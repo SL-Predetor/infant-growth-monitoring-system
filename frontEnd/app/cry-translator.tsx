@@ -1,27 +1,27 @@
-import { Image } from 'expo-image';
 import { StyleSheet } from 'react-native';
-
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Image } from 'expo-image';
 
-export default function ExploreScreen() {
+export default function CryTranslatorScreen() {
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
+      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
       headerImage={
         <Image
           source={require('@/assets/images/partial-react-logo.png')}
           style={styles.headerImage}
         />
-      }>
+      }
+    >
       <ThemedView style={styles.container}>
-        <ThemedText type="title">Explore</ThemedText>
+        <ThemedText type="title">Cry Translator</ThemedText>
         <ThemedText type="subtitle" style={styles.subtitle}>
-          Learn more about this app
+          Identify Hunger, Pain, or Fuss.
         </ThemedText>
         <ThemedText style={styles.content}>
-          This is your Infant Growth Monitoring System. Start with the Home tab to access the main features.
+          Record and analyze your baby's cry patterns. (Component by Dilshan)
         </ThemedText>
       </ThemedView>
     </ParallaxScrollView>
