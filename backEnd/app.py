@@ -1,107 +1,129 @@
-import pickle
-import numpy as np
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 import os
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import warnings
+import joblib
+import numpy as np
+import uuid
+import librosa
+import soundfile as sf 
 
-warnings.filterwarnings('ignore')
+# --- CRITICAL FIX FOR WINDOWS FFMPEG ---
+# This tells Python: "Look for ffmpeg.exe in THIS folder first"
+# This fixes the "PySoundFile failed" error if you manually pasted ffmpeg.exe here.
+os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(__name__)
-CORS(app)
+# Initialize App
+app = FastAPI(title="Baby Cry Translator API")
 
-# Load the model
-MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'mlModels', 'CryTranslater', 'audio_pain_model1.pkl')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- LOAD MODEL ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, 'audio_pain_model3.pkl') 
+
+print(f"🔍 Looking for model at: {MODEL_PATH}")
 
 try:
-    with open(MODEL_PATH, 'rb') as f:
-        model = pickle.load(f)
-    print("[OK] Model loaded successfully from " + MODEL_PATH)
+    model = joblib.load(MODEL_PATH)
+    print("✅ Model loaded successfully!")
 except Exception as e:
-    print("[ERROR] Error loading model: " + str(e))
+    print(f"❌ Error loading model: {e}")
     model = None
 
-# Map class predictions to labels
-LABEL_MAP = {
+# Labels
+LABELS = {
     0: 'hunger_cry',
     1: 'pain_cry',
     2: 'normal_cry'
 }
 
-def extract_features_simple(audio_path):
-    """Extract simple features from audio file using numpy only"""
+# --- IMPROVED FEATURE EXTRACTOR ---
+# --- UPDATE THIS FUNCTION IN APP.PY ---
+def extract_audio_features(audio_path):
     try:
-        import wave
-        # Load audio file using built-in wave module
-        with wave.open(audio_path, 'rb') as wav_file:
-            frames = wav_file.readframes(wav_file.getnframes())
-            audio_data = np.frombuffer(frames, dtype=np.int16)
-            
-            # Extract simple statistical features
-            features = np.array([
-                np.mean(np.abs(audio_data)),           # Mean amplitude
-                np.std(audio_data),                     # Standard deviation
-                np.max(np.abs(audio_data)),             # Peak amplitude
-                np.mean(np.diff(audio_data) ** 2),      # Energy change
-            ])
-            
-            # Pad to match expected input size (13 features from MFCC)
-            features = np.pad(features, (0, 9), mode='constant')
-            
-            return features.reshape(1, -1)
+        # Load audio
+        audio, sample_rate = librosa.load(audio_path, sr=None)
+        
+        # 1. Extract MFCCs (Try 42 to get 168 features: 42 * 4 stats = 168)
+        # If this doesn't work, we MUST see your notebook code.
+        mfccs = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=42)
+        
+        # 2. Calculate Statistics to get 168 features
+        mean = np.mean(mfccs.T, axis=0)  # 42 numbers
+        std = np.std(mfccs.T, axis=0)    # 42 numbers
+        max_v = np.max(mfccs.T, axis=0)  # 42 numbers
+        min_v = np.min(mfccs.T, axis=0)  # 42 numbers
+        
+        # Combine them: 42 + 42 + 42 + 42 = 168 features
+        features = np.concatenate([mean, std, max_v, min_v])
+        
+        return features.reshape(1, -1)
+        
     except Exception as e:
-        print(f"Feature extraction error: {e}")
+        print(f"❌ Feature Extraction Error: {e}")
         return None
 
-@app.route('/predict-cry', methods=['POST'])
-def predict_cry():
-    """Predict cry type from audio file"""
+@app.get("/")
+def home():
+    return {"status": "running", "model_loaded": model is not None}
+
+@app.post("/predict-cry")
+async def predict_cry(file: UploadFile = File(...)):
     if model is None:
-        return jsonify({'error': 'Model not loaded'}), 500
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    # Use a safe temporary filename
+    extension = file.filename.split(".")[-1] if "." in file.filename else "wav"
+    temp_filename = f"tmp/{uuid.uuid4()}.{extension}"
+    os.makedirs("tmp", exist_ok=True)
     
     try:
-        # Get audio file from request
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+        content = await file.read()
+        with open(temp_filename, "wb") as buffer:
+            buffer.write(content)
         
-        audio_file = request.files['file']
-        
-        # Save temporarily
-        temp_path = os.path.join(os.path.dirname(__file__), 'temp_cry.wav')
-        audio_file.save(temp_path)
-        
-        # Extract features
-        features = extract_features_simple(temp_path)
+        features = extract_audio_features(temp_filename)
         
         if features is None:
-            return jsonify({'error': 'Failed to extract features'}), 400
-        
+            # We explicitly return a 400 error here
+            raise HTTPException(status_code=400, detail="Audio format not supported. Server needs FFmpeg.")
+
         # Predict
-        prediction = model.predict(features)[0]
-        confidence = model.predict_proba(features)[0].max()
+        prediction_index = model.predict(features)[0]
         
-        # Map to label
-        label = LABEL_MAP.get(prediction, 'normal_cry')
+        try:
+            probs = model.predict_proba(features)[0]
+            confidence = float(np.max(probs))
+        except:
+            confidence = 1.0 
         
-        # Clean up
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        
-        return jsonify({
-            'label': label,
-            'confidence': float(confidence),
-            'prediction': int(prediction)
-        })
-    
+        label = LABELS.get(prediction_index, "unknown")
+
+        return {
+            "label": label,
+            "confidence": confidence,
+            "message": f"Detected: {label.replace('_', ' ').title()}"
+        }
+
+    except HTTPException as he:
+        # Re-raise HTTP exceptions (like the 400 above) directly
+        raise he
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Only catch UNEXPECTED crashes here
+        print(f"🔥 CRITICAL ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server Error: {str(e)}")
+        
+    finally:
+        if os.path.exists(temp_filename):
+            try: os.remove(temp_filename)
+            except: pass
 
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check endpoint"""
-    return jsonify({'status': 'ok', 'model_loaded': model is not None})
-
-if __name__ == '__main__':
-    print("[START] Starting Cry Translator API server...")
-    print("[INFO] Server running at http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

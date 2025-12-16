@@ -16,7 +16,7 @@ export default function HomeScreen() {
       title: "Cry Translator",
       subtitle: "Identify Hunger, Pain, or Fuss.",
       iconName: "speaker.wave.2",
-      onPress: () => router.push("/cry-translator"),
+      onPress: () => router.push("/cry-translator-simple"),
       accentColor: "#FF6B6B",
     },
     {
