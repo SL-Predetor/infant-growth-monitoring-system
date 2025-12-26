@@ -8,8 +8,10 @@ import os
 os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.abspath(__file__))
 
 # --- 2. IMPORT ROUTERS ---
-# We import the file from the 'routers' folder
-from routers import cry_router
+# We import the routers from the 'routers' folder
+# Make sure the filenames in your 'routers' folder match these exactly!
+from routers import cry_router_audio  # Your Audio Logic
+from routers import cry_router_img    # Your New Face Logic
 
 app = FastAPI(title="Infant Growth Monitoring System API")
 
@@ -22,13 +24,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 4. INCLUDE THE ROUTER ---
-# This connects the "Cry Shop" to the main app
-app.include_router(cry_router.router, tags=["Cry Translator"])
+# --- 4. INCLUDE THE ROUTERS ---
+# Connect both "Shops" (Audio and Face) to the main App Mall
+app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])
+app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])
 
 @app.get("/")
 def home():
-    return {"status": "online", "message": "Backend is running correctly"}
+    return {"status": "online", "message": "Backend is running correctly (Audio + Face)"}
 
 if __name__ == "__main__":
+    # Host 0.0.0.0 is required for mobile phones to connect
     uvicorn.run(app, host="0.0.0.0", port=8000)

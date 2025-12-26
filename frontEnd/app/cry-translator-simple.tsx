@@ -6,112 +6,127 @@ import {
   ActivityIndicator,
   Alert,
   Platform, 
+  Image,
+  ScrollView
 } from "react-native";
 import { Audio } from "expo-av";
+import * as ImagePicker from 'expo-image-picker'; // <--- NEW IMPORT
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 // --- CONFIGURATION ---
-// USB Tethering IP (Update this if you reconnect USB!)
-const API_URL = "http://192.168.8.119:8000/predict-cry";
+const BASE_URL = "http://10.19.105.78:8000";
+const AUDIO_API = `${BASE_URL}/predict-cry`;
+const FACE_API = `${BASE_URL}/predict-face`; // <--- NEW ENDPOINT
 
 export default function CryTranslatorScreen() {
+  // --- STATE ---
+  const [mode, setMode] = useState<'audio' | 'face'>('audio'); // Toggle modes
+  
+  // Audio State
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  
+  // Face State
+  const [faceUri, setFaceUri] = useState<string | null>(null);
+
+  // Shared State
   const [result, setResult] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Get theme-aware colors
+  // Colors
   const borderColor = useThemeColor({ light: 'rgba(0,0,0,0.05)', dark: 'rgba(255,255,255,0.1)' }, 'background');
-  const clearBtnBg = useThemeColor({ light: 'rgba(0,0,0,0.03)', dark: 'rgba(255,255,255,0.08)' }, 'background');
-  const clearTextColor = useThemeColor({ light: '#666', dark: '#999' }, 'text');
+  const activeTabColor = "#4ECDC4";
+  const inactiveTabColor = "#ccc";
 
-  // --- 1. START RECORDING ---
-  // Start recording audio (Auto-stop after 5s)
+  // ==============================
+  // 🎵 AUDIO LOGIC (Keep existing)
+  // ==============================
   const startRecording = async () => {
     setResult(null);
     setAudioUri(null);
-    
     try {
       const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert("Permission needed", "Please allow microphone access.");
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
+      if (!perm.granted) { Alert.alert("Permission needed"); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const rec = new Audio.Recording();
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await rec.startAsync();
       setRecording(rec);
-
-      // --- AUTO STOP LOGIC ---
-      console.log("Recording started... stopping in 5s");
-      
-      // Stop automatically after 5000ms (5 seconds)
       setTimeout(async () => {
-        // We need to check if 'rec' is still valid inside the timeout
         try {
-            await rec.stopAndUnloadAsync();
-            const uri = rec.getURI();
-            setRecording(null);
-            setAudioUri(uri || null);
-            console.log("Auto-stopped recording successfully");
-            
-            // Optional: Haptic feedback (vibration) here to tell user it's done
-        } catch (e) {
-            console.log("Auto-stop error (user might have stopped manually):", e);
-        }
+            const status = await rec.getStatusAsync();
+            if (status.isRecording) {
+                await rec.stopAndUnloadAsync();
+                setRecording(null);
+                setAudioUri(rec.getURI() || null);
+            }
+        } catch (e) {}
       }, 5000);
-
-    } catch (e) {
-      console.log("startRecording error", e);
-    }
+    } catch (e) {}
   };
 
-  // --- 2. STOP RECORDING ---
   const stopRecording = async () => {
     if (!recording) return;
-
     setLoading(true);
-    try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
-      setAudioUri(uri || null);
-    } catch (e) {
-      console.log("stopRecording error", e);
-    } finally {
-      setLoading(false);
-    }
+    await recording.stopAndUnloadAsync();
+    setRecording(null);
+    setAudioUri(recording.getURI() || null);
+    setLoading(false);
   };
 
-  // --- 3. PLAY RECORDING ---
   const playRecording = async () => {
     if (!audioUri) return;
-    try {
-      console.log("Loading Sound");
-      const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
-      setSound(sound);
-      console.log("Playing Sound");
-      await sound.playAsync();
-    } catch (e) {
-      console.log("Play Error", e);
-      Alert.alert("Error", "Cannot play audio");
+    const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
+    setSound(sound);
+    await sound.playAsync();
+  };
+
+  // ==============================
+  // 📸 FACE LOGIC (New)
+  // ==============================
+  const pickImage = async (useCamera: boolean) => {
+    setResult(null);
+    setFaceUri(null);
+
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert("Permission needed", "Camera access is required."); return; }
+
+    let result;
+    if (useCamera) {
+        result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1], // Square is better for AI
+            quality: 1,
+        });
+    } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 1,
+        });
+    }
+
+    if (!result.canceled) {
+        setFaceUri(result.assets[0].uri);
     }
   };
 
-  // --- 4. UPLOAD AND ANALYZE (UPDATED) ---
-  const uploadAndPredict = async () => {
-    if (!audioUri) {
-      Alert.alert("Missing audio", "Please record baby cry audio first.");
+  // ==============================
+  // 🚀 UPLOAD LOGIC (Unified)
+  // ==============================
+  const analyzeData = async () => {
+    const isAudio = mode === 'audio';
+    const uri = isAudio ? audioUri : faceUri;
+    const api = isAudio ? AUDIO_API : FACE_API;
+
+    if (!uri) {
+      Alert.alert("Missing Data", `Please ${isAudio ? 'record audio' : 'take a photo'} first.`);
       return;
     }
 
@@ -121,152 +136,160 @@ export default function CryTranslatorScreen() {
     try {
       const formData = new FormData();
       
-      // FIX: Handle Web vs Mobile File Types safely
       if (Platform.OS === 'web') {
-          // Web: Fetch as blob
-          const response = await fetch(audioUri);
+          const response = await fetch(uri);
           const blob = await response.blob();
-          formData.append("file", blob, "recording.webm");
+          formData.append("file", blob, isAudio ? "audio.webm" : "face.jpg");
       } else {
-          // Mobile: Send file object with correct MIME type
-          const uriParts = audioUri.split('.');
-          const fileType = uriParts[uriParts.length - 1]; // e.g. "m4a"
-          
-          // Android is picky: 'audio/mp4' is safer for m4a files
-          const mimeType = fileType === 'm4a' ? 'audio/mp4' : `audio/${fileType}`;
-
-          formData.append("file", {
-            uri: audioUri,
-            name: `recording.${fileType}`, 
-            type: mimeType,
-          } as any);
+          const type = isAudio ? 'audio/mp4' : 'image/jpeg';
+          const name = isAudio ? 'recording.m4a' : 'face.jpg';
+          formData.append("file", { uri, name, type } as any);
       }
 
-      console.log(`Sending to backend: ${API_URL}`);
-
-      const res = await fetch(API_URL, {
+      const res = await fetch(api, {
         method: "POST",
         body: formData,
-        headers: {
-            'Accept': 'application/json',
-            // Note: Content-Type is set automatically by fetch for FormData
-        },
+        headers: { 'Accept': 'application/json' },
       });
 
       const json = await res.json();
-      
-      if (res.ok) {
-        setResult(json);
-      } else {
-        Alert.alert("Server Error", json.detail || "Prediction failed");
-      }
+      if (res.ok) setResult(json);
+      else Alert.alert("Error", json.detail || "Failed");
+
     } catch (e) {
-      console.log("Upload Error:", e);
-      Alert.alert("Connection Failed", "Make sure backend is running and IP is correct.");
+      Alert.alert("Connection Failed", "Check Backend IP.");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 5. CLEAR DATA ---
   const clearAll = () => {
     setAudioUri(null);
+    setFaceUri(null);
     setResult(null);
     setRecording(null);
-    if (sound) {
-        sound.unloadAsync();
-    }
-  };
-
-  // Helper for nice labels
-  const labelPretty = (label?: string) => {
-    if (!label) return "";
-    if (label === "pain_cry") return "😢 Pain Cry";
-    if (label === "hunger_cry") return "🍼 Hunger Cry";
-    if (label === "normal_cry") return "🙂 Normal Cry";
-    return label;
   };
 
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Cry Translator</ThemedText>
-      <ThemedText style={styles.subtitle}>Record your baby's cry and get instant AI analysis</ThemedText>
-
-      <ThemedView lightColor="#FFFFFF" darkColor="#1E1E1E" style={[styles.card, { borderColor }]}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         
-        {/* RECORD BUTTON */}
-        {!recording ? (
-          <Pressable style={styles.btn} onPress={startRecording}>
-            <ThemedText style={styles.btnText}>
-              {audioUri ? "🔄 Re-record Audio" : "🎤 Start Recording"}
-            </ThemedText>
-          </Pressable>
-        ) : (
-          <Pressable style={[styles.btn, styles.stop]} onPress={stopRecording}>
-            <ThemedText style={styles.btnText}>⏹️ Stop Recording</ThemedText>
-          </Pressable>
-        )}
+        <ThemedText type="title" style={styles.title}>Cry Translator</ThemedText>
 
-        {/* PLAY BUTTON */}
-        {audioUri && !recording && (
-           <Pressable style={[styles.btn, styles.playBtn]} onPress={playRecording}>
-             <ThemedText style={styles.btnText}>▶️ Play Recording</ThemedText>
-           </Pressable>
-        )}
+        {/* --- TABS --- */}
+        <View style={styles.tabContainer}>
+            <Pressable 
+                style={[styles.tab, mode === 'audio' && { backgroundColor: activeTabColor }]} 
+                onPress={() => { setMode('audio'); clearAll(); }}
+            >
+                <ThemedText style={styles.tabText}>🎤 Audio</ThemedText>
+            </Pressable>
+            <Pressable 
+                style={[styles.tab, mode === 'face' && { backgroundColor: activeTabColor }]} 
+                onPress={() => { setMode('face'); clearAll(); }}
+            >
+                <ThemedText style={styles.tabText}>📸 Face</ThemedText>
+            </Pressable>
+        </View>
 
-        {/* ANALYZE BUTTON */}
-        {audioUri && !recording && (
-          <Pressable
-            style={[styles.btn, styles.analyzeBtn, loading && styles.btnDisabled]}
-            onPress={uploadAndPredict}
-            disabled={loading}
-          >
-            <ThemedText style={styles.btnText}>🔍 Analyze Cry</ThemedText>
-          </Pressable>
-        )}
+        <ThemedView lightColor="#FFFFFF" darkColor="#1E1E1E" style={[styles.card, { borderColor }]}>
+          
+          {/* --- AUDIO UI --- */}
+          {mode === 'audio' && (
+            <>
+                <ThemedText style={styles.instruction}>Record 5 seconds of crying</ThemedText>
+                {!recording ? (
+                <Pressable style={styles.btn} onPress={startRecording}>
+                    <ThemedText style={styles.btnText}>{audioUri ? "🔄 Re-record" : "🎤 Start"}</ThemedText>
+                </Pressable>
+                ) : (
+                <Pressable style={[styles.btn, styles.stopBtn]} onPress={stopRecording}>
+                    <ThemedText style={styles.btnText}>⏹️ Stop</ThemedText>
+                </Pressable>
+                )}
+                {audioUri && !recording && (
+                   <Pressable style={[styles.btn, styles.secondaryBtn]} onPress={playRecording}>
+                        <ThemedText style={styles.btnText}>▶️ Play</ThemedText>
+                   </Pressable> 
+                )}
+            </>
+          )}
 
-        {/* CLEAR BUTTON */}
-        {(audioUri || result) && !loading && (
-          <Pressable style={[styles.clearBtn, { backgroundColor: clearBtnBg }]} onPress={clearAll}>
-            <ThemedText style={[styles.clearText, { color: clearTextColor }]}>🗑️ Clear</ThemedText>
-          </Pressable>
-        )}
+          {/* --- FACE UI --- */}
+          {mode === 'face' && (
+            <>
+                <ThemedText style={styles.instruction}>Take a clear photo of the baby's face</ThemedText>
+                <View style={styles.row}>
+                    <Pressable style={[styles.btn, styles.halfBtn]} onPress={() => pickImage(true)}>
+                        <ThemedText style={styles.btnText}>📷 Camera</ThemedText>
+                    </Pressable>
+                    <Pressable style={[styles.btn, styles.halfBtn, styles.secondaryBtn]} onPress={() => pickImage(false)}>
+                        <ThemedText style={styles.btnText}>🖼️ Gallery</ThemedText>
+                    </Pressable>
+                </View>
+                
+                {faceUri && (
+                    <Image source={{ uri: faceUri }} style={styles.previewImage} />
+                )}
+            </>
+          )}
 
-        {/* LOADING SPINNER */}
-        {loading && <ActivityIndicator size="large" style={styles.loader} />}
+          {/* --- ANALYZE BUTTON --- */}
+          {(audioUri || faceUri) && !recording && (
+            <Pressable style={[styles.btn, styles.analyzeBtn]} onPress={analyzeData} disabled={loading}>
+                {loading ? <ActivityIndicator color="#fff" /> : <ThemedText style={styles.btnText}>🔍 Analyze</ThemedText>}
+            </Pressable>
+          )}
+          
+          {/* --- RESULT --- */}
+          {result && (
+            <ThemedView lightColor="rgba(78, 205, 196, 0.1)" darkColor="rgba(78, 205, 196, 0.2)" style={styles.resultBox}>
+                <ThemedText style={styles.resultTitle}>
+                    {result.label === 'pain_expression' || result.label === 'pain_cry' ? '😣 Pain Detected' : '🙂 No Pain / Normal'}
+                </ThemedText>
+                <ThemedText style={styles.confText}>Confidence: {(result.confidence * 100).toFixed(1)}%</ThemedText>
+                <ThemedText style={styles.msgText}>{result.message}</ThemedText>
+            </ThemedView>
+          )}
 
-        {/* RESULT DISPLAY */}
-        {result && result.label && (
-          <ThemedView lightColor="rgba(78, 205, 196, 0.08)" darkColor="rgba(78, 205, 196, 0.15)" style={styles.resultBox}>
-            <ThemedText style={styles.resultTitle}>{labelPretty(result.label)}</ThemedText>
-            <ThemedText style={styles.confText}>Confidence: {(result.confidence * 100).toFixed(1)}%</ThemedText>
-            {result.message && <ThemedText style={styles.messageText}>{result.message}</ThemedText>}
-          </ThemedView>
-        )}
-      </ThemedView>
+          {/* --- CLEAR --- */}
+          {(audioUri || faceUri) && !loading && (
+            <Pressable onPress={clearAll} style={styles.clearLink}>
+                <ThemedText style={{ color: '#999' }}>Clear & Restart</ThemedText>
+            </Pressable>
+          )}
+
+        </ThemedView>
+      </ScrollView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 40, paddingHorizontal: 20, paddingBottom: 20 },
-  title: { fontSize: 32, fontWeight: "900", marginBottom: 12, textAlign: "center", letterSpacing: -0.5 },
-  subtitle: { marginTop: 4, opacity: 0.65, fontSize: 16, lineHeight: 24, textAlign: "center", paddingHorizontal: 20 },
-  card: { marginTop: 32, padding: 24, borderRadius: 24, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8, borderWidth: 1 },
+  container: { flex: 1, paddingTop: 50, paddingHorizontal: 20 },
+  title: { fontSize: 32, fontWeight: "900", marginBottom: 20, textAlign: "center" },
   
-  btn: { paddingVertical: 18, paddingHorizontal: 24, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#FF6B6B", marginTop: 12, shadowColor: "#FF6B6B", shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4, minHeight: 56 },
-  stop: { backgroundColor: "#E53935", shadowColor: "#E53935" },
-  playBtn: { backgroundColor: "#4D96FF", shadowColor: "#4D96FF" },
-  analyzeBtn: { backgroundColor: "#4ECDC4", shadowColor: "#4ECDC4", marginTop: 16 },
-  btnDisabled: { opacity: 0.4, shadowOpacity: 0 },
-  btnText: { color: "#fff", fontWeight: "800", fontSize: 17, letterSpacing: 0.3 },
+  tabContainer: { flexDirection: 'row', marginBottom: 20, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#eee' },
+  tab: { flex: 1, paddingVertical: 14, alignItems: 'center', backgroundColor: '#f0f0f0' },
+  tabText: { fontWeight: '700', fontSize: 16 },
   
-  clearBtn: { marginTop: 16, alignItems: "center", paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
-  clearText: { fontSize: 15, fontWeight: "600" },
-  loader: { marginTop: 24, marginBottom: 8 },
+  card: { padding: 24, borderRadius: 24, shadowOpacity: 0.1, elevation: 5 },
+  instruction: { textAlign: 'center', opacity: 0.6, marginBottom: 15 },
   
-  resultBox: { marginTop: 24, alignItems: "center", padding: 28, borderRadius: 20, borderWidth: 2, borderColor: "#4ECDC4", shadowColor: "#4ECDC4", shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
-  resultTitle: { fontSize: 32, fontWeight: "900", marginBottom: 12, letterSpacing: -0.5 },
-  confText: { marginTop: 8, fontSize: 18, fontWeight: "700", color: "#4ECDC4" },
-  messageText: { marginTop: 12, opacity: 0.65, fontSize: 15, textAlign: "center", lineHeight: 22, paddingHorizontal: 10 },
+  btn: { padding: 16, borderRadius: 14, alignItems: 'center', backgroundColor: '#FF6B6B', marginBottom: 10 },
+  stopBtn: { backgroundColor: '#E53935' },
+  secondaryBtn: { backgroundColor: '#4D96FF' },
+  analyzeBtn: { backgroundColor: '#4ECDC4', marginTop: 10 },
+  halfBtn: { flex: 1, marginHorizontal: 5 },
+  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
+  previewImage: { width: '100%', height: 250, borderRadius: 12, marginVertical: 10, resizeMode: 'cover' },
+  
+  resultBox: { marginTop: 20, padding: 20, borderRadius: 16, alignItems: 'center', borderWidth: 2, borderColor: '#4ECDC4' },
+  resultTitle: { fontSize: 24, fontWeight: '800', marginBottom: 5 },
+  confText: { fontSize: 16, fontWeight: '600', color: '#4ECDC4' },
+  msgText: { marginTop: 8, opacity: 0.7 },
+  
+  clearLink: { marginTop: 15, alignItems: 'center' }
 });
