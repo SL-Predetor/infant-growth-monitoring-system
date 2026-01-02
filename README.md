@@ -2,68 +2,6 @@
 
 A comprehensive AI-powered system for monitoring infant well-being through cry analysis and facial pain detection.
 
-## 📋 Table of Contents
-- [Overview](#overview)
-- [Features](#features)
-- [System Architecture](#system-architecture)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-- [Model Training](#model-training)
-- [Project Structure](#project-structure)
-- [Technologies Used](#technologies-used)
-- [Troubleshooting](#troubleshooting)
-
-## 🎯 Overview
-
-This system provides real-time monitoring of infant distress through two complementary approaches:
-1. **Audio Analysis**: Classifies infant cry patterns (Hungry, Belly Pain, Burping, Discomfort, Tired)
-2. **Facial Expression Analysis**: Detects pain indicators through facial biomarkers
-
-The system aims to assist caregivers and healthcare professionals in understanding infant needs more effectively.
-
-## ✨ Features
-
-
-
-## 🏗️ System Architecture
-
-```
-┌─────────────────────┐
-│   Mobile/Web App    │
-│   (React Native)    │
-│   - Audio Recording │
-│   - Image Capture   │
-└──────────┬──────────┘
-           │ HTTP/REST
-           ▼
-┌─────────────────────┐
-│   FastAPI Backend   │
-│   - CORS Enabled    │
-│   - Port 8000       │
-└──────────┬──────────┘
-           │
-      ┌────┴─────┐
-      ▼          ▼
-┌──────────┐  ┌────────────┐
-│  Audio   │  │   Face     │
-│  Router  │  │   Router   │
-└────┬─────┘  └─────┬──────┘
-     │              │
-     ▼              ▼
-┌──────────┐  ┌────────────┐
-│   CNN    │  │  Random    │
-│  Model   │  │  Forest    │
-│ (.h5)    │  │  (.pkl)    │
-└──────────┘  └────────────┘
-                    │
-                    ▼
-              ┌──────────┐
-              │MediaPipe │
-              │Landmarks │
-              └──────────┘
-```
-
 ## 🚀 Installation
 
 ### Prerequisites
