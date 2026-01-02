@@ -1,591 +1,103 @@
 # 🍼 Infant Growth Monitoring System
 
-A comprehensive AI-powered system for monitoring infant well-being through cry analysis and facial pain detection.
+AI-powered system for infant cry analysis and facial pain detection.
 
-## 📋 Table of Contents
-- [Overview](#overview)
-- [Features](#features)
-- [System Architecture](#system-architecture)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-- [Model Training](#model-training)
-- [Project Structure](#project-structure)
-- [Technologies Used](#technologies-used)
-- [Troubleshooting](#troubleshooting)
-
-## 🎯 Overview
-
-This system provides real-time monitoring of infant distress through two complementary approaches:
-1. **Audio Analysis**: Classifies infant cry patterns (Hungry, Belly Pain, Burping, Discomfort, Tired)
-2. **Facial Expression Analysis**: Detects pain indicators through facial biomarkers
-
-The system aims to assist caregivers and healthcare professionals in understanding infant needs more effectively.
-
-## ✨ Features
-
-### 🎤 Audio Cry Analysis
-- Real-time audio recording (5-second clips)
-- Multi-class cry classification
-- Confidence scoring with probability distribution
-- Audio playback functionality
-- CNN-based deep learning model
-
-### 😣 Facial Pain Detection
-- Image capture from camera or gallery
-- Pain vs No-Pain binary classification
-- Biomarker extraction (EAR, MAR, Brow Score)
-- MediaPipe-powered facial landmark detection
-- Random Forest classifier with feature interpretability
-
-### 📱 Cross-Platform Support
-- Mobile (iOS/Android) via React Native
-- Web browser support
-- Desktop compatibility via Expo
-
-## 🏗️ System Architecture
-
-```
-┌─────────────────────┐
-│   Mobile/Web App    │
-│   (React Native)    │
-│   - Audio Recording │
-│   - Image Capture   │
-└──────────┬──────────┘
-           │ HTTP/REST
-           ▼
-┌─────────────────────┐
-│   FastAPI Backend   │
-│   - CORS Enabled    │
-│   - Port 8000       │
-└──────────┬──────────┘
-           │
-      ┌────┴─────┐
-      ▼          ▼
-┌──────────┐  ┌────────────┐
-│  Audio   │  │   Face     │
-│  Router  │  │   Router   │
-└────┬─────┘  └─────┬──────┘
-     │              │
-     ▼              ▼
-┌──────────┐  ┌────────────┐
-│   CNN    │  │  Random    │
-│  Model   │  │  Forest    │
-│ (.h5)    │  │  (.pkl)    │
-└──────────┘  └────────────┘
-                    │
-                    ▼
-              ┌──────────┐
-              │MediaPipe │
-              │Landmarks │
-              └──────────┘
-```
-
-## 🚀 Installation
+## 🚀 Quick Start Guide
 
 ### Prerequisites
 - Python 3.8+
 - Node.js 16+
-- FFmpeg (for audio processing)
 - Git
 
-### Backend Setup
-
-1. **Clone the repository**
+### 1. Clone the Project
 ```bash
 git clone <your-repo-url>
 cd infant-growth-monitoring-system
 ```
 
-2. **Set up Python virtual environment**
+### 2. Setup Backend
+
 ```bash
+# Navigate to backend folder
 cd backEnd
+
+# Create virtual environment
 python -m venv .venv
 
-# Windows
+# Activate it (Windows)
 .venv\Scripts\activate
 
-# macOS/Linux
+# Activate it (Mac/Linux)
 source .venv/bin/activate
-```
 
-3. **Install Python dependencies**
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-4. **Download FFmpeg** (Windows)
-   - Download from: https://ffmpeg.org/download.html
-   - Extract `ffmpeg.exe` and place in the `backEnd` folder
+**Note:** Download FFmpeg from https://ffmpeg.org/download.html and place `ffmpeg.exe` in the `backEnd` folder (Windows only).
 
-5. **Verify models exist**
-```
-backEnd/
-└── mlModels/
-    └── Cry/
-        ├── audio_cry_classifier.h5
+### 3. Setup Frontend
 
-mlModels/CryTranslater/
-├── saved_models/
-│   └── img_rf_pain_classifier3.pkl
-└── Notebooks/
-    └── face_landmarker.task (auto-downloads if missing)
-```
-
-### Frontend Setup
-
-1. **Navigate to frontend**
 ```bash
+# Navigate to frontend folder
 cd frontEnd
-```
 
-2. **Install dependencies**
-```bash
+# Install dependencies
 npm install
 ```
 
-3. **Configure API endpoint**
-   - Edit `app/cry-translator-simple.tsx`
-   - Update `BASE_URL`:
-   ```typescript
-   const BASE_URL = "http://localhost:8000";  // For local testing
-   // const BASE_URL = "http://YOUR_IP:8000"; // For mobile device
-   ```
+### 4. Start the Application
 
-## 💻 Usage
-
-### Starting the Backend
-
-1. **Activate virtual environment**
+**Terminal 1 - Backend:**
 ```bash
 cd backEnd
 .venv\Scripts\activate  # Windows
-```
-
-2. **Run the FastAPI server**
-```bash
 python app.py
 ```
 
-**Expected output:**
+Wait for this message:
 ```
-🔍 [AudioRouter] Audio Model loaded successfully
-✅ [FaceRouter] Random Forest model loaded successfully
-✅ [FaceRouter] MediaPipe Face Detector initialized
+✅ [AudioRouter] Audio Model loaded successfully
+✅ [FaceRouter] Face Model loaded successfully
 INFO: Uvicorn running on http://0.0.0.0:8000
 ```
 
-### Starting the Frontend
-
-1. **Start Expo development server**
+**Terminal 2 - Frontend:**
 ```bash
 cd frontEnd
 npm start
 ```
 
-2. **Choose your platform:**
-   - Press `w` → Web browser
-   - Press `a` → Android emulator
-   - Press `i` → iOS simulator
-   - Scan QR code → Physical device (Expo Go app)
+Press `w` to open in web browser.
 
-### Using the Application
+## 📱 Using the App
 
-#### 🎤 Audio Cry Analysis
-1. Open app and select **🎤 Audio** tab
-2. Press **🎤 Start** to begin recording
-3. Record infant cry (auto-stops after 5 seconds)
-4. Optional: Press **▶️ Play** to review recording
-5. Press **🔍 Analyze** to classify cry
-6. View result with confidence percentage
+### Audio Analysis
+1. Select **🎤 Audio** tab
+2. Press **Start** → Record 5 seconds
+3. Press **Analyze** → View cry type (Hungry, Pain, etc.)
 
-#### 📸 Facial Pain Detection
+### Face Analysis
 1. Select **📸 Face** tab
-2. Choose input method:
-   - **📷 Camera**: Take new photo
-   - **🖼️ Gallery**: Select existing image
-3. Ensure baby's face is clearly visible
-4. Press **🔍 Analyze** to detect pain
-5. View result with:
-   - Pain/No Pain classification
-   - Confidence score
-   - Extracted biomarkers (EAR, MAR, Brow Score)
-
-## 📡 API Documentation
-
-### Base URL
-```
-http://localhost:8000
-```
-
-### Endpoints
-
-#### 1. Health Check
-**GET** `/`
-
-**Response:**
-```json
-{
-  "status": "online",
-  "message": "Backend is running correctly (Audio + Face)"
-}
-```
-
-#### 2. Audio Cry Analysis
-**POST** `/predict-cry`
-
-**Request:**
-- Content-Type: `multipart/form-data`
-- Body: `file` (audio file, WAV/M4A/MP3)
-
-**Response:**
-```json
-{
-  "label": "Hungry",
-  "confidence": 85.4,
-  "message": "Baby might be hungry 🍼",
-  "probabilities": {
-    "Hungry": 85.4,
-    "BellyPain": 8.2,
-    "Burping": 3.1,
-    "Discomfort": 2.5,
-    "Tired": 0.8
-  }
-}
-```
-
-#### 3. Facial Pain Detection
-**POST** `/predict-face`
-
-**Request:**
-- Content-Type: `multipart/form-data`
-- Body: `file` (image file, JPG/PNG)
-
-**Response:**
-```json
-{
-  "label": "pain_expression",
-  "confidence": 92.3,
-  "pain_probability": 92.3,
-  "message": "Detected: Painful Expression 😣",
-  "features": {
-    "ear": 0.2345,
-    "mar": 0.5678,
-    "brow_score": 0.1234
-  }
-}
-```
-
-**Feature Descriptions:**
-- **EAR** (Eye Aspect Ratio): Lower values indicate eye squinting (pain indicator)
-- **MAR** (Mouth Aspect Ratio): Higher values indicate mouth opening (crying)
-- **Brow Score**: Lower values indicate brow lowering/furrowing (pain indicator)
-
-## 🧠 Model Training
-
-### Audio Model (CNN)
-
-**Location:** `backEnd/mlModels/Cry/audio_cry_classifier.h5`
-
-**Architecture:**
-- Input: MFCC features (40 coefficients × time steps)
-- 3 Conv1D layers with BatchNormalization and Dropout
-- GlobalAveragePooling1D
-- Dense layers with L2 regularization
-- Output: 5 classes (Softmax)
-
-**Training Process:**
-```bash
-cd mlModels/CryTranslater/Notebooks
-jupyter notebook "Audio pain recognition5.ipynb"
-```
-
-**Dataset:**
-- 5 cry types: Hungry, Belly Pain, Burping, Discomfort, Tired
-- Augmentation: Noise addition, pitch shifting, time stretching
-
-### Face Model (Random Forest)
-
-**Location:** `mlModels/CryTranslater/saved_models/img_rf_pain_classifier3.pkl`
-
-**Features:**
-- **EAR**: Eye Aspect Ratio (vertical/horizontal eye distance)
-- **MAR**: Mouth Aspect Ratio (vertical/horizontal mouth distance)
-- **Brow Score**: Normalized brow-to-eye distance
-
-**Training Process:**
-
-1. **Extract features from images:**
-```bash
-cd mlModels/CryTranslater/Notebooks
-jupyter notebook "img data processing3.ipynb"
-```
-
-2. **Train Random Forest classifier:**
-```bash
-jupyter notebook "ImgPainRecognition3.ipynb"
-```
-
-**Dataset:**
-- Pain: 6,368 images
-- No Pain: 2,135 images
-- Source: `mlModels/CryTranslater/data/raw/img/Combined dataset/`
-
-**Performance:**
-- Accuracy: ~88-92%
-- Class weights: Balanced
-- Features: Interpretable biomarkers
-
-## 📁 Project Structure
-
-```
-infant-growth-monitoring-system/
-├── backEnd/
-│   ├── app.py                          # FastAPI main application
-│   ├── requirements.txt                # Python dependencies
-│   ├── ffmpeg.exe                      # Audio processing tool
-│   ├── routers/
-│   │   ├── cry_router_audio.py        # Audio analysis API
-│   │   └── cry_router_img.py          # Face analysis API
-│   └── mlModels/
-│       └── Cry/
-│           └── audio_cry_classifier.h5 # Audio CNN model
-│
-├── frontEnd/
-│   ├── app/
-│   │   ├── cry-translator-simple.tsx  # Main application screen
-│   │   ├── _layout.tsx                # Navigation layout
-│   │   └── (tabs)/
-│   ├── components/                     # Reusable UI components
-│   ├── package.json
-│   └── app.json
-│
-├── mlModels/
-│   └── CryTranslater/
-│       ├── saved_models/
-│       │   └── img_rf_pain_classifier3.pkl  # Face RF model
-│       ├── Notebooks/
-│       │   ├── img data processing3.ipynb   # Feature extraction
-│       │   ├── ImgPainRecognition3.ipynb    # Model training
-│       │   ├── Audio pain recognition5.ipynb
-│       │   └── face_landmarker.task         # MediaPipe model
-│       └── data/
-│           ├── raw/                          # Original datasets
-│           └── processed/                    # Extracted features
-│
-└── README.md
-```
-
-## 🛠️ Technologies Used
-
-### Backend
-| Technology | Purpose |
-|------------|---------|
-| **FastAPI** | Modern Python web framework |
-| **TensorFlow/Keras** | Audio CNN model |
-| **scikit-learn** | Random Forest classifier |
-| **MediaPipe** | Facial landmark detection |
-| **librosa** | Audio feature extraction (MFCC) |
-| **OpenCV** | Image processing |
-| **NumPy/Pandas** | Data manipulation |
-| **joblib** | Model serialization |
-| **FFmpeg** | Audio format conversion |
-
-### Frontend
-| Technology | Purpose |
-|------------|---------|
-| **React Native** | Cross-platform mobile framework |
-| **Expo** | Development toolchain |
-| **TypeScript** | Type-safe JavaScript |
-| **expo-av** | Audio recording/playback |
-| **expo-image-picker** | Camera/gallery access |
-
-### Machine Learning
-| Technique | Application |
-|-----------|-------------|
-| **CNN** | Audio pattern recognition |
-| **Random Forest** | Facial expression classification |
-| **MFCC** | Audio feature extraction |
-| **Facial Action Units** | Pain biomarkers |
-| **Data Augmentation** | Dataset expansion |
+2. Press **Camera** or **Gallery** → Select image
+3. Press **Analyze** → View pain detection result
 
 ## 🔧 Troubleshooting
 
-### Backend Issues
+**Backend won't start?**
+- Make sure virtual environment is activated
+- Check if models exist in `backEnd/mlModels/` and `mlModels/CryTranslater/saved_models/`
 
-#### Model not loading
+**Frontend can't connect?**
+- Verify backend is running on port 8000
+- Check `BASE_URL` in `frontEnd/app/cry-translator-simple.tsx`
+- For mobile: Change to `http://YOUR_LOCAL_IP:8000`
+
+**Find your IP (Windows):**
 ```bash
-# Check if model files exist
-python -c "import os; print('Audio:', os.path.exists('backEnd/mlModels/Cry/audio_cry_classifier.h5'))"
-python -c "import os; print('Face:', os.path.exists('mlModels/CryTranslater/saved_models/img_rf_pain_classifier3.pkl'))"
-```
-
-**Solution:** Ensure models are trained and saved in correct locations.
-
-#### FFmpeg not found
-```
-Error: FFmpeg not installed or not in PATH
-```
-
-**Solution:**
-- Download FFmpeg: https://ffmpeg.org/download.html
-- Extract `ffmpeg.exe` to `backEnd` folder
-- Or add to system PATH
-
-#### Port already in use
-```
-Error: [Errno 10048] Only one usage of each socket address
-```
-
-**Solution:**
-```python
-# Edit app.py
-uvicorn.run(app, host="0.0.0.0", port=8001)  # Change port
-```
-
-#### MediaPipe import error
-```
-ImportError: No module named 'mediapipe'
-```
-
-**Solution:**
-```bash
-pip install mediapipe
-```
-
-### Frontend Issues
-
-#### Cannot connect to backend
-```
-Network request failed / Connection timeout
-```
-
-**Solutions:**
-1. Verify backend is running (`python app.py`)
-2. Check IP address in `BASE_URL`
-3. For local testing: Use `http://localhost:8000`
-4. For mobile device: Use `http://YOUR_LOCAL_IP:8000`
-5. Check firewall settings (allow port 8000)
-
-**Find your IP:**
-```bash
-# Windows
 ipconfig
-
-# macOS/Linux
-ifconfig
 ```
-
-#### Camera permissions denied
-**Solution:** Grant permissions in device settings → App → Permissions
-
-#### Image not detecting face
-**Solutions:**
-- Ensure good lighting
-- Face should be clearly visible
-- Try different angles
-- Check image quality
-
-### Model Performance Issues
-
-#### Low accuracy on audio
-**Possible causes:**
-- Background noise too loud
-- Recording too short (<3 seconds)
-- Baby cry not clear
-
-**Solutions:**
-- Record in quiet environment
-- Hold device closer to baby
-- Ensure 5-second recording completes
-
-#### False positives on face detection
-**Possible causes:**
-- Poor image quality
-- Occlusions (hands, blankets)
-- Extreme angles
-
-**Solutions:**
-- Use frontal face images
-- Ensure face is unobstructed
-- Adequate lighting
-
-## 📊 Performance Metrics
-
-### Audio Model
-- **Training Accuracy:** ~85-90%
-- **Validation Accuracy:** ~80-85%
-- **Classes:** 5 (Hungry, Belly Pain, Burping, Discomfort, Tired)
-- **Input:** MFCC features (40 coefficients)
-
-### Face Model
-- **Training Accuracy:** ~92%
-- **Test Accuracy:** ~88%
-- **Precision:** Balanced via class weights
-- **Dataset:** 8,503 images (Pain: 6,368 | No Pain: 2,135)
-- **Features:** 3 biomarkers (EAR, MAR, Brow Score)
-
-## 🔐 Security Considerations
-
-- **CORS:** Currently set to `allow_origins=["*"]` for development
-- **Production:** Update CORS to specific domains
-- **API Keys:** Consider adding authentication for production
-- **Data Privacy:** No data is stored by default
-- **HTTPS:** Use SSL/TLS for production deployment
-
-## 🚀 Deployment
-
-### Backend Deployment (Example: Heroku)
-```bash
-# Add Procfile
-echo "web: uvicorn app:app --host 0.0.0.0 --port $PORT" > Procfile
-
-# Deploy
-heroku create infant-monitoring-api
-git push heroku main
-```
-
-### Frontend Deployment
-```bash
-# Build for production
-expo build:android
-expo build:ios
-expo build:web
-```
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 👥 Authors
-
-- **Research Team** - *Initial development*
-
-## 🙏 Acknowledgments
-
-- MediaPipe team for facial landmark detection framework
-- TensorFlow/Keras team for deep learning tools
-- Expo team for mobile development platform
-- Open-source infant cry dataset contributors
-- Research community for pain assessment methodologies
-
-## 📧 Contact & Support
-
-For questions, issues, or contributions:
-- Open an issue on GitHub
-- Contact: [Your Email]
 
 ---
 
-**⚠️ Important Notice:** This system is intended for research and educational purposes only. It should NOT replace professional medical advice, diagnosis, or treatment. Always consult qualified healthcare professionals for infant health concerns.
-
-## 🎯 Future Enhancements
-
-- [ ] Real-time video analysis
-- [ ] Multi-infant monitoring
-- [ ] Historical data tracking
-- [ ] Parent mobile notifications
-- [ ] Integration with wearable devices
-- [ ] Cloud-based data storage
-- [ ] Multi-language support
-- [ ] Improved model accuracy with larger datasets
+**⚠️ Note:** This is a research project. Not for medical use.
