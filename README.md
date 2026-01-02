@@ -24,24 +24,7 @@ The system aims to assist caregivers and healthcare professionals in understandi
 
 ## ✨ Features
 
-### 🎤 Audio Cry Analysis
-- Real-time audio recording (5-second clips)
-- Multi-class cry classification
-- Confidence scoring with probability distribution
-- Audio playback functionality
-- CNN-based deep learning model
 
-### 😣 Facial Pain Detection
-- Image capture from camera or gallery
-- Pain vs No-Pain binary classification
-- Biomarker extraction (EAR, MAR, Brow Score)
-- MediaPipe-powered facial landmark detection
-- Random Forest classifier with feature interpretability
-
-### 📱 Cross-Platform Support
-- Mobile (iOS/Android) via React Native
-- Web browser support
-- Desktop compatibility via Expo
 
 ## 🏗️ System Architecture
 
