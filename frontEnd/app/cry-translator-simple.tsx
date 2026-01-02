@@ -17,7 +17,7 @@ import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 // --- CONFIGURATION ---
-const BASE_URL = "http://10.19.105.78:8000";
+const BASE_URL = "http://localhost:8000";
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`; // <--- NEW ENDPOINT
 
@@ -247,7 +247,7 @@ export default function CryTranslatorScreen() {
                 <ThemedText style={styles.resultTitle}>
                     {result.label === 'pain_expression' || result.label === 'pain_cry' ? '😣 Pain Detected' : '🙂 No Pain / Normal'}
                 </ThemedText>
-                <ThemedText style={styles.confText}>Confidence: {(result.confidence * 100).toFixed(1)}%</ThemedText>
+                <ThemedText style={styles.confText}>Confidence: {result.confidence.toFixed(1)}%</ThemedText>
                 <ThemedText style={styles.msgText}>{result.message}</ThemedText>
             </ThemedView>
           )}
