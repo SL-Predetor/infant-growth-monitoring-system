@@ -2,8 +2,6 @@
 
 AI-powered system for infant cry analysis and facial pain detection.
 
-## 🚀 Quick Start Guide
-
 ### Prerequisites
 - Python 3.8+
 - Node.js 16+
