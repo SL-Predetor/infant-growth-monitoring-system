@@ -66,7 +66,7 @@ npm install
 ```
 
 3. **Configure API endpoint**
-   - Edit `app/cry-translator-simple.tsx`
+   - Edit `app/(tabs)/cry-translator.tsx`
    - Update `BASE_URL`:
    ```typescript
    const BASE_URL = "http://localhost:8000";  // For local testing
@@ -112,22 +112,39 @@ npm start
 
 ### Using the Application
 
-#### 🎤 Audio Cry Analysis
-1. Open app and select **🎤 Audio** tab
+The app features a **6-tab navigation system** for easy access to all features:
+
+#### 📱 Tab Navigation
+1. **🏠 Home** - Main menu with quick access to all features
+2. **🎤 Cry Translator** - Audio cry analysis and facial pain detection
+3. **👶 Behavior** - Child behavior and development tracking
+4. **📊 Growth** - Height and weight prediction forecaster
+5. **💪 Recovery** - Mom's postpartum recovery guidance
+6. **👤 Profile** - User profile and settings
+
+#### 🎤 Cry Translator Tab
+**Features:**
+- Audio cry analysis (Hungry, Pain, Burping, etc.)
+- Facial pain detection from photos
+- Dual mode operation:
+  
+**Audio Cry Analysis:**
+1. Open **🎤 Cry Translator** tab
 2. Press **🎤 Start** to begin recording
 3. Record infant cry (auto-stops after 5 seconds)
 4. Optional: Press **▶️ Play** to review recording
 5. Press **🔍 Analyze** to classify cry
 6. View result with confidence percentage
 
-#### 📸 Facial Pain Detection
-1. Select **📸 Face** tab
-2. Choose input method:
+**Facial Pain Detection:**
+1. Stay in **🎤 Cry Translator** tab
+2. Switch to face analysis mode
+3. Choose input method:
    - **📷 Camera**: Take new photo
    - **🖼️ Gallery**: Select existing image
-3. Ensure baby's face is clearly visible
-4. Press **🔍 Analyze** to detect pain
-5. View result with:
+4. Ensure baby's face is clearly visible
+5. Press **🔍 Analyze** to detect pain
+6. View result with:
    - Pain/No Pain classification
    - Confidence score
    - Extracted biomarkers (EAR, MAR, Brow Score)
@@ -274,11 +291,23 @@ infant-growth-monitoring-system/
 │
 ├── frontEnd/
 │   ├── app/
-│   │   ├── cry-translator-simple.tsx  # Main application screen
-│   │   ├── _layout.tsx                # Navigation layout
+│   │   ├── _layout.tsx                # Root layout with auth & theme
+│   │   ├── modal.tsx                  # Modal component
 │   │   └── (tabs)/
+│   │       ├── _layout.tsx            # Tab navigation (6 tabs)
+│   │       ├── index.tsx              # Home screen with menu grid
+│   │       ├── cry-translator.tsx     # 🎤 Cry Translator (audio + face)
+│   │       ├── behavior.tsx           # 👶 Behavior & Development
+│   │       ├── growth.tsx             # 📊 Growth Forecaster
+│   │       ├── recovery.tsx           # 💪 Mom's Recovery
+│   │       └── Profile.tsx            # 👤 User Profile
 │   ├── components/                     # Reusable UI components
+│   ├── constants/                      # Theme and constants
+│   ├── hooks/                          # Custom React hooks
+│   ├── lib/                            # Utilities and helpers
+│   ├── models/                         # Data models
 │   ├── package.json
+│   ├── tsconfig.json
 │   └── app.json
 │
 ├── mlModels/
@@ -297,7 +326,79 @@ infant-growth-monitoring-system/
 └── README.md
 ```
 
-## 🛠️ Technologies Used
+## � Frontend Architecture
+
+### Navigation Structure (Expo Router)
+
+The frontend uses **Expo Router** with a professional **6-tab bottom navigation system**:
+
+```
+App Root (app/_layout.tsx)
+  ├── Theme Provider
+  ├── Auth Provider
+  └── Tab Navigator (app/(tabs)/_layout.tsx)
+      ├── Home Tab (index.tsx) - Menu grid
+      ├── Cry Translator Tab (cry-translator.tsx) - Audio + Face analysis
+      ├── Behavior Tab (behavior.tsx) - Development tracking
+      ├── Growth Tab (growth.tsx) - Height/weight prediction
+      ├── Recovery Tab (recovery.tsx) - Postpartum guidance
+      └── Profile Tab (Profile.tsx) - User settings
+```
+
+### Tab Features
+
+| Tab | Icon | Component | Features |
+|-----|------|-----------|----------|
+| **Home** | 🏠 | `index.tsx` | Quick menu to all features |
+| **Cry Translator** | 🎤 | `cry-translator.tsx` | Audio cry analysis + facial pain detection |
+| **Behavior** | 👶 | `behavior.tsx` | Child behavior & development tracking |
+| **Growth** | 📊 | `growth.tsx` | Height & weight prediction forecaster |
+| **Recovery** | 💪 | `recovery.tsx` | Mom's postpartum recovery guidance |
+| **Profile** | 👤 | `Profile.tsx` | User profile & app settings |
+
+### Component Hierarchy
+
+```
+App (Root Layout)
+│
+├── SplashScreen (Loading)
+├── AuthContext (Authentication)
+├── ThemeProvider (Dark/Light mode)
+│
+└── TabNavigator
+    ├── HomeScreen
+    │   └── MenuGrid (Navigation to all features)
+    │
+    ├── CryTranslatorScreen
+    │   ├── AudioRecorder (expo-av)
+    │   ├── AudioPlayer (expo-av)
+    │   ├── ImagePicker (expo-image-picker)
+    │   └── API Integration
+    │
+    ├── BehaviorScreen
+    │   └── ParallaxScrollView
+    │
+    ├── GrowthScreen
+    │   └── ParallaxScrollView
+    │
+    ├── RecoveryScreen
+    │   └── ParallaxScrollView
+    │
+    └── ProfileScreen
+        └── User Settings
+```
+
+### Key Technologies
+
+- **Expo Router** - File-based routing (like Next.js)
+- **React Native** - Cross-platform UI
+- **TypeScript** - Type safety
+- **expo-av** - Audio recording/playback
+- **expo-image-picker** - Camera/gallery access
+- **Appwrite** - Backend authentication
+- **Custom Hooks** - State management (useState, useContext)
+
+## �🛠️ Technologies Used
 
 ### Backend
 | Technology | Purpose |
