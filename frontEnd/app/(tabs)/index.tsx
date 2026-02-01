@@ -16,7 +16,7 @@ export default function HomeScreen() {
       title: "Cry Translator",
       subtitle: "Identify Hunger, Pain, or Fuss.",
       iconName: "speaker.wave.2",
-      onPress: () => router.push("/cry-translator-simple"),
+      onPress: () => router.push("/(tabs)/cry-translator"),
       accentColor: "#FF6B6B",
     },
     {
@@ -25,7 +25,7 @@ export default function HomeScreen() {
       subtitle: "Predict Height & Weight.",
       iconName: "chart.line.uptrend.xyaxis",
       badge: "Next measure: Today",
-      onPress: () => router.push("/growth-forecaster"),
+      onPress: () => router.push("/(tabs)/growth"),
       accentColor: "#4ECDC4",
     },
   ];
@@ -36,7 +36,7 @@ export default function HomeScreen() {
       title: "Behavior & Development",
       subtitle: "Screening & Eye Gaze Analysis.",
       iconName: "puzzlepiece",
-      onPress: () => router.push("/behavior-development"),
+      onPress: () => router.push("/(tabs)/behavior"),
       accentColor: "#FFE66D",
     },
     {
@@ -44,7 +44,7 @@ export default function HomeScreen() {
       title: "Mom's Recovery",
       subtitle: "Postpartum Pain & Nutrition.",
       iconName: "heart",
-      onPress: () => router.push("/moms-recovery"),
+      onPress: () => router.push("/(tabs)/recovery"),
       accentColor: "#FF85B3",
     },
   ];
