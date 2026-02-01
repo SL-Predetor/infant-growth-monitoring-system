@@ -1,8 +1,8 @@
-# 🍼 Infant Growth Monitoring System
+# Infant Growth Monitoring System
 
 A comprehensive AI-powered system for monitoring infant well-being through cry analysis and facial pain detection.
 
-## 🚀 Installation
+## Installation
 
 ### Prerequisites
 - Python 3.8+
@@ -73,7 +73,7 @@ npm install
    // const BASE_URL = "http://YOUR_IP:8000"; // For mobile device
    ```
 
-## 💻 Usage
+## Usage
 
 ### Starting the Backend
 
@@ -114,42 +114,42 @@ npm start
 
 The app features a **6-tab navigation system** for easy access to all features:
 
-#### 📱 Tab Navigation
-1. **🏠 Home** - Main menu with quick access to all features
-2. **🎤 Cry Translator** - Audio cry analysis and facial pain detection
-3. **👶 Behavior** - Child behavior and development tracking
-4. **📊 Growth** - Height and weight prediction forecaster
-5. **💪 Recovery** - Mom's postpartum recovery guidance
-6. **👤 Profile** - User profile and settings
+#### Tab Navigation
+1. **Home** - Main menu with quick access to all features
+2. **Cry Translator** - Audio cry analysis and facial pain detection
+3. **Behavior** - Child behavior and development tracking
+4. **Growth** - Height and weight prediction forecaster
+5. **Recovery** - Postpartum recovery guidance
+6. **Profile** - User profile and settings
 
-#### 🎤 Cry Translator Tab
+#### Cry Translator Tab
 **Features:**
 - Audio cry analysis (Hungry, Pain, Burping, etc.)
 - Facial pain detection from photos
 - Dual mode operation:
   
 **Audio Cry Analysis:**
-1. Open **🎤 Cry Translator** tab
-2. Press **🎤 Start** to begin recording
+1. Open Cry Translator tab
+2. Press Start to begin recording
 3. Record infant cry (auto-stops after 5 seconds)
-4. Optional: Press **▶️ Play** to review recording
-5. Press **🔍 Analyze** to classify cry
+4. Optional: Press Play to review recording
+5. Press Analyze to classify cry
 6. View result with confidence percentage
 
 **Facial Pain Detection:**
-1. Stay in **🎤 Cry Translator** tab
+1. Stay in Cry Translator tab
 2. Switch to face analysis mode
 3. Choose input method:
-   - **📷 Camera**: Take new photo
-   - **🖼️ Gallery**: Select existing image
+   - **Camera**: Take new photo
+   - **Gallery**: Select existing image
 4. Ensure baby's face is clearly visible
-5. Press **🔍 Analyze** to detect pain
+5. Press Analyze to detect pain
 6. View result with:
    - Pain/No Pain classification
    - Confidence score
    - Extracted biomarkers (EAR, MAR, Brow Score)
 
-## 📡 API Documentation
+## API Documentation
 
 ### Base URL
 ```
@@ -158,7 +158,7 @@ http://localhost:8000
 
 ### Endpoints
 
-#### 1. Health Check
+#### Health Check
 **GET** `/`
 
 **Response:**
@@ -169,7 +169,7 @@ http://localhost:8000
 }
 ```
 
-#### 2. Audio Cry Analysis
+#### Audio Cry Analysis
 **POST** `/predict-cry`
 
 **Request:**
@@ -192,7 +192,7 @@ http://localhost:8000
 }
 ```
 
-#### 3. Facial Pain Detection
+#### Facial Pain Detection
 **POST** `/predict-face`
 
 **Request:**
@@ -219,7 +219,7 @@ http://localhost:8000
 - **MAR** (Mouth Aspect Ratio): Higher values indicate mouth opening (crying)
 - **Brow Score**: Lower values indicate brow lowering/furrowing (pain indicator)
 
-## 🧠 Model Training
+## Model Training
 
 ### Audio Model (CNN)
 
@@ -274,7 +274,7 @@ jupyter notebook "ImgPainRecognition3.ipynb"
 - Class weights: Balanced
 - Features: Interpretable biomarkers
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 infant-growth-monitoring-system/
@@ -326,7 +326,7 @@ infant-growth-monitoring-system/
 └── README.md
 ```
 
-## � Frontend Architecture
+## Frontend Architecture
 
 ### Navigation Structure (Expo Router)
 
@@ -347,14 +347,14 @@ App Root (app/_layout.tsx)
 
 ### Tab Features
 
-| Tab | Icon | Component | Features |
-|-----|------|-----------|----------|
-| **Home** | 🏠 | `index.tsx` | Quick menu to all features |
-| **Cry Translator** | 🎤 | `cry-translator.tsx` | Audio cry analysis + facial pain detection |
-| **Behavior** | 👶 | `behavior.tsx` | Child behavior & development tracking |
-| **Growth** | 📊 | `growth.tsx` | Height & weight prediction forecaster |
-| **Recovery** | 💪 | `recovery.tsx` | Mom's postpartum recovery guidance |
-| **Profile** | 👤 | `Profile.tsx` | User profile & app settings |
+| Tab | Component | Features |
+|-----|-----------|----------|
+| **Home** | `index.tsx` | Quick menu to all features |
+| **Cry Translator** | `cry-translator.tsx` | Audio cry analysis and facial pain detection |
+| **Behavior** | `behavior.tsx` | Child behavior and development tracking |
+| **Growth** | `growth.tsx` | Height and weight prediction forecaster |
+| **Recovery** | `recovery.tsx` | Postpartum recovery guidance |
+| **Profile** | `Profile.tsx` | User profile and app settings |
 
 ### Component Hierarchy
 
@@ -398,7 +398,7 @@ App (Root Layout)
 - **Appwrite** - Backend authentication
 - **Custom Hooks** - State management (useState, useContext)
 
-## �🛠️ Technologies Used
+## Technologies Used
 
 ### Backend
 | Technology | Purpose |
@@ -431,7 +431,7 @@ App (Root Layout)
 | **Facial Action Units** | Pain biomarkers |
 | **Data Augmentation** | Dataset expansion |
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Backend Issues
 
@@ -532,7 +532,7 @@ ifconfig
 - Ensure face is unobstructed
 - Adequate lighting
 
-## 📊 Performance Metrics
+## Performance Metrics
 
 ### Audio Model
 - **Training Accuracy:** ~85-90%
@@ -547,7 +547,7 @@ ifconfig
 - **Dataset:** 8,503 images (Pain: 6,368 | No Pain: 2,135)
 - **Features:** 3 biomarkers (EAR, MAR, Brow Score)
 
-## 🔐 Security Considerations
+## Security Considerations
 
 - **CORS:** Currently set to `allow_origins=["*"]` for development
 - **Production:** Update CORS to specific domains
@@ -555,7 +555,7 @@ ifconfig
 - **Data Privacy:** No data is stored by default
 - **HTTPS:** Use SSL/TLS for production deployment
 
-## 🚀 Deployment
+## Deployment
 
 ### Backend Deployment (Example: Heroku)
 ```bash
@@ -575,11 +575,11 @@ expo build:ios
 expo build:web
 ```
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 👥 Authors
+## Authors
 
 - **Research Team** - *Initial development*
 
