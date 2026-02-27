@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -24,6 +24,36 @@ const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;
 
 export default function CryTranslatorScreen() {
+  type AudioResult = {
+    label: string;
+    confidence: number;
+    message?: string;
+    isFusion?: false;
+  };
+
+  type FaceResult = {
+    label: string;
+    confidence: number;
+    message?: string;
+    pain_probability?: number;
+    features?: unknown;
+    isFusion?: false;
+  };
+
+  type FusionResult = {
+    predicted_cry_reason: string;
+    confidence: number;
+    confidence_level: 'Low' | 'Medium' | 'High' | string;
+    confidence_message?: string;
+    context_info?: string;
+    all_class_probabilities?: Record<string, number>;
+    disclaimer?: string;
+    model_disagreement?: boolean;
+    isFusion: true;
+  };
+
+  type ResultState = AudioResult | FaceResult | FusionResult | null;
+
   // --- STATE ---
   const [mode, setMode] = useState<'audio' | 'face' | 'comprehensive'>('audio');
   
@@ -36,9 +66,8 @@ export default function CryTranslatorScreen() {
   const [faceUri, setFaceUri] = useState<string | null>(null);
 
   // Shared State
-  const [result, setResult] = useState<any | null>(null);
+  const [result, setResult] = useState<ResultState>(null);
   const [loading, setLoading] = useState(false);
-  const [showContextForm, setShowContextForm] = useState(false);
   
   // Contextual Data for Fusion Analysis
   const [contextData, setContextData] = useState({
@@ -55,12 +84,134 @@ export default function CryTranslatorScreen() {
   const inputBg = useThemeColor({ light: '#F5F5F5', dark: '#2A2A2A' }, 'background');
   const textColor = useThemeColor({ light: '#000000', dark: '#FFFFFF' }, 'text');
 
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Normalize confidence scale between 0-1 and 0-100.
+  const to01 = (value: number | string | null | undefined) => {
+    const num = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(num)) return 0;
+    return num > 1 ? num / 100 : num;
+  };
+
+  // Normalize confidence scale for display as percent.
+  const toPct = (value: number | string | null | undefined) => {
+    const num = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(num)) return 0;
+    return num <= 1 ? num * 100 : num;
+  };
+
+  const mapAudioLabel = (label?: string) => {
+    const normalized = (label || '').toLowerCase();
+    if (normalized === 'pain_cry') return 'Pain';
+    if (normalized === 'hunger_cry') return 'Hunger';
+    if (normalized === 'normal_cry') return 'Normal';
+    return 'Unknown';
+  };
+
+  const mapFaceLabel = (label?: string) => {
+    const normalized = (label || '').toLowerCase();
+    if (normalized === 'pain_expression') return 'Pain';
+    if (normalized === 'no_pain' || normalized === 'no-pain') return 'No-Pain';
+    return 'Unknown';
+  };
+
+  // Retry fusion endpoint once if we hit a 404 (alternate route fallback).
+  const postFusion = async (payload: Record<string, any>) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    const post = (url: string) => fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    let res = await post(FUSION_API);
+    if (res.status === 404) {
+      res = await post(`${BASE_URL}/predict`);
+    }
+    return res;
+  };
+
+  const nonFusionConfidencePct = result && !('isFusion' in result && result.isFusion)
+    ? toPct(result.confidence)
+    : 0;
+
+  const isFusionResult = (value: ResultState): value is FusionResult => {
+    return !!value && 'isFusion' in value && value.isFusion === true;
+  };
+
+  const isNonFusionResult = (value: ResultState): value is AudioResult | FaceResult => {
+    return !!value && !isFusionResult(value) && 'label' in value;
+  };
+
+  const clearStopTimeout = () => {
+    if (stopTimeoutRef.current) {
+      clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
+  };
+
+  const abortActiveRequest = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  };
+
+  const unloadSound = async () => {
+    if (soundRef.current) {
+      try {
+        await soundRef.current.unloadAsync();
+      } catch (e) {}
+      soundRef.current = null;
+      setSound(null);
+    }
+  };
+
+  const stopAndUnloadRecording = async () => {
+    if (!recordingRef.current) return;
+    try {
+      const status = await recordingRef.current.getStatusAsync();
+      if (status.isRecording) {
+        await recordingRef.current.stopAndUnloadAsync();
+      }
+    } catch (e) {}
+    recordingRef.current = null;
+    setRecording(null);
+  };
+
+  const setNonRecordingAudioMode = async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      clearStopTimeout();
+      abortActiveRequest();
+      void unloadSound();
+      void stopAndUnloadRecording();
+    };
+  }, []);
+
   // ==============================
   // 🎵 AUDIO LOGIC
   // ==============================
   const startRecording = async () => {
     setResult(null);
     setAudioUri(null);
+    clearStopTimeout();
     try {
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) { Alert.alert("Permission needed"); return; }
@@ -69,13 +220,16 @@ export default function CryTranslatorScreen() {
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await rec.startAsync();
       setRecording(rec);
-      setTimeout(async () => {
+      recordingRef.current = rec;
+      stopTimeoutRef.current = setTimeout(async () => {
         try {
             const status = await rec.getStatusAsync();
             if (status.isRecording) {
                 await rec.stopAndUnloadAsync();
                 setRecording(null);
                 setAudioUri(rec.getURI() || null);
+                recordingRef.current = null;
+                await setNonRecordingAudioMode();
             }
         } catch (e) {}
       }, 5000);
@@ -85,16 +239,21 @@ export default function CryTranslatorScreen() {
   const stopRecording = async () => {
     if (!recording) return;
     setLoading(true);
+    clearStopTimeout();
     await recording.stopAndUnloadAsync();
     setRecording(null);
     setAudioUri(recording.getURI() || null);
+    recordingRef.current = null;
+    await setNonRecordingAudioMode();
     setLoading(false);
   };
 
   const playRecording = async () => {
     if (!audioUri) return;
+    await unloadSound();
     const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
     setSound(sound);
+    soundRef.current = sound;
     await sound.playAsync();
   };
 
@@ -105,19 +264,26 @@ export default function CryTranslatorScreen() {
     setResult(null);
     setFaceUri(null);
 
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert("Permission needed", "Camera access is required."); return; }
+    if (Platform.OS !== 'web') {
+      if (useCamera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Permission needed", "Camera access is required."); return; }
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Permission needed", "Gallery access is required."); return; }
+      }
+    }
 
-    let result;
+    let pickerResult;
     if (useCamera) {
-        result = await ImagePicker.launchCameraAsync({
+        pickerResult = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
             quality: 1,
         });
     } else {
-        result = await ImagePicker.launchImageLibraryAsync({
+        pickerResult = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
@@ -125,8 +291,8 @@ export default function CryTranslatorScreen() {
         });
     }
 
-    if (!result.canceled) {
-        setFaceUri(result.assets[0].uri);
+    if (!pickerResult.canceled) {
+        setFaceUri(pickerResult.assets[0].uri);
     }
   };
 
@@ -145,6 +311,8 @@ export default function CryTranslatorScreen() {
 
     setLoading(true);
     setResult(null);
+    abortActiveRequest();
+    abortControllerRef.current = new AbortController();
 
     try {
       const formData = new FormData();
@@ -154,7 +322,7 @@ export default function CryTranslatorScreen() {
           const blob = await response.blob();
           formData.append("file", blob, isAudio ? "audio.webm" : "face.jpg");
       } else {
-          const type = isAudio ? 'audio/mp4' : 'image/jpeg';
+          const type = isAudio ? 'audio/m4a' : 'image/jpeg';
           const name = isAudio ? 'recording.m4a' : 'face.jpg';
           formData.append("file", { uri, name, type } as any);
       }
@@ -163,25 +331,41 @@ export default function CryTranslatorScreen() {
         method: "POST",
         body: formData,
         headers: { 'Accept': 'application/json' },
+        signal: abortControllerRef.current.signal,
       });
 
-      const json = await res.json();
-      if (res.ok) setResult(json);
-      else Alert.alert("Error", json.detail || "Failed");
+      const contentType = res.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+      const json = isJson ? await res.json() : null;
+      if (!res.ok) {
+        Alert.alert("Error", json?.detail || `Request failed (${res.status})`);
+        return;
+      }
+      if (!json) {
+        Alert.alert("Error", `Unexpected response (${res.status})`);
+        return;
+      }
+      if (isMountedRef.current) setResult(json);
 
     } catch (e) {
-      Alert.alert("Connection Failed", "Check Backend IP.");
+      const isAbort = (e as { name?: string } | null)?.name === 'AbortError';
+      if (!isAbort) {
+        Alert.alert("Connection Failed", "Check Backend IP.");
+      }
     } finally {
-      setLoading(false);
+      abortControllerRef.current = null;
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
   const clearAll = () => {
+    clearStopTimeout();
+    abortActiveRequest();
+    void unloadSound();
+    void stopAndUnloadRecording();
     setAudioUri(null);
     setFaceUri(null);
     setResult(null);
-    setRecording(null);
-    setShowContextForm(false);
   };
 
   // ==============================
@@ -195,6 +379,8 @@ export default function CryTranslatorScreen() {
     console.log('Context Data:', contextData);
     console.log('Loading state:', loading);
 
+    let nonFusionResult: AudioResult | FaceResult | null = null;
+
     // For comprehensive mode, check if we have audio or face data
     if (mode === 'comprehensive') {
       if (!audioUri && !faceUri) {
@@ -205,11 +391,12 @@ export default function CryTranslatorScreen() {
       console.log('✓ Audio/Face validation passed');
     } else {
       // For other modes, validate that analysis has been done
-      if (!result || !result.label) {
+      if (!isNonFusionResult(result)) {
         console.log('ERROR: No result available');
         Alert.alert('Analysis Required', 'Please analyze audio or face first before comprehensive analysis.');
         return;
       }
+      nonFusionResult = result;
       console.log('✓ Result validation passed');
     }
 
@@ -240,12 +427,14 @@ export default function CryTranslatorScreen() {
     console.log('✓ Validation passed, starting analysis');
 
     setLoading(true);
+    abortActiveRequest();
+    abortControllerRef.current = new AbortController();
 
     try {
-      let audioPrediction = 'Hunger';
-      let audioConfidence = 0.5;
-      let imagePrediction = 'No-Pain';
-      let imageConfidence = 0.5;
+      let audioPrediction = 'Unknown';
+      let audioConfidence = 0;
+      let imagePrediction = 'Unknown';
+      let imageConfidence = 0;
 
       // For comprehensive mode, analyze audio and/or face first
       if (mode === 'comprehensive') {
@@ -257,23 +446,26 @@ export default function CryTranslatorScreen() {
             const blob = await response.blob();
             formData.append("file", blob, "audio.webm");
           } else {
-            formData.append("file", { uri: audioUri, name: 'recording.m4a', type: 'audio/mp4' } as any);
+            formData.append("file", { uri: audioUri, name: 'recording.m4a', type: 'audio/m4a' } as any);
           }
 
           const audioRes = await fetch(AUDIO_API, {
             method: "POST",
             body: formData,
             headers: { 'Accept': 'application/json' },
+            signal: abortControllerRef.current.signal,
           });
 
-          const audioJson = await audioRes.json();
-          if (audioRes.ok) {
-            if (audioJson.label === 'pain_cry') {
-              audioPrediction = 'Pain';
-            } else if (audioJson.label === 'normal_cry') {
-              audioPrediction = 'Hunger';
-            }
-            audioConfidence = audioJson.confidence / 100;
+          const audioContentType = audioRes.headers.get('content-type') || '';
+          const audioJson = audioContentType.includes('application/json')
+            ? await audioRes.json()
+            : null;
+          if (audioRes.ok && audioJson) {
+            audioPrediction = mapAudioLabel(audioJson.label);
+            audioConfidence = to01(audioJson.confidence);
+          } else if (!audioRes.ok) {
+            Alert.alert("Error", audioJson?.detail || `Audio request failed (${audioRes.status})`);
+            return;
           }
         }
 
@@ -292,34 +484,33 @@ export default function CryTranslatorScreen() {
             method: "POST",
             body: formData,
             headers: { 'Accept': 'application/json' },
+            signal: abortControllerRef.current.signal,
           });
 
-          const faceJson = await faceRes.json();
-          if (faceRes.ok) {
-            if (faceJson.label === 'pain_expression') {
-              imagePrediction = 'Pain';
-            } else {
-              imagePrediction = 'No-Pain';
-            }
-            imageConfidence = faceJson.confidence / 100;
+          const faceContentType = faceRes.headers.get('content-type') || '';
+          const faceJson = faceContentType.includes('application/json')
+            ? await faceRes.json()
+            : null;
+          if (faceRes.ok && faceJson) {
+            imagePrediction = mapFaceLabel(faceJson.label);
+            imageConfidence = to01(faceJson.confidence);
+          } else if (!faceRes.ok) {
+            Alert.alert("Error", faceJson?.detail || `Face request failed (${faceRes.status})`);
+            return;
           }
         }
       } else {
         // Parse from existing result for audio/face modes
+        if (!nonFusionResult) {
+          Alert.alert('Analysis Required', 'Please analyze audio or face first before comprehensive analysis.');
+          return;
+        }
         if (mode === 'audio') {
-          if (result.label === 'pain_cry') {
-            audioPrediction = 'Pain';
-          } else if (result.label === 'normal_cry') {
-            audioPrediction = 'Hunger';
-          }
-          audioConfidence = result.confidence / 100;
+          audioPrediction = mapAudioLabel(nonFusionResult.label);
+          audioConfidence = to01(nonFusionResult.confidence);
         } else {
-          if (result.label === 'pain_expression') {
-            imagePrediction = 'Pain';
-          } else {
-            imagePrediction = 'No-Pain';
-          }
-          imageConfidence = result.confidence / 100;
+          imagePrediction = mapFaceLabel(nonFusionResult.label);
+          imageConfidence = to01(nonFusionResult.confidence);
         }
       }
 
@@ -338,36 +529,47 @@ export default function CryTranslatorScreen() {
       console.log('Sending payload to fusion API:', payload);
       console.log('FUSION_API URL:', FUSION_API);
 
-      const res = await fetch(FUSION_API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      const res = await postFusion(payload);
 
       console.log('Response status:', res.status);
-      const json = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      const json = contentType.includes('application/json') ? await res.json() : null;
       console.log('Response data:', json);
 
+      if (!res.ok) {
+        Alert.alert('Error', json?.detail || `Fusion request failed (${res.status})`);
+        return;
+      }
+      if (!json) {
+        Alert.alert('Error', `Unexpected response (${res.status})`);
+        return;
+      }
       if (res.ok) {
         console.log('✓ Fusion analysis successful!');
-        setResult({
-          ...json,
-          isFusion: true,
-        });
+        const audioIsPain = audioPrediction === 'Pain';
+        const imageIsPain = imagePrediction === 'Pain';
+        const hasDisagreement = Object.prototype.hasOwnProperty.call(json, 'model_disagreement');
+        if (isMountedRef.current) {
+          setResult({
+            ...json,
+            model_disagreement: hasDisagreement ? audioIsPain !== imageIsPain : json.model_disagreement,
+            isFusion: true,
+          });
+        }
         console.log('Result set with isFusion=true');
-        setShowContextForm(false);
       } else {
         console.log('ERROR: API returned error');
         Alert.alert('Error', json.detail || 'Failed to analyze');
       }
     } catch (e: any) {
-      console.error('Comprehensive analysis error:', e);
-      Alert.alert('Connection Failed', e.message || 'Check Backend IP and ensure server is running.');
+      const isAbort = (e as { name?: string } | null)?.name === 'AbortError';
+      if (!isAbort) {
+        console.error('Comprehensive analysis error:', e);
+        Alert.alert('Connection Failed', e.message || 'Check Backend IP and ensure server is running.');
+      }
     } finally {
-      setLoading(false);
+      abortControllerRef.current = null;
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -634,98 +836,10 @@ export default function CryTranslatorScreen() {
           
           
 
-          {/* --- CONTEXT FORM --- */}
-          {showContextForm && (
-            <View style={styles.contextForm}>
-              <ThemedText style={styles.contextFormTitle}>📋 Additional Information</ThemedText>
-              
-              <ThemedText style={styles.contextLabel}>Baby Age (months)</ThemedText>
-              <TextInput
-                style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
-                value={contextData.baby_age_months}
-                onChangeText={(val) => setContextData({...contextData, baby_age_months: val})}
-                placeholder="e.g., 6"
-                placeholderTextColor="#999"
-                keyboardType="numeric"
-              />
-
-              <ThemedText style={styles.contextLabel}>Time Since Feed (hours)</ThemedText>
-              <TextInput
-                style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
-                value={contextData.time_since_feed_hours}
-                onChangeText={(val) => setContextData({...contextData, time_since_feed_hours: val})}
-                placeholder="e.g., 4.5"
-                placeholderTextColor="#999"
-                keyboardType="decimal-pad"
-              />
-
-              <ThemedText style={styles.contextLabel}>Time Since Sleep (hours)</ThemedText>
-              <TextInput
-                style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
-                value={contextData.time_since_sleep_hours}
-                onChangeText={(val) => setContextData({...contextData, time_since_sleep_hours: val})}
-                placeholder="e.g., 1.2"
-                placeholderTextColor="#999"
-                keyboardType="decimal-pad"
-              />
-
-              <ThemedText style={styles.contextLabel}>Diaper Status</ThemedText>
-              <View style={styles.diaperButtons}>
-                {['Clean', 'Wet', 'Soiled'].map((status) => (
-                  <Pressable
-                    key={status}
-                    style={[
-                      styles.diaperBtn,
-                      contextData.diaper_status === status && styles.diaperBtnActive
-                    ]}
-                    onPress={() => setContextData({...contextData, diaper_status: status})}
-                  >
-                    <ThemedText style={[
-                      styles.diaperBtnText,
-                      contextData.diaper_status === status && styles.diaperBtnTextActive
-                    ]}>
-                      {status === 'Clean' ? '✨' : status === 'Wet' ? '💧' : '💩'} {status}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-
-              <ThemedText style={styles.contextLabel}>Room Temperature (°C) - Optional</ThemedText>
-              <TextInput
-                style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
-                value={contextData.room_temperature_celsius}
-                onChangeText={(val) => setContextData({...contextData, room_temperature_celsius: val})}
-                placeholder="e.g., 26 (leave empty for default)"
-                placeholderTextColor="#999"
-                keyboardType="decimal-pad"
-              />
-
-              <View style={styles.contextBtnRow}>
-                <Pressable 
-                  style={[styles.contextCancelBtn, { flex: 1, marginRight: 8 }]}
-                  onPress={() => setShowContextForm(false)}
-                >
-                  <ThemedText style={styles.contextCancelText}>Cancel</ThemedText>
-                </Pressable>
-                <Pressable 
-                  style={[styles.contextSubmitBtn, { flex: 1, marginLeft: 8 }]}
-                  onPress={comprehensiveAnalysis}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <ThemedText style={styles.btnText}>Analyze</ThemedText>
-                  )}
-                </Pressable>
-              </View>
-            </View>
-          )}
-          
           {/* --- RESULT --- */}
-          {result && !showContextForm && (mode !== 'comprehensive' || result.isFusion) && (
+          {result && (mode !== 'comprehensive' || isFusionResult(result)) && (
             <View style={styles.resultContainer}>
-              {result.isFusion ? (
+              {isFusionResult(result) ? (
                 // Fusion Result Display
                 <View style={[
                   styles.resultBox,
@@ -799,27 +913,27 @@ export default function CryTranslatorScreen() {
                 // Standard Result Display
                 <View style={[
                   styles.resultBox,
-                  result.label === 'pain_expression' || result.label === 'pain_cry' 
+                  isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry')
                     ? styles.resultPain 
                     : styles.resultNormal
                 ]}>
                   <View style={styles.resultIconContainer}>
                     <ThemedText style={styles.resultIcon}>
-                      {result.label === 'pain_expression' || result.label === 'pain_cry' ? '😣' : '😊'}
+                      {isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry') ? '😣' : '😊'}
                     </ThemedText>
                   </View>
                   
                   <ThemedText style={styles.resultTitle}>
-                    {result.label === 'pain_expression' || result.label === 'pain_cry' 
+                    {isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry') 
                       ? 'Pain Detected' 
                       : 'Normal / No Pain'}
                   </ThemedText>
                   
                   <View style={styles.confidenceBar}>
-                    <View style={[styles.confidenceFill, { width: `${result.confidence}%` }]} />
+                    <View style={[styles.confidenceFill, { width: `${nonFusionConfidencePct}%` }]} />
                   </View>
                   
-                  <ThemedText style={styles.confText}>{result.confidence.toFixed(1)}% Confidence</ThemedText>
+                  <ThemedText style={styles.confText}>{nonFusionConfidencePct.toFixed(1)}% Confidence</ThemedText>
                   <ThemedText style={styles.msgText}>{result.message}</ThemedText>
                 </View>
               )}
@@ -827,7 +941,7 @@ export default function CryTranslatorScreen() {
           )}
 
           {/* --- CLEAR --- */}
-          {(audioUri || faceUri) && !loading && !showContextForm && (
+          {(audioUri || faceUri) && !loading && (
             <Pressable onPress={clearAll} style={styles.clearBtn}>
               <ThemedText style={styles.clearText}>↻ Start Over</ThemedText>
             </Pressable>
