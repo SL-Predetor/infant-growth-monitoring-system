@@ -12,7 +12,7 @@ import { AuthProvider } from '@/lib/auth-context';
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  anchor: 'disclaimer', // Show disclaimer first
 };
 
 export default function RootLayout() {

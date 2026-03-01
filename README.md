@@ -7,110 +7,70 @@ A comprehensive AI-powered system for monitoring infant well-being through cry a
 ### Prerequisites
 - Python 3.8+
 - Node.js 16+
-- FFmpeg (for audio processing)
 - Git
 
-### Backend Setup
-
-1. **Clone the repository**
+### 1. Clone the Project
 ```bash
 git clone <your-repo-url>
 cd infant-growth-monitoring-system
 ```
 
-2. **Set up Python virtual environment**
+### 2. Setup Backend
+
 ```bash
+# Navigate to backend folder
 cd backEnd
+
+# Create virtual environment
 python -m venv .venv
 
-# Windows
+# Activate it (Windows)
 .venv\Scripts\activate
 
-# macOS/Linux
+# Activate it (Mac/Linux)
 source .venv/bin/activate
-```
 
-3. **Install Python dependencies**
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-4. **Download FFmpeg** (Windows)
-   - Download from: https://ffmpeg.org/download.html
-   - Extract `ffmpeg.exe` and place in the `backEnd` folder
+**Note:** Download FFmpeg from https://ffmpeg.org/download.html and place `ffmpeg.exe` in the `backEnd` folder (Windows only).
 
-5. **Verify models exist**
-```
-backEnd/
-└── mlModels/
-    └── Cry/
-        ├── audio_cry_classifier.h5
+### 3. Setup Frontend
 
-mlModels/CryTranslater/
-├── saved_models/
-│   └── img_rf_pain_classifier3.pkl
-└── Notebooks/
-    └── face_landmarker.task (auto-downloads if missing)
-```
-
-### Frontend Setup
-
-1. **Navigate to frontend**
 ```bash
+# Navigate to frontend folder
 cd frontEnd
-```
 
-2. **Install dependencies**
-```bash
+# Install dependencies
 npm install
 ```
 
-3. **Configure API endpoint**
-   - Edit `app/(tabs)/cry-translator.tsx`
-   - Update `BASE_URL`:
-   ```typescript
-   const BASE_URL = "http://localhost:8000";  // For local testing
-   // const BASE_URL = "http://YOUR_IP:8000"; // For mobile device
-   ```
+### 4. Start the Application
 
-## Usage
-
-### Starting the Backend
-
-1. **Activate virtual environment**
+**Terminal 1 - Backend:**
 ```bash
 cd backEnd
 .venv\Scripts\activate  # Windows
-```
-
-2. **Run the FastAPI server**
-```bash
 python app.py
 ```
 
-**Expected output:**
+Wait for this message:
 ```
 🔍 [AudioRouter] Audio Model loaded successfully
-✅ [FaceRouter] Random Forest model loaded successfully
-✅ [FaceRouter] MediaPipe Face Detector initialized
+🔍 [FaceRouter] Face Model loaded successfully
 INFO: Uvicorn running on http://0.0.0.0:8000
 ```
 
-### Starting the Frontend
-
-1. **Start Expo development server**
+**Terminal 2 - Frontend:**
 ```bash
 cd frontEnd
 npm start
 ```
 
-2. **Choose your platform:**
-   - Press `w` → Web browser
-   - Press `a` → Android emulator
-   - Press `i` → iOS simulator
-   - Scan QR code → Physical device (Expo Go app)
+Press `w` to open in web browser.
 
-### Using the Application
+## 📱 Using the App
 
 The app features a **6-tab navigation system** for easy access to all features:
 
@@ -433,70 +393,16 @@ App (Root Layout)
 
 ## Troubleshooting
 
-### Backend Issues
+**Backend won't start?**
+- Make sure virtual environment is activated
+- Check if models exist in `backEnd/mlModels/` and `mlModels/CryTranslater/saved_models/`
 
-#### Model not loading
-```bash
-# Check if model files exist
-python -c "import os; print('Audio:', os.path.exists('backEnd/mlModels/Cry/audio_cry_classifier.h5'))"
-python -c "import os; print('Face:', os.path.exists('mlModels/CryTranslater/saved_models/img_rf_pain_classifier3.pkl'))"
-```
+**Frontend can't connect?**
+- Verify backend is running on port 8000
+- Check `BASE_URL` in `frontEnd/app/cry-translator-simple.tsx`
+- For mobile: Change to `http://YOUR_LOCAL_IP:8000`
 
-**Solution:** Ensure models are trained and saved in correct locations.
 
-#### FFmpeg not found
-```
-Error: FFmpeg not installed or not in PATH
-```
-
-**Solution:**
-- Download FFmpeg: https://ffmpeg.org/download.html
-- Extract `ffmpeg.exe` to `backEnd` folder
-- Or add to system PATH
-
-#### Port already in use
-```
-Error: [Errno 10048] Only one usage of each socket address
-```
-
-**Solution:**
-```python
-# Edit app.py
-uvicorn.run(app, host="0.0.0.0", port=8001)  # Change port
-```
-
-#### MediaPipe import error
-```
-ImportError: No module named 'mediapipe'
-```
-
-**Solution:**
-```bash
-pip install mediapipe
-```
-
-### Frontend Issues
-
-#### Cannot connect to backend
-```
-Network request failed / Connection timeout
-```
-
-**Solutions:**
-1. Verify backend is running (`python app.py`)
-2. Check IP address in `BASE_URL`
-3. For local testing: Use `http://localhost:8000`
-4. For mobile device: Use `http://YOUR_LOCAL_IP:8000`
-5. Check firewall settings (allow port 8000)
-
-**Find your IP:**
-```bash
-# Windows
-ipconfig
-
-# macOS/Linux
-ifconfig
-```
 
 #### Camera permissions denied
 **Solution:** Grant permissions in device settings → App → Permissions
@@ -599,15 +505,4 @@ For questions, issues, or contributions:
 
 ---
 
-**⚠️ Important Notice:** This system is intended for research and educational purposes only. It should NOT replace professional medical advice, diagnosis, or treatment. Always consult qualified healthcare professionals for infant health concerns.
-
-## 🎯 Future Enhancements
-
-- [ ] Real-time video analysis
-- [ ] Multi-infant monitoring
-- [ ] Historical data tracking
-- [ ] Parent mobile notifications
-- [ ] Integration with wearable devices
-- [ ] Cloud-based data storage
-- [ ] Multi-language support
-- [ ] Improved model accuracy with larger datasets
+**⚠️ Note:** This is a research project. Not for medical use.

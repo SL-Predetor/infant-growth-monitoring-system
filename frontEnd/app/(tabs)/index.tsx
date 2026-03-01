@@ -1,11 +1,62 @@
-import React from "react";
-import { StyleSheet, View, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import React from 'react';
+import { StyleSheet, View, Pressable, Dimensions, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ThemedText } from '@/components/themed-text';
+import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
-import { HelloWave } from "@/components/hello-wave";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { MenuGrid } from "@/components/menu-grid";
+const { width: screenWidth } = Dimensions.get('window');
+
+const GRID_GAP = Spacing.lg;
+const HORIZONTAL_PADDING = Spacing.lg;
+const isSmallScreen = screenWidth < 768;
+const CARD_WIDTH = isSmallScreen 
+  ? screenWidth - HORIZONTAL_PADDING * 2
+  : (screenWidth - HORIZONTAL_PADDING * 2 - GRID_GAP) / 2;
+
+interface Tool {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  route: string;
+}
+
+const TOOLS: Tool[] = [
+  {
+    id: 'cry-analysis',
+    name: 'Cry Analysis',
+    description: 'Understand your baby\'s cry patterns',
+    icon: '🎤',
+    color: '#4ECDC4',
+    route: '/smart-cry-analysis',
+  },
+  {
+    id: 'growth-forecaster',
+    name: 'Growth Forecaster',
+    description: 'Track your baby\'s development',
+    icon: '📈',
+    color: '#FF6B9D',
+    route: '/growth-forecaster',
+  },
+  {
+    id: 'behavior-development',
+    name: 'Behavior & Development',
+    description: 'Monitor developmental milestones',
+    icon: '🧠',
+    color: '#FFC75F',
+    route: '/behavior-development',
+  },
+  {
+    id: 'moms-recovery',
+    name: 'Mom\'s Recovery',
+    description: 'Your wellness and recovery guide',
+    icon: '🌸',
+    color: '#95E1D3',
+    route: '/moms-recovery',
+  },
+];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -49,100 +100,161 @@ export default function HomeScreen() {
     },
   ];
 
-  return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
+  const handleToolPress = (route: string) => {
+    router.push(route as any);
+  };
+
+  const ToolCard = ({ tool }: { tool: Tool }) => (
+    <Pressable
+      style={[
+        styles.toolCard,
+        {
+          backgroundColor: cardBackground,
+          width: CARD_WIDTH,
+          shadowColor: tool.color,
+        },
+      ]}
+      onPress={() => handleToolPress(tool.route)}
+      android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
     >
+      <View style={[styles.toolIconCircle, { backgroundColor: `${tool.color}20` }]}>
+        <ThemedText style={styles.toolIcon}>{tool.icon}</ThemedText>
+      </View>
+
+      <ThemedText style={[styles.toolName, { color: textColor }]}>
+        {tool.name}
+      </ThemedText>
+
+      <ThemedText style={[styles.toolDescription, { color: secondaryText }]} numberOfLines={2}>
+        {tool.description}
+      </ThemedText>
+
+      <View style={[styles.toolArrow, { borderTopColor: tool.color }]}>
+        <ThemedText style={{ color: tool.color, fontSize: 16 }}>→</ThemedText>
+      </View>
+    </Pressable>
+  );
+
+  return (
+    <ScrollView style={[styles.container, { backgroundColor }]} showsVerticalScrollIndicator={false}>
       {/* Header */}
-      <ThemedView style={styles.header}>
-        <View style={styles.headerRow}>
-          <ThemedText type="title" style={styles.title}>
-            Welcome!
+      <View style={styles.headerSection}>
+        <ThemedText style={[styles.mainTitle, { color: textColor }]}>
+          Infant Care Assistant
+        </ThemedText>
+        <ThemedText style={[styles.mainSubtitle, { color: secondaryText }]}>
+          Choose your tool
+        </ThemedText>
+      </View>
+
+      {/* Tools Grid */}
+      <View style={styles.gridContainer}>
+        <View style={[styles.sectionLabel, { paddingHorizontal: HORIZONTAL_PADDING }]}>
+          <ThemedText style={[styles.sectionTitle, { color: textColor }]}>
+            Tools
           </ThemedText>
-          <HelloWave />
         </View>
 
-        <ThemedText style={styles.subtitle}>
-          Let’s take care of your baby and you, one step at a time.
-        </ThemedText>
-      </ThemedView>
+        <View style={[styles.grid, { gap: GRID_GAP, paddingHorizontal: HORIZONTAL_PADDING }]}>
+          {TOOLS.map((tool) => (
+            <ToolCard key={tool.id} tool={tool} />
+          ))}
+        </View>
+      </View>
 
-      {/* Section title */}
-      <ThemedView style={styles.sectionHeader}>
-        <ThemedText style={styles.sectionTitle}>Quick Tools</ThemedText>
-        <ThemedText style={styles.sectionHint}>
-          Tap any card to start
-        </ThemedText>
-      </ThemedView>
-
-      {/* Grid card */}
-      <ThemedView style={styles.gridCard}>
-        <MenuGrid rowOneItems={rowOneItems} rowTwoItems={rowTwoItems} />
-      </ThemedView>
-
-      <View style={{ height: 28 }} />
+      {/* Footer spacing */}
+      <View style={{ height: Spacing.xl }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 50,
-    paddingBottom: 10,
+    flex: 1,
   },
 
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 15,
-    opacity: 0.8,
-    lineHeight: 20,
+  headerSection: {
+    paddingTop: Spacing.xxl,
+    paddingBottom: Spacing.xl,
+    paddingHorizontal: HORIZONTAL_PADDING,
+    alignItems: 'center',
   },
 
-  sectionHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
+  mainTitle: {
+    fontSize: Typography.sizes.heading,
+    fontWeight: Typography.weights.bold,
+    marginBottom: Spacing.sm,
+    textAlign: 'center',
   },
+
+  mainSubtitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.regular,
+    textAlign: 'center',
+  },
+
+  gridContainer: {
+    width: '100%',
+  },
+
+  sectionLabel: {
+    marginBottom: Spacing.md,
+  },
+
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  sectionHint: {
-    fontSize: 12,
-    opacity: 0.6,
+    fontSize: Typography.sizes.xl,
+    fontWeight: Typography.weights.semiBold,
   },
 
-  gridCard: {
-    marginHorizontal: 16,
-    marginTop: 6,
-    padding: 10,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.9)",
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: isSmallScreen ? 'center' : 'flex-start',
+    paddingBottom: Spacing.lg,
+  },
 
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+  toolCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    alignItems: 'flex-start',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  toolIconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+
+  toolIcon: {
+    fontSize: 24,
+  },
+
+  toolName: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semiBold,
+    marginBottom: Spacing.sm,
+  },
+
+  toolDescription: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.regular,
+    lineHeight: 18,
+    marginBottom: Spacing.md,
+    flex: 1,
+  },
+
+  toolArrow: {
+    width: '100%',
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'flex-end',
   },
 });
