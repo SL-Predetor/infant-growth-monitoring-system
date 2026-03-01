@@ -54,13 +54,20 @@ const TOOLS: Tool[] = [
     description: 'Your wellness and recovery guide',
     icon: '🌸',
     color: '#95E1D3',
-    route: '/moms-recovery',
+    route: '/recovery',
   },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
 
+  // theme-based colors
+  const backgroundColor = useThemeColor({}, 'background');
+  const cardBackground = useThemeColor({}, 'cardBackground');
+  const textColor = useThemeColor({}, 'text');
+  const secondaryText = useThemeColor({}, 'secondaryText');
+
+  // (rowOneItems/rowTwoItems defined but not used – grid rendered from TOOLS constant below)
   const rowOneItems = [
     {
       id: "cry-translator",
@@ -87,7 +94,7 @@ export default function HomeScreen() {
       title: "Behavior & Development",
       subtitle: "Screening & Eye Gaze Analysis.",
       iconName: "puzzlepiece",
-      onPress: () => router.push("/(tabs)/behavior"),
+      onPress: () => router.push("/behavior"),
       accentColor: "#FFE66D",
     },
     {
@@ -95,7 +102,7 @@ export default function HomeScreen() {
       title: "Mom's Recovery",
       subtitle: "Postpartum Pain & Nutrition.",
       iconName: "heart",
-      onPress: () => router.push("/(tabs)/recovery"),
+      onPress: () => router.push("/recovery"),
       accentColor: "#FF85B3",
     },
   ];
