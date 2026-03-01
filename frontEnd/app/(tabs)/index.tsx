@@ -61,10 +61,44 @@ const TOOLS: Tool[] = [
 export default function HomeScreen() {
   const router = useRouter();
 
-  const backgroundColor = useThemeColor({}, 'background');
-  const cardBackground = useThemeColor({}, 'cardBackground');
-  const textColor = useThemeColor({}, 'text');
-  const secondaryText = useThemeColor({}, 'secondaryText');
+  const rowOneItems = [
+    {
+      id: "cry-translator",
+      title: "Cry Translator",
+      subtitle: "Identify Hunger, Pain, or Fuss.",
+      iconName: "speaker.wave.2",
+      onPress: () => router.push("/(tabs)/cry-translator"),
+      accentColor: "#FF6B6B",
+    },
+    {
+      id: "growth-forecaster",
+      title: "Growth Forecaster",
+      subtitle: "Predict Height & Weight.",
+      iconName: "chart.line.uptrend.xyaxis",
+      badge: "Next measure: Today",
+      onPress: () => router.push("/(tabs)/growth"),
+      accentColor: "#4ECDC4",
+    },
+  ];
+
+  const rowTwoItems = [
+    {
+      id: "behavior-development",
+      title: "Behavior & Development",
+      subtitle: "Screening & Eye Gaze Analysis.",
+      iconName: "puzzlepiece",
+      onPress: () => router.push("/(tabs)/behavior"),
+      accentColor: "#FFE66D",
+    },
+    {
+      id: "moms-recovery",
+      title: "Mom's Recovery",
+      subtitle: "Postpartum Pain & Nutrition.",
+      iconName: "heart",
+      onPress: () => router.push("/(tabs)/recovery"),
+      accentColor: "#FF85B3",
+    },
+  ];
 
   const handleToolPress = (route: string) => {
     router.push(route as any);
