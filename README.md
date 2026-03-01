@@ -21,13 +21,21 @@ cd backEnd
 
 # Create virtual environment
 python -m venv .venv
+```
 
-# Activate it (Windows)
+**Activate virtual environment:**
+
+Windows:
+```cmd
 .venv\Scripts\activate
+```
 
-# Activate it (Mac/Linux)
+Mac/Linux:
+```bash
 source .venv/bin/activate
+```
 
+```bash
 # Install dependencies
 pip install -r requirements.txt
 ```
@@ -47,9 +55,18 @@ npm install
 ### 4. Start the Application
 
 **Terminal 1 - Backend:**
+
+Windows:
+```cmd
+cd backEnd
+.venv\Scripts\activate
+python app.py
+```
+
+Mac/Linux:
 ```bash
 cd backEnd
-.venv\Scripts\activate  # Windows
+source .venv/bin/activate
 python app.py
 ```
 
@@ -92,7 +109,7 @@ Press `w` to open in web browser.
 - For mobile: Change to `http://YOUR_LOCAL_IP:8000`
 
 **Find your IP (Windows):**
-```bash
+```cmd
 ipconfig
 ```
 
