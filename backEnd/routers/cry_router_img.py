@@ -1,31 +1,35 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException
 import numpy as np
-import cv2
+# import cv2  # DISABLED FOR AZURE
 import io
 import os
 import joblib
+from pathlib import Path
 
-# MediaPipe for facial landmark detection
-try:
-    import mediapipe as mp
-    from mediapipe.tasks import python
-    from mediapipe.tasks.python import vision
-    MEDIAPIPE_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️ [FaceRouter] MediaPipe not available: {e}")
-    MEDIAPIPE_AVAILABLE = False
+# MediaPipe for facial landmark detection (DISABLED FOR AZURE)
+MEDIAPIPE_AVAILABLE = False
+face_detector = None
+
+# try:
+#     import mediapipe as mp
+#     from mediapipe.tasks import python
+#     from mediapipe.tasks.python import vision
+#     MEDIAPIPE_AVAILABLE = True
+# except ImportError as e:
+#     print(f"⚠️ [FaceRouter] MediaPipe not available: {e}")
+#     MEDIAPIPE_AVAILABLE = False
 
 router = APIRouter()
 
 # --- 1. SETUP PATHS ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(current_dir, '..', '..', 'mlModels', 'CryTranslater', 'saved_models', 'img_rf_pain_classifier3.pkl')
-LANDMARKER_PATH = os.path.join(current_dir, '..', '..', 'mlModels', 'CryTranslater', 'Notebooks', 'face_landmarker.task')
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / 'mlModels' / 'Cry' / 'img_rf_pain_classifier3.pkl'
+LANDMARKER_PATH = BASE_DIR / 'mlModels' / 'Cry' / 'face_landmarker.task'
 
-print(f"🔍 [FaceRouter] Looking for model at: {os.path.abspath(MODEL_PATH)}")
-print(f"🔍 [FaceRouter] Looking for landmarker at: {os.path.abspath(LANDMARKER_PATH)}")
+print(f"🔍 [FaceRouter] Looking for model at: {MODEL_PATH}")
+print(f"🔍 [FaceRouter] Looking for landmarker at: {LANDMARKER_PATH}")
 
-# --- 2. LOAD RANDOM FOREST MODEL ---
+# --- 2. LAZY LOAD MODELS ---
 face_model = None
 face_detector = None
 
@@ -39,44 +43,56 @@ RIGHT_BROW_INNER = 285
 RIGHT_EYE_INNER = 362
 
 def load_face_model():
+    """Lazy load face model and detector only when needed"""
     global face_model, face_detector
+    
+    if face_model is not None and face_detector is not None:
+        return  # Already loaded
+    
     try:
         # Load Random Forest model
-        if not os.path.exists(MODEL_PATH):
-            print(f"⚠️ [FaceRouter] Model file NOT found at: {MODEL_PATH}")
-            return
+        if not MODEL_PATH.exists():
+            print(f"❌ [FaceRouter] Model file NOT found at: {MODEL_PATH}")
+            raise FileNotFoundError(f"Model not found at {MODEL_PATH}")
 
         face_model = joblib.load(MODEL_PATH)
         print("✅ [FaceRouter] Random Forest model loaded successfully!")
         
         # Initialize MediaPipe Face Landmarker
-        if MEDIAPIPE_AVAILABLE:
-            if not os.path.exists(LANDMARKER_PATH):
-                print(f"⚠️ [FaceRouter] Downloading face_landmarker.task...")
-                import urllib.request
-                url = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
-                os.makedirs(os.path.dirname(LANDMARKER_PATH), exist_ok=True)
-                urllib.request.urlretrieve(url, LANDMARKER_PATH)
-                print("✅ [FaceRouter] Landmarker downloaded!")
+        if not MEDIAPIPE_AVAILABLE:
+            print("❌ [FaceRouter] MediaPipe is not available")
+            raise ImportError("MediaPipe not installed")
             
-            base_options = python.BaseOptions(model_asset_path=LANDMARKER_PATH)
-            options = vision.FaceLandmarkerOptions(
-                base_options=base_options,
-                output_face_blendshapes=False,
-                output_facial_transformation_matrixes=False,
-                num_faces=1,
-                min_face_detection_confidence=0.5
-            )
-            face_detector = vision.FaceLandmarker.create_from_options(options)
-            print("✅ [FaceRouter] MediaPipe Face Detector initialized!")
+        if not LANDMARKER_PATH.exists():
+            print(f"⚠️ [FaceRouter] Landmarker task not found at: {LANDMARKER_PATH}")
+            print(f"🔄 [FaceRouter] Downloading face_landmarker.task...")
+            import urllib.request
+            url = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+            try:
+                LANDMARKER_PATH.parent.mkdir(parents=True, exist_ok=True)
+                urllib.request.urlretrieve(url, str(LANDMARKER_PATH))
+                print("✅ [FaceRouter] Landmarker downloaded!")
+            except Exception as download_err:
+                print(f"❌ [FaceRouter] Failed to download landmarker: {download_err}")
+                raise
+        
+        base_options = python.BaseOptions(model_asset_path=str(LANDMARKER_PATH))
+        options = vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            output_face_blendshapes=False,
+            output_facial_transformation_matrixes=False,
+            num_faces=1,
+            min_face_detection_confidence=0.5
+        )
+        face_detector = vision.FaceLandmarker.create_from_options(options)
+        print("✅ [FaceRouter] MediaPipe Face Detector initialized!")
         
     except Exception as e:
-        print(f"❌ [FaceRouter] Error loading model: {e}")
+        print(f"❌ [FaceRouter] Error loading model: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         face_model = None
         face_detector = None
-
-# Load immediately on startup
-load_face_model()
 
 # --- 3. FEATURE EXTRACTION FUNCTIONS ---
 def calculate_ratio(landmarks, indices):
@@ -153,54 +169,8 @@ def extract_features(image_bytes):
 # --- 4. PREDICTION ROUTE ---
 @router.post("/predict-face")
 async def predict_face(file: UploadFile = File(...)):
-    if face_model is None or face_detector is None:
-        load_face_model()
-        if face_model is None:
-            raise HTTPException(status_code=503, detail="Face model could not be loaded.")
-        if face_detector is None:
-            raise HTTPException(status_code=503, detail="Face detector could not be initialized.")
-
-    try:
-        # Read file
-        contents = await file.read()
-        
-        # Extract features using MediaPipe
-        features = extract_features(contents)
-        if features is None:
-            raise HTTPException(status_code=400, detail="Could not detect face or extract features from image")
-
-        # Predict using Random Forest
-        prediction = face_model.predict(features)[0]
-        probabilities = face_model.predict_proba(features)[0]
-        
-        # prediction: 0 = No Pain, 1 = Pain
-        # probabilities is array like [0.3, 0.7] for [No Pain prob, Pain prob]
-        no_pain_prob = float(probabilities[0])
-        pain_prob = float(probabilities[1])
-        
-        if prediction == 1:
-            label = "pain_expression"
-            confidence = pain_prob
-            msg = "Detected: Painful Expression 😣"
-        else:
-            label = "no_pain"
-            confidence = no_pain_prob
-            msg = "Detected: No Pain / Neutral 🙂"
-
-        return {
-            "label": label,
-            "confidence": round(confidence * 100, 2),
-            "pain_probability": round(pain_prob * 100, 2),
-            "features": {
-                "ear": round(float(features[0][0]), 4),
-                "mar": round(float(features[0][1]), 4),
-                "brow_score": round(float(features[0][2]), 4)
-            },
-            "message": msg
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"🔥 Prediction Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Temporary Azure deployment fix - heavy ML dependencies disabled
+    raise HTTPException(
+        status_code=503, 
+        detail="Face detection temporarily disabled on Azure free tier. Use local deployment for full features."
+    )

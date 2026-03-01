@@ -3,26 +3,38 @@ from pydantic import BaseModel, Field
 import joblib
 import pandas as pd
 import os
+from pathlib import Path
 from typing import Dict
 
 router = APIRouter()
 
 # ==============================
-# LOAD TRAINED MODEL & ENCODER
+# LOAD TRAINED MODEL & ENCODER (LAZY LOADING)
 # ==============================
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "mlModels", "Cry")
-MODEL_PATH = os.path.join(MODEL_DIR, "fusion_model_calibrated.pkl")
-ENCODER_PATH = os.path.join(MODEL_DIR, "fusion_label_encoder.pkl")
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / "mlModels" / "Cry" / "fusion_model_calibrated.pkl"
+ENCODER_PATH = BASE_DIR / "mlModels" / "Cry" / "fusion_label_encoder.pkl"
 
-# Load model and encoder at startup
-try:
-    calibrated_model = joblib.load(MODEL_PATH)
-    label_encoder = joblib.load(ENCODER_PATH)
-    print("✅ Fusion model and encoder loaded successfully!")
-except Exception as e:
-    print(f"❌ Error loading fusion model: {e}")
-    calibrated_model = None
-    label_encoder = None
+# Global variables for lazy loading
+calibrated_model = None
+label_encoder = None
+
+def load_models():
+    """Lazy load model and encoder only when needed"""
+    global calibrated_model, label_encoder
+    
+    if calibrated_model is not None and label_encoder is not None:
+        return  # Already loaded
+    
+    try:
+        calibrated_model = joblib.load(MODEL_PATH)
+        label_encoder = joblib.load(ENCODER_PATH)
+        print("✅ Fusion model and encoder loaded successfully!")
+    except Exception as e:
+        print(f"❌ Error loading fusion model: {e}")
+        calibrated_model = None
+        label_encoder = None
+        raise
 
 # ==============================
 # REQUEST MODEL
@@ -64,6 +76,9 @@ async def predict_cry_reason(request: FusionPredictionRequest):
     Combines audio analysis, facial expression analysis, and contextual information
     to provide an accurate prediction of why the baby is crying.
     """
+    
+    # Lazy load models on first call
+    load_models()
     
     # Check if model is loaded
     if calibrated_model is None or label_encoder is None:
@@ -157,9 +172,19 @@ async def predict_cry_reason(request: FusionPredictionRequest):
 @router.get("/health")
 async def health_check():
     """Check if the fusion model is loaded and ready"""
-    return {
-        "status": "healthy" if (calibrated_model is not None and label_encoder is not None) else "unhealthy",
-        "model_loaded": calibrated_model is not None,
-        "encoder_loaded": label_encoder is not None,
-        "available_classes": list(label_encoder.classes_) if label_encoder is not None else []
-    }
+    try:
+        load_models()
+        return {
+            "status": "healthy",
+            "model_loaded": calibrated_model is not None,
+            "encoder_loaded": label_encoder is not None,
+            "available_classes": list(label_encoder.classes_) if label_encoder is not None else []
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "model_loaded": False,
+            "encoder_loaded": False,
+            "error": str(e),
+            "available_classes": []
+        }
