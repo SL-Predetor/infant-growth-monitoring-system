@@ -55,8 +55,8 @@ python app.py
 
 Wait for this message:
 ```
-✅ [AudioRouter] Audio Model loaded successfully
-✅ [FaceRouter] Face Model loaded successfully
+🔍 [AudioRouter] Audio Model loaded successfully
+🔍 [FaceRouter] Face Model loaded successfully
 INFO: Uvicorn running on http://0.0.0.0:8000
 ```
 
