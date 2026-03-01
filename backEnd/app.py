@@ -14,6 +14,9 @@ from routers import cry_router_audio  # Your Audio Logic
 from routers import cry_router_img    # Your New Face Logic
 from routers import cry_router_fusion # Fusion Analysis Logic
 
+# postpartum module 
+from postpartum import router as postpartum_router
+
 app = FastAPI(title="Infant Growth Monitoring System API")
 
 # --- 3. CORS SETUP (Allows Phone/Web to connect) ---
@@ -30,6 +33,9 @@ app.add_middleware(
 app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])
 app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])
 app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")
+
+# include postpartum endpoints
+app.include_router(postpartum_router)  # mounted at /postpartum
 
 @app.get("/")
 def home():
