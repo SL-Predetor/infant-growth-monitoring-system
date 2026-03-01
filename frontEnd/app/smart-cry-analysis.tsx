@@ -145,21 +145,36 @@ export default function SmartAnalysisScreen() {
 
   const validateContext = (ctx: FusionContext) => {
     const errors: string[] = [];
-    if (!Number.isFinite(ctx.baby_age_months) || ctx.baby_age_months < 0 || ctx.baby_age_months > 36) {
+    
+    // Check if fields are filled
+    if (!babyAge.trim()) {
+      errors.push('Baby age is required');
+    } else if (!Number.isFinite(ctx.baby_age_months) || ctx.baby_age_months < 0 || ctx.baby_age_months > 36) {
       errors.push('Baby age must be between 0-36 months');
     }
-    if (!Number.isFinite(ctx.time_since_feed_hours) || ctx.time_since_feed_hours < 0 || ctx.time_since_feed_hours > 48) {
+    
+    if (!feedingTime.trim()) {
+      errors.push('Time since last feeding is required');
+    } else if (!Number.isFinite(ctx.time_since_feed_hours) || ctx.time_since_feed_hours < 0 || ctx.time_since_feed_hours > 48) {
       errors.push('Time since last feeding must be between 0-48 hours');
     }
-    if (!Number.isFinite(ctx.time_since_sleep_hours) || ctx.time_since_sleep_hours < 0 || ctx.time_since_sleep_hours > 48) {
+    
+    if (!sleepTime.trim()) {
+      errors.push('Time since last sleep is required');
+    } else if (!Number.isFinite(ctx.time_since_sleep_hours) || ctx.time_since_sleep_hours < 0 || ctx.time_since_sleep_hours > 48) {
       errors.push('Time since last sleep must be between 0-48 hours');
     }
+    
     if (!['Clean', 'Wet', 'Soiled'].includes(ctx.diaper_status)) {
       errors.push('Diaper status must be Clean/Wet/Soiled');
     }
-    if (!Number.isFinite(ctx.room_temperature_celsius) || ctx.room_temperature_celsius < 5 || ctx.room_temperature_celsius > 35) {
-      errors.push('Room temperature must be between 5-35°C');
+    
+    if (!roomTemperature.trim()) {
+      errors.push('Room temperature is required');
+    } else if (!Number.isFinite(ctx.room_temperature_celsius) || ctx.room_temperature_celsius < 15 || ctx.room_temperature_celsius > 35) {
+      errors.push('Room temperature must be between 15-35°C');
     }
+    
     return errors;
   };
 
@@ -380,54 +395,69 @@ export default function SmartAnalysisScreen() {
   const uploadAudio = async (): Promise<AudioApiResult | null> => {
     if (!audioUri && !audioBlob) return null;
 
-    const form = new FormData();
+    try {
+      const form = new FormData();
 
-    if (Platform.OS === 'web') {
-      if (!audioBlob) throw new Error('Web audio blob missing');
-      // IMPORTANT: send blob directly
-      form.append('file', audioBlob, 'recording.webm');
-    } else {
-      if (!audioUri) throw new Error('Native audio uri missing');
-      form.append('file', { uri: audioUri, name: 'recording.m4a', type: 'audio/m4a' } as any);
+      if (Platform.OS === 'web') {
+        if (!audioBlob) throw new Error('Web audio blob missing');
+        form.append('file', audioBlob, 'recording.webm');
+      } else {
+        if (!audioUri) throw new Error('Native audio uri missing');
+        form.append('file', { uri: audioUri, name: 'recording.m4a', type: 'audio/m4a' } as any);
+      }
+
+      console.log('📤 Uploading audio...');
+      const res = await fetch(AUDIO_API, {
+        method: 'POST',
+        body: form,
+        headers: { Accept: 'application/json' },
+      });
+
+      const ct = res.headers.get('content-type') || '';
+      const json = ct.includes('application/json') ? await res.json() : null;
+
+      if (!res.ok) throw new Error(json?.detail || `Audio request failed (${res.status})`);
+      
+      console.log('✅ Audio upload successful:', json);
+      return json;
+    } catch (error: any) {
+      console.error('❌ Audio upload error:', error);
+      throw error;
     }
-
-    const res = await fetch(AUDIO_API, {
-      method: 'POST',
-      body: form,
-      headers: { Accept: 'application/json' },
-    });
-
-    const ct = res.headers.get('content-type') || '';
-    const json = ct.includes('application/json') ? await res.json() : null;
-
-    if (!res.ok) throw new Error(json?.detail || `Audio request failed (${res.status})`);
-    return json;
   };
 
   const uploadFace = async (): Promise<FaceApiResult | null> => {
     if (!faceUri) return null;
 
-    const form = new FormData();
+    try {
+      const form = new FormData();
 
-    if (Platform.OS === 'web') {
-      const resp = await fetch(faceUri);
-      const blob = await resp.blob();
-      form.append('file', blob, 'face.jpg');
-    } else {
-      form.append('file', { uri: faceUri, name: 'face.jpg', type: 'image/jpeg' } as any);
+      if (Platform.OS === 'web') {
+        const resp = await fetch(faceUri);
+        const blob = await resp.blob();
+        form.append('file', blob, 'face.jpg');
+      } else {
+        form.append('file', { uri: faceUri, name: 'face.jpg', type: 'image/jpeg' } as any);
+      }
+
+      console.log('📤 Uploading face image...');
+      const res = await fetch(FACE_API, {
+        method: 'POST',
+        body: form,
+        headers: { Accept: 'application/json' },
+      });
+
+      const ct = res.headers.get('content-type') || '';
+      const json = ct.includes('application/json') ? await res.json() : null;
+
+      if (!res.ok) throw new Error(json?.detail || `Face request failed (${res.status})`);
+      
+      console.log('✅ Face upload successful:', json);
+      return json;
+    } catch (error: any) {
+      console.error('❌ Face upload error:', error);
+      throw error;
     }
-
-    const res = await fetch(FACE_API, {
-      method: 'POST',
-      body: form,
-      headers: { Accept: 'application/json' },
-    });
-
-    const ct = res.headers.get('content-type') || '';
-    const json = ct.includes('application/json') ? await res.json() : null;
-
-    if (!res.ok) throw new Error(json?.detail || `Face request failed (${res.status})`);
-    return json;
   };
 
   // -------- Final analysis --------
@@ -451,7 +481,7 @@ export default function SmartAnalysisScreen() {
         time_since_feed_hours: parseFloat(feedingTime),
         time_since_sleep_hours: parseFloat(sleepTime),
         diaper_status: diaperStatus,
-        room_temperature_celsius: roomTemperature ? parseFloat(roomTemperature) : 24,
+        room_temperature_celsius: parseFloat(roomTemperature),
       };
 
       const errors = validateContext(context);
@@ -483,12 +513,15 @@ export default function SmartAnalysisScreen() {
         room_temperature_celsius: context.room_temperature_celsius,
       };
 
+      console.log('📤 Sending fusion payload:', payload);
+
       const fusionRes = await postFusion(payload);
       const ct = fusionRes.headers.get('content-type') || '';
       const fusionJson: FusionApiResult | null = ct.includes('application/json') ? await fusionRes.json() : null;
 
       if (!fusionRes.ok) {
-        throw new Error((fusionJson as any)?.detail || `Fusion request failed (${fusionRes.status})`);
+        const errorMsg = fusionJson && typeof fusionJson === 'object' ? (fusionJson as any).detail || JSON.stringify(fusionJson) : `HTTP ${fusionRes.status}`;
+        throw new Error(`Backend error: ${errorMsg}`);
       }
       if (!fusionJson) throw new Error('Fusion response not JSON');
 
@@ -506,7 +539,18 @@ export default function SmartAnalysisScreen() {
 
     } catch (error: any) {
       console.error('❌ Analysis error:', error);
-      Alert.alert('Analysis Failed', error?.message || `${error}`);
+      
+      // Better error message extraction
+      let errorMessage = 'Analysis failed';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object' && error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Analysis Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -766,6 +810,7 @@ export default function SmartAnalysisScreen() {
                 placeholderTextColor={secondaryText}
                 keyboardType="numeric"
               />
+              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 0-36 months</ThemedText>
             </View>
 
             <View style={styles.inputContainer}>
@@ -778,6 +823,7 @@ export default function SmartAnalysisScreen() {
                 placeholderTextColor={secondaryText}
                 keyboardType="numeric"
               />
+              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 0-48 hours</ThemedText>
             </View>
 
             <View style={styles.inputContainer}>
@@ -790,6 +836,7 @@ export default function SmartAnalysisScreen() {
                 placeholderTextColor={secondaryText}
                 keyboardType="numeric"
               />
+              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 0-48 hours</ThemedText>
             </View>
 
             <View style={styles.inputContainer}>
@@ -823,6 +870,7 @@ export default function SmartAnalysisScreen() {
                 placeholderTextColor={secondaryText}
                 keyboardType="numeric"
               />
+              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 15-35°C</ThemedText>
             </View>
 
             <View style={styles.actionButtons}>
@@ -1083,7 +1131,7 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: 'row', gap: Spacing.md, width: '100%' },
   imagePreview: { alignItems: 'center', width: '100%' },
   previewImage: { width: 200, height: 200, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
-  inputContainer: { width: '100%', marginBottom: Spacing.lg },
+  inputContainer: { width: '100%', marginBottom: Spacing.xl, paddingBottom: Spacing.sm },
   inputLabel: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium, marginBottom: Spacing.sm },
   textInput: {
     borderWidth: 1,
@@ -1092,6 +1140,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     fontSize: Typography.sizes.md,
   },
+  inputHint: { fontSize: Typography.sizes.xs, marginTop: Spacing.xs, fontStyle: 'italic' },
   resultHeader: { alignItems: 'center', marginBottom: Spacing.xl, width: '100%' },
   resultIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg },
   resultIconText: { fontSize: 24 },
@@ -1173,20 +1222,20 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     marginTop: Spacing.lg,
   },
-  radioContainer: { flexDirection: 'row', gap: Spacing.md, flexWrap: 'wrap' },
+  radioContainer: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'space-between', width: '100%' },
   radioOption: {
     flex: 1,
-    minWidth: 100,
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    maxWidth: '32%',
   },
   radioSelected: { backgroundColor: 'rgba(78, 205, 196, 0.15)' },
-  radioText: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium },
+  radioText: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium, textAlign: 'center' },
   confidenceMessage: { fontSize: Typography.sizes.sm, fontStyle: 'italic', marginVertical: Spacing.md, textAlign: 'center' },
   probabilityTable: { width: '100%' },
   probabilityRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
