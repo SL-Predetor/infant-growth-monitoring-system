@@ -60,6 +60,12 @@ const TOOLS: Tool[] = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  
+  // Define theme colors
+  const backgroundColor = useThemeColor({}, 'background');
+  const cardBackground = useThemeColor({}, 'cardBackground');
+  const textColor = useThemeColor({}, 'text');
+  const secondaryText = useThemeColor({}, 'secondaryText');
 
   const rowOneItems = [
     {
