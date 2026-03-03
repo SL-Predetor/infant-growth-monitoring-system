@@ -5,56 +5,61 @@
 
 import { Platform } from 'react-native';
 
-const primaryTeal = '#4ECDC4';
-const accentPurple = '#6C5CE7';
-const softRed = '#FF6B6B';
-const backgroundLight = '#F8F9FA';
+// Infant Growth Monitoring Color Palette
+const primaryModern = '#6C63FF';     // Trustworthy & Modern (Primary Brand)
+const secondaryNurture = '#FF8FB1';  // Soft & Caring (Secondary)
+const backgroundLight = '#F8F9FA';   // Clean, Clinical, Minimal
+const textDeepGrey = '#2D3436';      // High readability
+const successGrowth = '#4CAF50';     // Healthy progression
+const warningStagnation = '#FFC107'; // Attention needed
 
 export const Colors = {
   light: {
-    text: '#2D3436',
+    text: textDeepGrey,
     secondaryText: '#636E72',
     background: backgroundLight,
     cardBackground: '#FFFFFF',
-    tint: primaryTeal,
+    tint: primaryModern,
     icon: '#636E72',
     tabIconDefault: '#B2BEC3',
-    tabIconSelected: primaryTeal,
+    tabIconSelected: primaryModern,
     
-    // BabySense AI Health Theme
-    primary: primaryTeal,
-    accent: accentPurple,
-    error: softRed,
-    success: '#00B894',
-    warning: '#FDCB6E',
+    // Infant Growth Monitoring Health Theme
+    primary: primaryModern,
+    secondary: secondaryNurture,
+    accent: secondaryNurture,
+    error: '#E63946',
+    success: successGrowth,
+    warning: warningStagnation,
     
     // Borders and surfaces
-    border: '#DDD6FE',
-    shadow: 'rgba(45, 52, 54, 0.1)',
-    cardShadow: 'rgba(45, 52, 54, 0.08)',
+    border: '#E8E8FF',
+    shadow: 'rgba(108, 99, 255, 0.08)',
+    cardShadow: 'rgba(108, 99, 255, 0.06)',
     overlay: 'rgba(45, 52, 54, 0.6)',
   },
   dark: {
     text: '#ECEDEE',
     secondaryText: '#B2BEC3',
-    background: '#2D3436',
-    cardBackground: '#636E72',
-    tint: primaryTeal,
+    background: '#1a1a2e',
+    cardBackground: '#16213e',
+    tint: primaryModern,
     icon: '#B2BEC3',
-    tabIconDefault: '#74B9FF',
-    tabIconSelected: primaryTeal,
+    tabIconDefault: '#B8A5FF',
+    tabIconSelected: primaryModern,
     
-    // BabySense AI Health Theme
-    primary: primaryTeal,
-    accent: accentPurple,
-    error: softRed,
-    success: '#00B894',
-    warning: '#FDCB6E',
+    // Infant Growth Monitoring Health Theme
+    primary: primaryModern,
+    secondary: secondaryNurture,
+    accent: secondaryNurture,
+    error: '#E63946',
+    success: successGrowth,
+    warning: warningStagnation,
     
     // Borders and surfaces
-    border: '#636E72',
-    shadow: 'rgba(0, 0, 0, 0.3)',
-    cardShadow: 'rgba(0, 0, 0, 0.2)',
+    border: '#6C63FF40',
+    shadow: 'rgba(108, 99, 255, 0.2)',
+    cardShadow: 'rgba(108, 99, 255, 0.15)',
     overlay: 'rgba(0, 0, 0, 0.7)',
   },
 };
