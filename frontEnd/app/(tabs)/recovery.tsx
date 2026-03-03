@@ -5,11 +5,18 @@ import { Image } from 'expo-image';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RecoveryScreen() {
+  const colorScheme = useColorScheme() ?? 'light';
+  
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
+      headerBackgroundColor={{
+        light: Colors.light.primary,
+        dark: Colors.dark.primary,
+      }}
       headerImage={
         <Image
           source={require('@/assets/images/partial-react-logo.png')}

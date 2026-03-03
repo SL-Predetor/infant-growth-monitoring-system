@@ -29,7 +29,7 @@ const TOOLS: Tool[] = [
     name: 'Cry Analysis',
     description: 'Understand your baby\'s cry patterns',
     icon: '🎤',
-    color: '#4ECDC4',
+    color: '#6C63FF',
     route: '/smart-cry-analysis',
   },
   {
@@ -37,7 +37,7 @@ const TOOLS: Tool[] = [
     name: 'Growth Forecaster',
     description: 'Track your baby\'s development',
     icon: '📈',
-    color: '#FF6B9D',
+    color: '#FF8FB1',
     route: '/growth-forecaster',
   },
   {
@@ -45,7 +45,7 @@ const TOOLS: Tool[] = [
     name: 'Behavior & Development',
     description: 'Monitor developmental milestones',
     icon: '🧠',
-    color: '#FFC75F',
+    color: '#4CAF50',
     route: '/behavior-development',
   },
   {
@@ -53,7 +53,7 @@ const TOOLS: Tool[] = [
     name: 'Mom\'s Recovery',
     description: 'Your wellness and recovery guide',
     icon: '🌸',
-    color: '#95E1D3',
+    color: '#FFC107',
     route: '/moms-recovery',
   },
 ];

@@ -4,11 +4,18 @@ import { StyleSheet } from 'react-native';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ExploreScreen() {
+  const colorScheme = useColorScheme() ?? 'light';
+  
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
+      headerBackgroundColor={{
+        light: Colors.light.primary,
+        dark: Colors.dark.primary,
+      }}
       headerImage={
         <Image
           source={require('@/assets/images/partial-react-logo.png')}
