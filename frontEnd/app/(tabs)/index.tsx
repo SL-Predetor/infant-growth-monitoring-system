@@ -3,7 +3,7 @@ import { StyleSheet, View, Pressable, Dimensions, ScrollView } from 'react-nativ
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -60,6 +60,12 @@ const TOOLS: Tool[] = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const theme = useColorScheme() ?? 'light';
+  
+  const backgroundColor = Colors[theme].background;
+  const textColor = Colors[theme].text;
+  const secondaryText = Colors[theme].secondaryText;
+  const cardBackground = Colors[theme].cardBackground;
 
   const rowOneItems = [
     {
