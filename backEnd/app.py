@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # --- 0. LOAD ENVIRONMENT VARIABLES ---
 # Load .env file from current directory
 load_dotenv()
-print("🌍 Environment variables loaded from .env file")
+print("[INFO] Environment variables loaded from .env file")
 
 # --- 1. SETUP FFMPEG (Crucial for Windows) ---
 # Adds the current folder to the system path so Python can find ffmpeg.exe
