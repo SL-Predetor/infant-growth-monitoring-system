@@ -5,34 +5,37 @@ import uuid
 import librosa
 import os
 import noisereduce as nr  # <--- NEW IMPORT
+from pathlib import Path
 
 router = APIRouter()
 
 # --- 1. SETUP PATHS ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(current_dir, '..', 'mlModels', 'Cry')
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Model A: Pain vs No Pain
-MODEL_A_PATH = os.path.join(MODELS_DIR, 'model_a_pain.pkl')
-SCALER_A_PATH = os.path.join(MODELS_DIR, 'scaler_a.pkl')
+# --- 2. LAZY LOAD MODELS (GLOBAL VARIABLES) ---
+model_a = None
+scaler_a = None
+model_b = None
+scaler_b = None
 
-# Model B: Hunger vs Normal
-MODEL_B_PATH = os.path.join(MODELS_DIR, 'model_b_hunger.pkl')
-SCALER_B_PATH = os.path.join(MODELS_DIR, 'scaler_b.pkl')
-
-print(f"🔍 [CryRouter] Loading models from: {os.path.abspath(MODELS_DIR)}")
-
-# --- 2. LOAD MODELS ---
-models = {}
-try:
-    models['model_a'] = joblib.load(MODEL_A_PATH)
-    models['scaler_a'] = joblib.load(SCALER_A_PATH)
-    models['model_b'] = joblib.load(MODEL_B_PATH)
-    models['scaler_b'] = joblib.load(SCALER_B_PATH)
-    print("✅ [CryRouter] All Models & Scalers loaded successfully!")
-except Exception as e:
-    print(f"❌ [CryRouter] Error loading models. Check file names! Error: {e}")
-    models = None
+def load_models():
+    """Lazy load models only when needed (on first prediction call)"""
+    global model_a, scaler_a, model_b, scaler_b
+    
+    if model_a is not None:
+        return  # Already loaded
+    
+    print(f"🔍 [CryRouter] Loading models from: {BASE_DIR / 'mlModels' / 'Cry'}")
+    
+    try:
+        model_a = joblib.load(BASE_DIR / 'mlModels' / 'Cry' / 'model_a_pain.pkl')
+        scaler_a = joblib.load(BASE_DIR / 'mlModels' / 'Cry' / 'scaler_a.pkl')
+        model_b = joblib.load(BASE_DIR / 'mlModels' / 'Cry' / 'model_b_hunger.pkl')
+        scaler_b = joblib.load(BASE_DIR / 'mlModels' / 'Cry' / 'scaler_b.pkl')
+        print("✅ [CryRouter] All Models & Scalers loaded successfully!")
+    except Exception as e:
+        print(f"❌ [CryRouter] Error loading models. Check file names! Error: {e}")
+        raise
 
 # --- 3. FEATURE EXTRACTOR (With Noise Cancellation) ---
 def extract_audio_features(audio_path):
@@ -84,14 +87,13 @@ def extract_audio_features(audio_path):
 # --- 4. PREDICTION ROUTE ---
 @router.post("/predict-cry")
 async def predict_cry(file: UploadFile = File(...)):
-    if models is None:
-        raise HTTPException(status_code=503, detail="Models not loaded properly")
-
+    load_models()  # Lazy load models on first call
+    
     # Save Temp File
     extension = file.filename.split(".")[-1] if "." in file.filename else "wav"
-    temp_dir = os.path.join(current_dir, '..', 'tmp')
-    os.makedirs(temp_dir, exist_ok=True)
-    temp_filename = os.path.join(temp_dir, f"{uuid.uuid4()}.{extension}")
+    temp_dir = BASE_DIR / 'tmp'
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_filename = temp_dir / f"{uuid.uuid4()}.{extension}"
     
     try:
         content = await file.read()
@@ -105,10 +107,10 @@ async def predict_cry(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Audio is silent or invalid format")
 
         # --- 🧠 STAGE 1: IS IT PAIN? (Model A) ---
-        features_a = models['scaler_a'].transform(raw_features)
+        features_a = scaler_a.transform(raw_features)
         
-        is_pain_prob = models['model_a'].predict_proba(features_a)[0]
-        is_pain = models['model_a'].predict(features_a)[0]
+        is_pain_prob = model_a.predict_proba(features_a)[0]
+        is_pain = model_a.predict(features_a)[0]
         
         print(f"🧠 Stage 1 (Pain): Prediction={is_pain}, Probs={is_pain_prob}")
 
@@ -117,10 +119,10 @@ async def predict_cry(file: UploadFile = File(...)):
             confidence = float(is_pain_prob[1])
         else:
             # --- 🧠 STAGE 2: HUNGER OR NORMAL? (Model B) ---
-            features_b = models['scaler_b'].transform(raw_features)
+            features_b = scaler_b.transform(raw_features)
             
-            is_hunger_prob = models['model_b'].predict_proba(features_b)[0]
-            is_hunger = models['model_b'].predict(features_b)[0]
+            is_hunger_prob = model_b.predict_proba(features_b)[0]
+            is_hunger = model_b.predict(features_b)[0]
             
             print(f"🧠 Stage 2 (Hunger/Normal): Prediction={is_hunger}, Probs={is_hunger_prob}")
 
@@ -144,6 +146,8 @@ async def predict_cry(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
         
     finally:
-        if os.path.exists(temp_filename):
-            try: os.remove(temp_filename)
-            except: pass
+        if temp_filename.exists():
+            try:
+                temp_filename.unlink()
+            except:
+                pass
