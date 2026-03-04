@@ -5,10 +5,92 @@
 
 import { Platform } from 'react-native';
 
-// derive base URL from environment, with safe defaults for development devices
-const BASE_URL = Platform.OS === 'web'
-  ? `http://${process.env.EXPO_PUBLIC_API_URL || process.env.REACT_APP_API_BASE_URL || 'localhost:8000'}`
-  : `http://${process.env.EXPO_PUBLIC_API_URL || process.env.REACT_APP_API_BASE_URL || '192.168.8.119:8000'}`;
+const envHost = process.env.EXPO_PUBLIC_API_URL || process.env.REACT_APP_API_BASE_URL || '';
+
+const getCandidateBaseUrls = (): string[] => {
+  const urls = new Set<string>();
+
+  if (envHost) {
+    urls.add(`http://${envHost}`);
+  }
+
+  if (Platform.OS === 'web') {
+    urls.add('http://localhost:8000');
+    urls.add('http://127.0.0.1:8000');
+  } else {
+    urls.add('http://10.0.2.2:8000');
+    urls.add('http://localhost:8000');
+    urls.add('http://127.0.0.1:8000');
+    urls.add('http://192.168.8.119:8000');
+  }
+
+  return Array.from(urls);
+};
+
+const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = 5000): Promise<Response> => {
+  return await Promise.race([
+    fetch(url, options),
+    new Promise<Response>((_, reject) => {
+      setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]);
+};
+
+const postJsonWithFallback = async <T>(path: string, body: unknown): Promise<T> => {
+  const candidates = getCandidateBaseUrls();
+  const errors: string[] = [];
+
+  for (const baseUrl of candidates) {
+    try {
+      const url = `${baseUrl}${path}`;
+      const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      }, 5000);
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      errors.push(`${baseUrl} -> ${String(error)}`);
+    }
+  }
+
+  throw new Error(`Postpartum API unreachable. Tried: ${errors.join(' | ')}`);
+};
+
+const getJsonWithFallback = async <T>(path: string): Promise<T> => {
+  const candidates = getCandidateBaseUrls();
+  const errors: string[] = [];
+
+  for (const baseUrl of candidates) {
+    try {
+      const url = `${baseUrl}${path}`;
+      const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      }, 5000);
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      errors.push(`${baseUrl} -> ${String(error)}`);
+    }
+  }
+
+  throw new Error(`Postpartum API unreachable. Tried: ${errors.join(' | ')}`);
+};
 
 export interface PostpartumPayload {
   age: number;
@@ -40,30 +122,51 @@ export interface PostpartumResult {
     model_based?: string[];
     general_care?: string[];
   };
+  created_at?: string;
+}
+
+export interface PostpartumHistoryItem {
+  id: string;
+  created_at?: string;
+  input?: PostpartumPayload;
+  predictions?: PostpartumResult['predictions'];
+  top_factors?: string[];
+  guidance?: PostpartumResult['guidance'];
+}
+
+export interface PostpartumDashboardData {
+  total_records: number;
+  period_days: number;
+  avg_scores: {
+    perineal: number;
+    csection: number;
+    back_pelvic: number;
+  };
+  risk_distribution: {
+    LOW: number;
+    MODERATE: number;
+    HIGH: number;
+  };
+  trend: Array<{
+    date: string;
+    count: number;
+  }>;
 }
 
 export const submitPostpartum = async (
   payload: PostpartumPayload
 ): Promise<PostpartumResult> => {
-  const url = `${BASE_URL}/postpartum/predict`;
-  console.log('➡️ POST', url, payload);
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  return await postJsonWithFallback<PostpartumResult>('/postpartum/predict', payload);
+};
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`HTTP ${response.status}: ${text}`);
-  }
+export const getPostpartumHistory = async (
+  limit: number = 20
+): Promise<PostpartumHistoryItem[]> => {
+  return await getJsonWithFallback<PostpartumHistoryItem[]>(`/postpartum/history?limit=${limit}`);
+};
 
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    return await response.json();
-  }
-  return {} as PostpartumResult;
+export const getPostpartumDashboard = async (
+  days: number = 30
+): Promise<PostpartumDashboardData> => {
+  return await getJsonWithFallback<PostpartumDashboardData>(`/postpartum/dashboard?days=${days}`);
 };
