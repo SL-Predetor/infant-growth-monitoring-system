@@ -61,11 +61,12 @@ const TOOLS: Tool[] = [
 export default function HomeScreen() {
   const router = useRouter();
 
-  // theme-based colors
+  // Define theme colors
   const backgroundColor = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
   const textColor = useThemeColor({}, 'text');
   const secondaryText = useThemeColor({}, 'secondaryText');
+
 
   // (rowOneItems/rowTwoItems defined but not used – grid rendered from TOOLS constant below)
   const rowOneItems = [
@@ -257,11 +258,258 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  toolArrow: {
+toolArrow: {
+  width: '100%',
+  paddingTop: Spacing.sm,
+  borderTopWidth: 1,
+  borderTopColor: 'rgba(0,0,0,0.1)',
+  alignItems: 'flex-end',
+},
+
+// Main Cry Analysis Card
+mainCard: {
+  borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  mainCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+
+  mainIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+
+  mainIconText: {
+    fontSize: 28,
+  },
+
+  mainCardContent: {
+    flex: 1,
+  },
+
+  mainCardTitle: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.semiBold,
+    marginBottom: Spacing.xs,
+  },
+
+  mainCardSubtitle: {
+    fontSize: Typography.sizes.sm,
+  },
+
+  chevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  chevronText: {
+    fontSize: 16,
+    fontWeight: Typography.weights.semiBold,
+  },
+
+  mainCardDescription: {
+    fontSize: Typography.sizes.sm,
+    lineHeight: 20,
+  },
+
+  // Section Headers
+  sectionHeader: {
+    marginBottom: Spacing.lg,
+  },
+
+  sectionTitle: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.semiBold,
+    marginBottom: Spacing.xs,
+  },
+
+  sectionSubtitle: {
+    fontSize: Typography.sizes.sm,
+  },
+
+  // Tools Grid
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xl,
+  },
+
+  toolCard: {
+    width: (screenWidth - Spacing.lg * 2 - Spacing.md) / 2,
+    ...BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 120,
+  },
+
+  toolIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
+  },
+
+  toolIconText: {
+    fontSize: 20,
+  },
+
+  toolTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.semiBold,
+    marginBottom: Spacing.xs,
+    lineHeight: 18,
+  },
+
+  toolSubtitle: {
+    fontSize: Typography.sizes.xs,
+    lineHeight: 16,
+  },
+
+  // Advanced Link
+  advancedLink: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+
+  linkText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+
+  modalContent: {
     width: '100%',
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-    alignItems: 'flex-end',
+    maxWidth: 400,
+    ...BorderRadius.lg,
+    padding: Spacing.xl,
+  },
+
+  modalTitle: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.bold,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+
+  modalSubtitle: {
+    fontSize: Typography.sizes.sm,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+
+  // Option Cards
+  optionCard: {
+    ...BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+
+  optionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+
+  optionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+
+  optionIconText: {
+    fontSize: 24,
+  },
+
+  optionContent: {
+    flex: 1,
+  },
+
+  optionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+
+  optionTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semiBold,
+    marginRight: Spacing.sm,
+  },
+
+  newBadge: {
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+    ...BorderRadius.sm,
+  },
+
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: Typography.weights.bold,
+    color: 'white',
+  },
+
+  optionSubtitle: {
+    fontSize: Typography.sizes.sm,
+  },
+
+  optionDescription: {
+    fontSize: Typography.sizes.sm,
+    lineHeight: 18,
+  },
+
+  // Cancel Button
+  cancelButton: {
+    borderWidth: 1,
+    ...BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+
+  cancelText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
   },
 });

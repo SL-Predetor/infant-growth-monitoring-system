@@ -6,18 +6,33 @@ echo ===========================================================================
 echo    INFANT GROWTH MONITORING SYSTEM - ONE-CLICK LAUNCHER
 echo ================================================================================
 echo.
-echo Starting Backend and Frontend servers...
+echo Checking for existing processes on port 8000...
 echo.
 
 REM Get the directory where the batch file is located
 cd /d "%~dp0"
+
+REM Kill any existing processes on port 8000
+netstat -ano | find ":8000" >nul
+if %errorlevel% equ 0 (
+    echo Cleaning up port 8000...
+    for /f "tokens=5" %%a in ('netstat -ano ^| find ":8000"') do (
+        taskkill /PID %%a /F 2>nul
+    )
+    timeout /t 2 /nobreak >nul
+    echo Port 8000 cleaned up.
+    echo.
+)
+
+echo Starting Backend and Frontend servers...
+echo.
 
 REM Start Backend Server (FastAPI)
 echo [1/2] Starting Backend Server (FastAPI on port 8000)...
 start "Backend Server" cmd /k "cd backEnd && .venv\Scripts\activate && python app.py"
 
 REM Wait a few seconds for backend to initialize
-timeout /t 3 /nobreak >nul
+timeout /t 4 /nobreak >nul
 
 REM Start Frontend Server (Expo)
 echo [2/2] Starting Frontend Server (Expo)...
