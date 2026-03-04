@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 import uvicorn
 import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- 1. SETUP FFMPEG (Crucial for Windows) ---
 # Adds the current folder to the system path so Python can find ffmpeg.exe
