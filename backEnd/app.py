@@ -8,10 +8,11 @@ import os
 os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.abspath(__file__))
 
 # --- 2. IMPORT ROUTERS ---
-# Gradually re-enabling routers for Azure deployment
-# from routers import cry_router_audio  # DISABLED - requires librosa (heavy)
-# from routers import cry_router_img    # DISABLED - requires opencv/mediapipe (heavy)
-from routers import cry_router_fusion   # ENABLED - light dependencies (pandas/joblib)
+# We import the routers from the 'routers' folder
+# Make sure the filenames in your 'routers' folder match these exactly!
+from routers import cry_router_audio  # Your Audio Logic
+from routers import cry_router_img    # Your New Face Logic
+from routers import cry_router_fusion # Fusion Analysis Logic
 
 app = FastAPI(title="Infant Growth Monitoring System API")
 
@@ -25,22 +26,14 @@ app.add_middleware(
 )
 
 # --- 4. INCLUDE THE ROUTERS ---
-# Gradually re-enabling routers for Azure deployment
-# app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])  # DISABLED
-# app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])    # DISABLED
-app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")  # ENABLED
+# Connect both "Shops" (Audio and Face) to the main App Mall
+app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])
+app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])
+app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")
 
 @app.get("/")
 def home():
-    return {
-        "status": "online", 
-        "message": "✅ Azure deployment successful! FastAPI server with Fusion Analysis enabled.",
-        "info": "Fusion ML features are now active. Audio/Image analysis still disabled for Azure optimization.",
-        "endpoints": ["/docs", "/redoc", "/fusion/health", "/fusion/predict"],
-        "enabled_features": ["Fusion Analysis"],
-        "disabled_features": ["Audio Analysis", "Image Analysis"],
-        "note": "Gradual re-enablement of ML features for Azure free tier compatibility"
-    }
+    return {"status": "online", "message": "Backend is running correctly (Audio + Face)"}
 
 if __name__ == "__main__":
     # Host 0.0.0.0 is required for mobile phones to connect

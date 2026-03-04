@@ -1,23 +1,20 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException
 import numpy as np
-# import cv2  # DISABLED FOR AZURE
+import cv2
 import io
 import os
 import joblib
 from pathlib import Path
 
-# MediaPipe for facial landmark detection (DISABLED FOR AZURE)
-MEDIAPIPE_AVAILABLE = False
-face_detector = None
-
-# try:
-#     import mediapipe as mp
-#     from mediapipe.tasks import python
-#     from mediapipe.tasks.python import vision
-#     MEDIAPIPE_AVAILABLE = True
-# except ImportError as e:
-#     print(f"⚠️ [FaceRouter] MediaPipe not available: {e}")
-#     MEDIAPIPE_AVAILABLE = False
+# MediaPipe for facial landmark detection
+try:
+    import mediapipe as mp
+    from mediapipe.tasks import python
+    from mediapipe.tasks.python import vision
+    MEDIAPIPE_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ [FaceRouter] MediaPipe not available: {e}")
+    MEDIAPIPE_AVAILABLE = False
 
 router = APIRouter()
 
@@ -169,8 +166,54 @@ def extract_features(image_bytes):
 # --- 4. PREDICTION ROUTE ---
 @router.post("/predict-face")
 async def predict_face(file: UploadFile = File(...)):
-    # Temporary Azure deployment fix - heavy ML dependencies disabled
-    raise HTTPException(
-        status_code=503, 
-        detail="Face detection temporarily disabled on Azure free tier. Use local deployment for full features."
-    )
+    if face_model is None or face_detector is None:
+        load_face_model()
+        if face_model is None:
+            raise HTTPException(status_code=503, detail="Face model could not be loaded.")
+        if face_detector is None:
+            raise HTTPException(status_code=503, detail="Face detector could not be initialized.")
+
+    try:
+        # Read file
+        contents = await file.read()
+        
+        # Extract features using MediaPipe
+        features = extract_features(contents)
+        if features is None:
+            raise HTTPException(status_code=400, detail="Could not detect face or extract features from image")
+
+        # Predict using Random Forest
+        prediction = face_model.predict(features)[0]
+        probabilities = face_model.predict_proba(features)[0]
+        
+        # prediction: 0 = No Pain, 1 = Pain
+        # probabilities is array like [0.3, 0.7] for [No Pain prob, Pain prob]
+        no_pain_prob = float(probabilities[0])
+        pain_prob = float(probabilities[1])
+        
+        if prediction == 1:
+            label = "pain_expression"
+            confidence = pain_prob
+            msg = "Detected: Painful Expression 😣"
+        else:
+            label = "no_pain"
+            confidence = no_pain_prob
+            msg = "Detected: No Pain / Neutral 🙂"
+
+        return {
+            "label": label,
+            "confidence": round(confidence * 100, 2),
+            "pain_probability": round(pain_prob * 100, 2),
+            "features": {
+                "ear": round(float(features[0][0]), 4),
+                "mar": round(float(features[0][1]), 4),
+                "brow_score": round(float(features[0][2]), 4)
+            },
+            "message": msg
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"🔥 Prediction Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

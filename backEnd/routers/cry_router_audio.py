@@ -2,9 +2,9 @@ from fastapi import APIRouter, File, UploadFile, HTTPException
 import joblib
 import numpy as np
 import uuid
-# import librosa  # DISABLED FOR AZURE
+import librosa
 import os
-# import noisereduce as nr  # DISABLED FOR AZURE
+import noisereduce as nr  # <--- NEW IMPORT
 from pathlib import Path
 
 router = APIRouter()
@@ -87,8 +87,67 @@ def extract_audio_features(audio_path):
 # --- 4. PREDICTION ROUTE ---
 @router.post("/predict-cry")
 async def predict_cry(file: UploadFile = File(...)):
-    # Temporary Azure deployment fix - heavy ML dependencies disabled
-    raise HTTPException(
-        status_code=503, 
-        detail="Audio analysis temporarily disabled on Azure free tier. Use local deployment for full features."
-    )
+    load_models()  # Lazy load models on first call
+    
+    # Save Temp File
+    extension = file.filename.split(".")[-1] if "." in file.filename else "wav"
+    temp_dir = BASE_DIR / 'tmp'
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_filename = temp_dir / f"{uuid.uuid4()}.{extension}"
+    
+    try:
+        content = await file.read()
+        with open(temp_filename, "wb") as buffer:
+            buffer.write(content)
+        
+        # Extract Features (Includes Noise Reduction)
+        raw_features = extract_audio_features(temp_filename)
+        
+        if raw_features is None:
+            raise HTTPException(status_code=400, detail="Audio is silent or invalid format")
+
+        # --- 🧠 STAGE 1: IS IT PAIN? (Model A) ---
+        features_a = scaler_a.transform(raw_features)
+        
+        is_pain_prob = model_a.predict_proba(features_a)[0]
+        is_pain = model_a.predict(features_a)[0]
+        
+        print(f"🧠 Stage 1 (Pain): Prediction={is_pain}, Probs={is_pain_prob}")
+
+        if is_pain == 1:
+            final_label = "pain_cry"
+            confidence = float(is_pain_prob[1])
+        else:
+            # --- 🧠 STAGE 2: HUNGER OR NORMAL? (Model B) ---
+            features_b = scaler_b.transform(raw_features)
+            
+            is_hunger_prob = model_b.predict_proba(features_b)[0]
+            is_hunger = model_b.predict(features_b)[0]
+            
+            print(f"🧠 Stage 2 (Hunger/Normal): Prediction={is_hunger}, Probs={is_hunger_prob}")
+
+            if is_hunger == 1:
+                final_label = "hunger_cry"
+                confidence = float(is_hunger_prob[1])
+            else:
+                final_label = "normal_cry"
+                confidence = float(is_hunger_prob[0])
+
+        return {
+            "label": final_label,
+            "confidence": confidence,
+            "message": f"Detected: {final_label.replace('_', ' ').title()}"
+        }
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"🔥 CRITICAL ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        if temp_filename.exists():
+            try:
+                temp_filename.unlink()
+            except:
+                pass
