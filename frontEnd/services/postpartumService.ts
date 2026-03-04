@@ -122,6 +122,7 @@ export interface PostpartumResult {
     model_based?: string[];
     general_care?: string[];
   };
+  top_factors?: string[];
   created_at?: string;
 }
 
@@ -153,20 +154,142 @@ export interface PostpartumDashboardData {
   }>;
 }
 
+// ==========================================
+// Local Caching for Offline Support
+// ==========================================
+const LOCAL_CACHE_KEY = '@postpartum_predictions';
+
+const saveToLocalCache = async (item: PostpartumHistoryItem): Promise<void> => {
+  try {
+    const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+    const existing = await AsyncStorage.getItem(LOCAL_CACHE_KEY);
+    const items = existing ? JSON.parse(existing) : [];
+    items.push(item);
+    // Keep only last 100 items
+    const limited = items.slice(-100);
+    await AsyncStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(limited));
+  } catch (e) {
+    console.warn('Could not save to local cache:', e);
+  }
+};
+
+const getLocalCache = async (): Promise<PostpartumHistoryItem[]> => {
+  try {
+    const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+    const data = await AsyncStorage.getItem(LOCAL_CACHE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    console.warn('Could not read local cache:', e);
+    return [];
+  }
+};
+
+// ==========================================
+// API Functions
+// ==========================================
+
 export const submitPostpartum = async (
   payload: PostpartumPayload
 ): Promise<PostpartumResult> => {
-  return await postJsonWithFallback<PostpartumResult>('/postpartum/predict', payload);
+  const result = await postJsonWithFallback<PostpartumResult>('/postpartum/predict', payload);
+  
+  // Also save to local cache as a fallback
+  const cacheItem: PostpartumHistoryItem = {
+    id: `local_${Date.now()}`,
+    created_at: result.created_at || new Date().toISOString(),
+    input: payload,
+    predictions: result.predictions,
+    top_factors: result.top_factors || [],
+    guidance: result.guidance,
+  };
+  
+  await saveToLocalCache(cacheItem);
+  
+  return result;
 };
 
 export const getPostpartumHistory = async (
   limit: number = 20
 ): Promise<PostpartumHistoryItem[]> => {
-  return await getJsonWithFallback<PostpartumHistoryItem[]>(`/postpartum/history?limit=${limit}`);
+  try {
+    // Try to get from backend first
+    const result = await getJsonWithFallback<PostpartumHistoryItem[]>(`/postpartum/history?limit=${limit}`);
+    // If backend returns anything (empty array is ok), return it
+    if (Array.isArray(result)) {
+      return result.slice(0, limit);
+    }
+  } catch (error) {
+    console.warn('Backend unavailable, falling back to local cache:', error);
+  }
+  
+  // Fall back to local cache
+  const cached = await getLocalCache();
+  return cached.slice(0, limit);
 };
 
 export const getPostpartumDashboard = async (
   days: number = 30
 ): Promise<PostpartumDashboardData> => {
-  return await getJsonWithFallback<PostpartumDashboardData>(`/postpartum/dashboard?days=${days}`);
+  try {
+    return await getJsonWithFallback<PostpartumDashboardData>(`/postpartum/dashboard?days=${days}`);
+  } catch (error) {
+    console.warn('Dashboard API unavailable, generating from local cache:', error);
+    
+    // Generate dashboard data from local cache as fallback
+    const cached = await getLocalCache();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    const recentItems = cached.filter(item => {
+      if (!item.created_at) return true;
+      return new Date(item.created_at) >= cutoffDate;
+    });
+    
+    const avgScores = { perineal: 0, csection: 0, back_pelvic: 0 };
+    const scoreCounts = { perineal: 0, csection: 0, back_pelvic: 0 };
+    const riskDistribution = { LOW: 0, MODERATE: 0, HIGH: 0 };
+    
+    recentItems.forEach(item => {
+      if (item.predictions) {
+        ['perineal', 'csection', 'back_pelvic'].forEach(painKey => {
+          const pred = item.predictions?.[painKey as keyof typeof item.predictions];
+          if (pred && typeof pred.score === 'number') {
+            avgScores[painKey as keyof typeof avgScores] += pred.score;
+            scoreCounts[painKey as keyof typeof scoreCounts]++;
+          }
+          if (pred?.risk && pred.risk in riskDistribution) {
+            riskDistribution[pred.risk as keyof typeof riskDistribution]++;
+          }
+        });
+      }
+    });
+    
+    // Calculate averages
+    Object.keys(avgScores).forEach(key => {
+      if (scoreCounts[key as keyof typeof scoreCounts] > 0) {
+        avgScores[key as keyof typeof avgScores] /= scoreCounts[key as keyof typeof scoreCounts];
+      }
+    });
+    
+    // Generate trend data
+    const trendMap: { [date: string]: number } = {};
+    recentItems.forEach(item => {
+      if (item.created_at) {
+        const date = new Date(item.created_at).toISOString().split('T')[0];
+        trendMap[date] = (trendMap[date] || 0) + 1;
+      }
+    });
+    
+    const trend = Object.entries(trendMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => ({ date, count }));
+    
+    return {
+      total_records: recentItems.length,
+      period_days: days,
+      avg_scores: avgScores,
+      risk_distribution: riskDistribution,
+      trend: trend,
+    };
+  }
 };
