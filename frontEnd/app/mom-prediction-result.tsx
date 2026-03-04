@@ -52,6 +52,7 @@ export default function MomPredictionResultsScreen() {
                 </View>
                 <View style={styles.textContainer}>
                   <Text style={styles.title}>{config.label}</Text>
+                  <Text style={styles.scoreText}>Score: {Math.round(Number(value.score))}/10</Text>
                   <View style={[styles.badge, isHighRisk ? styles.highBadge : styles.modBadge]}>
                     <Text style={[styles.badgeText, isHighRisk ? styles.highText : styles.modText]}>
                       {isHighRisk ? '• HIGH RISK' : '• MODERATE RISK'}
@@ -62,7 +63,7 @@ export default function MomPredictionResultsScreen() {
             </View>
           );
         })}
-        <Text style={styles.sectionTitle}>Risk Assessment</Text>
+        <Text style={styles.sectionTitle}>Daily Care Routine</Text>
       </View>
       
       <View style={styles.guidanceCard}>
@@ -168,6 +169,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2D2D2D',
     marginBottom: 4,
+  },
+  scoreText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 6,
   },
   badge: {
     alignSelf: 'flex-start',
