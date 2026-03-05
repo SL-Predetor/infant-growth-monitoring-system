@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,29 +9,25 @@ import {
     Alert,
     ActivityIndicator,
     Platform,
+    Animated,
+    LayoutAnimation,
+    UIManager,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors, Typography, Spacing, Shadows, Radius } from '@/constants/theme';
 
-// ── Theme ─────────────────────────────────────────────
-const T = {
-    bg: '#1a1a2e',
-    cardBg: '#16213e',
-    cardBorder: '#2a2d4e',
-    primary: '#6C63FF',
-    white: '#FFFFFF',
-    muted: '#8892a4',
-    label: '#a8b2c1',
-    inputBg: '#0f1729',
-    inputBorder: '#2a2d4e',
-    success: '#4CAF50',
-    error: '#FF5252',
-};
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function UpdateMeasurementsScreen() {
     const router = useRouter();
     const { user } = useAuth();
+    const colorScheme = useColorScheme() ?? 'light';
+    const C = Colors[colorScheme];
 
     // ── State ──────────────────────────────────────────
     const [weightG, setWeightG] = useState('');
@@ -44,6 +40,10 @@ export default function UpdateMeasurementsScreen() {
     const [lastMeasurement, setLastMeasurement] = useState<any>(null);
     const [pageLoading, setPageLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [tipsExpanded, setTipsExpanded] = useState(false);
+
+    // Animation for weight change
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     // ── On mount ───────────────────────────────────────
     useEffect(() => {
@@ -111,6 +111,18 @@ export default function UpdateMeasurementsScreen() {
         return diff;
     }, [weightG, lastMeasurement]);
 
+    useEffect(() => {
+        if (weightChange !== null) {
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 400,
+                useNativeDriver: true,
+            }).start();
+        } else {
+            fadeAnim.setValue(0);
+        }
+    }, [weightChange, fadeAnim]);
+
     // ── Save ───────────────────────────────────────────
     const handleSave = async () => {
         const err = validate();
@@ -172,227 +184,237 @@ export default function UpdateMeasurementsScreen() {
         });
     })();
 
+    const toggleTips = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setTipsExpanded(!tipsExpanded);
+    };
+
     // ── Loading ────────────────────────────────────────
     if (pageLoading) {
         return (
-            <View style={[styles.container, styles.center]}>
-                <ActivityIndicator size="large" color={T.primary} />
-                <Text style={[styles.mutedText, { marginTop: 12 }]}>Loading…</Text>
+            <View style={[styles.container, { backgroundColor: C.background, justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={C.primary} />
+                <Text style={[{ color: C.labelTertiary, marginTop: 12 }, Typography.subheadline]}>Loading…</Text>
             </View>
         );
     }
 
     // ── Render ─────────────────────────────────────────
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: C.background }]}>
             <ScrollView
                 style={styles.scroll}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[styles.scrollContent, { paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}
                 showsVerticalScrollIndicator={false}
             >
                 {/* ── HEADER ────────────────────────────── */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Text style={styles.backArrow}>←</Text>
+                <View style={styles.headerRow}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.headerBtnLeft}>
+                        <Text style={{ color: C.primary, fontSize: 32, lineHeight: 34 }}>←</Text>
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Update Measurements</Text>
-                    <View style={{ width: 38 }} />
+                    <View style={styles.headerCenter}>
+                        <Text style={[Typography.headline, { color: C.label }]}>Update Measurements</Text>
+                        {infant && (
+                            <Text style={[Typography.caption1, { color: C.labelTertiary }]}>
+                                for {infant.name || 'Baby'}
+                            </Text>
+                        )}
+                    </View>
+                    <View style={styles.headerBtnRight} />
                 </View>
 
-                {infant && (
-                    <Text style={styles.subHeader}>
-                        for {infant.name || 'Baby'}
+                {/* ── LAST RECORDED CARD ────────────────── */}
+                <View style={[styles.card, Shadows.sm, { backgroundColor: C.card, paddingVertical: 16, marginBottom: 16 }]}>
+                    <Text style={[Typography.headline, { color: C.label, marginBottom: 16, textAlign: 'center' }]}>
+                        📊 Last Recorded
                     </Text>
-                )}
 
-                {/* ── LAST MEASUREMENT CARD ─────────────── */}
-                <View style={styles.lastMeasCard}>
                     {lastMeasurement ? (
                         <>
-                            <Text style={styles.lastMeasTitle}>📊 Last Recorded</Text>
-                            <View style={styles.lastMeasRow}>
-                                <View style={styles.lastMeasCol}>
-                                    <Text style={styles.lastMeasLabel}>Date</Text>
-                                    <Text style={styles.lastMeasValue}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                                <View style={{ flex: 1, alignItems: 'center' }}>
+                                    <Text style={[Typography.caption1, { color: C.labelTertiary, marginBottom: 4 }]}>Date</Text>
+                                    <Text style={[Typography.headline, { color: C.label, fontWeight: '700' }]}>
                                         {formatDate(lastMeasurement.measured_date)}
                                     </Text>
                                 </View>
-                                <View style={styles.lastMeasCol}>
-                                    <Text style={styles.lastMeasLabel}>Weight</Text>
-                                    <Text style={styles.lastMeasValue}>
+                                <View style={{ flex: 1, alignItems: 'center' }}>
+                                    <Text style={[Typography.caption1, { color: C.labelTertiary, marginBottom: 4 }]}>Weight</Text>
+                                    <Text style={[Typography.headline, { color: C.label, fontWeight: '700' }]}>
                                         {lastMeasurement.weight_g
                                             ? `${lastMeasurement.weight_g.toLocaleString()} g`
                                             : '—'}
                                     </Text>
                                 </View>
-                                <View style={styles.lastMeasCol}>
-                                    <Text style={styles.lastMeasLabel}>Height</Text>
-                                    <Text style={styles.lastMeasValue}>
+                                <View style={{ flex: 1, alignItems: 'center' }}>
+                                    <Text style={[Typography.caption1, { color: C.labelTertiary, marginBottom: 4 }]}>Height</Text>
+                                    <Text style={[Typography.headline, { color: C.label, fontWeight: '700' }]}>
                                         {lastMeasurement.height_cm
                                             ? `${lastMeasurement.height_cm} cm`
                                             : '—'}
                                     </Text>
                                 </View>
                             </View>
-                            <Text style={styles.lastMeasHint}>
-                                Enter new measurement below to update
+                            <Text style={[Typography.caption1, { color: C.labelTertiary, textAlign: 'center' }]}>
+                                Enter new values below to update
                             </Text>
                         </>
                     ) : (
-                        <>
-                            <Text style={styles.lastMeasTitle}>📊 No measurements recorded yet</Text>
-                            <Text style={styles.lastMeasHint}>
-                                Add your first measurement below
-                            </Text>
-                        </>
+                        <Text style={[Typography.subheadline, { color: C.labelTertiary, textAlign: 'center' }]}>
+                            No measurements recorded yet
+                        </Text>
                     )}
                 </View>
 
-                {/* ── MEASUREMENT DATE ──────────────────── */}
-                <View style={styles.dateSection}>
-                    <Text style={styles.inputLabel}>Measurement Date</Text>
-                    <Text style={styles.dateDisplay}>{todayLabel}</Text>
-                    <View style={styles.dateInputRow}>
+                {/* ── DATE ROW ──────────────────────────── */}
+                <View style={{ marginBottom: 16 }}>
+                    <Text style={[Typography.footnote, { color: C.labelTertiary, marginBottom: 4 }]}>Measurement Date</Text>
+                    <Text style={[Typography.title3, { color: C.label, fontWeight: '700', marginBottom: 12 }]}>{todayLabel}</Text>
+
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
                         <TextInput
-                            style={styles.dateInput}
+                            style={[
+                                styles.inputBox,
+                                Typography.body,
+                                {
+                                    backgroundColor: C.cardSecondary,
+                                    borderColor: C.primary,
+                                    color: C.label,
+                                    flex: 1
+                                }
+                            ]}
                             value={measDate}
-                            onChangeText={(text) => {
-                                // Allow typing, validate on blur-like behavior
-                                setMeasDate(text);
-                            }}
+                            onChangeText={setMeasDate}
                             placeholder="YYYY-MM-DD"
-                            placeholderTextColor={T.muted}
+                            placeholderTextColor={C.labelPlaceholder}
                             keyboardType="default"
                             maxLength={10}
                         />
                         <TouchableOpacity
-                            style={styles.todayBtn}
+                            style={[
+                                styles.todayBtn,
+                                { backgroundColor: C.primarySoft, borderColor: C.primary }
+                            ]}
                             onPress={() => setMeasDate(new Date().toISOString().split('T')[0])}
                         >
-                            <Text style={styles.todayBtnText}>Today</Text>
+                            <Text style={[Typography.callout, { color: C.primary, fontWeight: '700' }]}>Today</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* ── INPUT CARD ────────────────────────── */}
-                <View style={[styles.card, { borderLeftColor: T.primary }]}>
-                    <View style={styles.inputRow}>
-                        {/* Weight */}
-                        <View style={styles.inputCol}>
-                            <Text style={styles.inputLabel}>Weight</Text>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={styles.measureInput}
-                                    value={weightG}
-                                    onChangeText={setWeightG}
-                                    placeholder="e.g. 6200"
-                                    placeholderTextColor={T.muted}
-                                    keyboardType="decimal-pad"
-                                />
-                                <View style={styles.suffixBadge}>
-                                    <Text style={styles.suffixText}>g</Text>
-                                </View>
-                            </View>
-                            {weightG !== '' &&
-                                (isNaN(parseFloat(weightG)) ||
-                                    parseFloat(weightG) < 500 ||
-                                    parseFloat(weightG) > 30000) && (
-                                    <Text style={styles.validationError}>500–30,000g</Text>
-                                )}
-                        </View>
-
-                        {/* Height */}
-                        <View style={styles.inputCol}>
-                            <Text style={styles.inputLabel}>Height</Text>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={styles.measureInput}
-                                    value={heightCm}
-                                    onChangeText={setHeightCm}
-                                    placeholder="e.g. 65.5"
-                                    placeholderTextColor={T.muted}
-                                    keyboardType="decimal-pad"
-                                />
-                                <View style={styles.suffixBadge}>
-                                    <Text style={styles.suffixText}>cm</Text>
-                                </View>
-                            </View>
-                            {heightCm !== '' &&
-                                (isNaN(parseFloat(heightCm)) ||
-                                    parseFloat(heightCm) < 30 ||
-                                    parseFloat(heightCm) > 120) && (
-                                    <Text style={styles.validationError}>30–120cm</Text>
-                                )}
+                {/* ── MEASUREMENT INPUTS ────────────────── */}
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                    {/* Weight Card */}
+                    <View style={[styles.measurementCard, Shadows.sm, { backgroundColor: C.card }]}>
+                        <View style={[styles.cardAccentBar, { backgroundColor: C.primary }]} />
+                        <View style={{ padding: 16 }}>
+                            <Text style={[Typography.footnote, { color: C.labelTertiary, marginBottom: 8 }]}>⚖️ Weight</Text>
+                            <TextInput
+                                style={[{ fontSize: 28, fontWeight: '700', color: C.label, padding: 0 }]}
+                                value={weightG}
+                                onChangeText={setWeightG}
+                                placeholder="6200"
+                                placeholderTextColor={C.labelPlaceholder}
+                                keyboardType="decimal-pad"
+                            />
+                            <Text style={[Typography.footnote, { color: C.labelTertiary, textAlign: 'right', marginTop: 4 }]}>grams</Text>
                         </View>
                     </View>
 
-                    {/* Weight change hint */}
-                    {weightChange !== null && (
-                        <View
-                            style={[
-                                styles.changeHint,
-                                {
-                                    backgroundColor:
-                                        weightChange > 0
-                                            ? 'rgba(76,175,80,0.1)'
-                                            : 'rgba(255,82,82,0.1)',
-                                },
-                            ]}
-                        >
-                            <Text
-                                style={[
-                                    styles.changeHintText,
-                                    { color: weightChange > 0 ? T.success : T.error },
-                                ]}
-                            >
-                                {weightChange > 0 ? '↑' : '↓'}{' '}
-                                {weightChange > 0 ? '+' : ''}
-                                {Math.round(weightChange)}g since last measurement
-                            </Text>
+                    {/* Height Card */}
+                    <View style={[styles.measurementCard, Shadows.sm, { backgroundColor: C.card }]}>
+                        <View style={[styles.cardAccentBar, { backgroundColor: C.secondary }]} />
+                        <View style={{ padding: 16 }}>
+                            <Text style={[Typography.footnote, { color: C.labelTertiary, marginBottom: 8 }]}>📏 Height</Text>
+                            <TextInput
+                                style={[{ fontSize: 28, fontWeight: '700', color: C.label, padding: 0 }]}
+                                value={heightCm}
+                                onChangeText={setHeightCm}
+                                placeholder="65.5"
+                                placeholderTextColor={C.labelPlaceholder}
+                                keyboardType="decimal-pad"
+                            />
+                            <Text style={[Typography.footnote, { color: C.labelTertiary, textAlign: 'right', marginTop: 4 }]}>cm</Text>
                         </View>
-                    )}
+                    </View>
                 </View>
 
+                {/* ── WEIGHT CHANGE INDICATOR ───────────── */}
+                {weightChange !== null && (
+                    <Animated.View style={{ opacity: fadeAnim, marginBottom: 16 }}>
+                        <Text style={[
+                            Typography.subheadline,
+                            { color: weightChange > 0 ? C.success : C.danger, textAlign: 'center' }
+                        ]}>
+                            {weightChange > 0 ? '↑' : '↓'} {weightChange > 0 ? '+' : ''}
+                            {Math.round(weightChange)}g since last measurement
+                        </Text>
+                    </Animated.View>
+                )}
+
                 {/* ── NOTES INPUT ───────────────────────── */}
-                <View style={styles.notesSection}>
-                    <Text style={styles.inputLabel}>Notes (optional)</Text>
+                <View style={{ marginBottom: 16 }}>
+                    <Text style={[Typography.footnote, { color: C.labelTertiary, marginBottom: 8 }]}>Notes (optional)</Text>
                     <TextInput
-                        style={styles.notesInput}
+                        style={[
+                            styles.notesBox,
+                            Typography.body,
+                            {
+                                backgroundColor: C.cardSecondary,
+                                borderColor: C.border,
+                                color: C.label
+                            }
+                        ]}
                         value={notes}
                         onChangeText={setNotes}
-                        placeholder="e.g. After clinic visit, measured by nurse"
-                        placeholderTextColor={T.muted}
+                        placeholder="e.g. After clinic visit"
+                        placeholderTextColor={C.labelPlaceholder}
                         multiline
-                        numberOfLines={3}
                         textAlignVertical="top"
                     />
                 </View>
 
-                {/* ── TIPS CARD ─────────────────────────── */}
-                <View style={styles.tipsCard}>
-                    <Text style={styles.tipsTitle}>📌 Tips for accurate measurement</Text>
-                    <Text style={styles.tipItem}>• Weigh baby without clothes if possible</Text>
-                    <Text style={styles.tipItem}>• Measure at the same time each day</Text>
-                    <Text style={styles.tipItem}>• Use the same scale each time</Text>
-                    <Text style={styles.tipItem}>• Record immediately after clinic visits</Text>
-                </View>
+                {/* ── TIPS ROW (accordion) ─────────────── */}
+                <TouchableOpacity
+                    style={[styles.tipsAccordion, Shadows.sm, { backgroundColor: C.card }]}
+                    onPress={toggleTips}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={[Typography.subheadline, { color: C.label }]}>📌 Tips for accurate measurement</Text>
+                        <Text style={{ color: C.labelTertiary, fontSize: 14 }}>{tipsExpanded ? '▲' : '▼'}</Text>
+                    </View>
 
-                {/* Bottom spacer for footer */}
-                <View style={{ height: 100 }} />
+                    {tipsExpanded && (
+                        <View style={{ marginTop: 12, gap: 6 }}>
+                            <Text style={[Typography.subheadline, { color: C.labelSecondary }]}>• Weigh baby without clothes if possible</Text>
+                            <Text style={[Typography.subheadline, { color: C.labelSecondary }]}>• Measure at the same time each day</Text>
+                            <Text style={[Typography.subheadline, { color: C.labelSecondary }]}>• Use the same scale each time</Text>
+                            <Text style={[Typography.subheadline, { color: C.labelSecondary }]}>• Record immediately after clinic visits</Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
+
+                {/* Bottom spacer equivalent */}
+                <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* ── FOOTER ──────────────────────────────── */}
-            <View style={styles.footer}>
+            {/* ── SAVE BUTTON ───────────────────────── */}
+            <View style={styles.footerContainer}>
                 <TouchableOpacity
-                    style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+                    style={[
+                        styles.saveBtn,
+                        { backgroundColor: C.primary, shadowColor: C.primary },
+                        saving && { opacity: 0.7 }
+                    ]}
                     onPress={handleSave}
                     disabled={saving}
                     activeOpacity={0.8}
                 >
                     {saving ? (
-                        <ActivityIndicator color={T.white} />
+                        <ActivityIndicator color="#FFF" />
                     ) : (
-                        <Text style={styles.saveBtnText}>Save Measurement</Text>
+                        <Text style={[Typography.callout, { color: '#FFF', fontWeight: '700' }]}>Save Measurement</Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -404,275 +426,85 @@ export default function UpdateMeasurementsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: T.bg,
-    },
-    center: {
-        justifyContent: 'center',
-        alignItems: 'center',
     },
     scroll: {
         flex: 1,
     },
     scrollContent: {
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'ios' ? 56 : 40,
-        paddingBottom: 24,
     },
-
-    /* Header */
-    header: {
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 4,
-    },
-    backBtn: {
-        padding: 8,
-    },
-    backArrow: {
-        fontSize: 22,
-        color: T.white,
-        fontWeight: '700',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: T.white,
-    },
-    subHeader: {
-        textAlign: 'center',
-        color: T.muted,
-        fontSize: 14,
         marginBottom: 16,
     },
-
-    /* Last measurement */
-    lastMeasCard: {
-        backgroundColor: 'rgba(108,99,255,0.08)',
-        borderWidth: 1,
-        borderColor: 'rgba(108,99,255,0.2)',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
+    headerBtnLeft: {
+        width: 44,
+        alignItems: 'flex-start',
     },
-    lastMeasTitle: {
-        color: T.white,
-        fontSize: 15,
-        fontWeight: '700',
-        marginBottom: 12,
-    },
-    lastMeasRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    lastMeasCol: {
-        flex: 1,
+    headerCenter: {
         alignItems: 'center',
     },
-    lastMeasLabel: {
-        color: T.muted,
-        fontSize: 11,
-        marginBottom: 4,
+    headerBtnRight: {
+        width: 44,
     },
-    lastMeasValue: {
-        color: T.white,
-        fontSize: 16,
-        fontWeight: '700',
+    card: {
+        borderRadius: Radius.lg,
     },
-    lastMeasHint: {
-        color: T.muted,
-        fontSize: 12,
-        textAlign: 'center',
-    },
-
-    /* Date section */
-    dateSection: {
-        marginBottom: 16,
-    },
-    dateDisplay: {
-        color: T.white,
-        fontSize: 16,
-        fontWeight: '600',
-        marginTop: 6,
-        marginBottom: 8,
-    },
-    dateInputRow: {
-        flexDirection: 'row',
-        gap: 10,
-    },
-    dateInput: {
-        flex: 1,
+    inputBox: {
         height: 44,
-        backgroundColor: T.inputBg,
         borderWidth: 1,
-        borderColor: T.inputBorder,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         paddingHorizontal: 14,
-        color: T.white,
-        fontSize: 14,
     },
     todayBtn: {
         height: 44,
         paddingHorizontal: 16,
-        backgroundColor: 'rgba(108,99,255,0.15)',
         borderWidth: 1,
-        borderColor: T.primary,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    todayBtnText: {
-        color: T.primary,
-        fontSize: 14,
-        fontWeight: '700',
-    },
-
-    /* Card */
-    card: {
-        backgroundColor: T.cardBg,
-        borderWidth: 1,
-        borderColor: T.cardBorder,
-        borderRadius: 14,
-        borderLeftWidth: 4,
-        padding: 18,
-        marginBottom: 16,
-    },
-    inputRow: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    inputCol: {
+    measurementCard: {
         flex: 1,
+        borderRadius: Radius.lg,
+        overflow: 'hidden',
     },
-    inputLabel: {
-        color: T.label,
-        fontSize: 13,
-        fontWeight: '600',
-        marginBottom: 6,
+    cardAccentBar: {
+        height: 3,
+        width: '100%',
     },
-    inputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    measureInput: {
-        flex: 1,
-        height: 50,
-        backgroundColor: T.inputBg,
+    notesBox: {
         borderWidth: 1,
-        borderColor: T.inputBorder,
-        borderTopLeftRadius: 10,
-        borderBottomLeftRadius: 10,
-        paddingHorizontal: 14,
-        color: T.white,
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    suffixBadge: {
-        height: 50,
-        paddingHorizontal: 14,
-        backgroundColor: 'rgba(108,99,255,0.15)',
-        borderWidth: 1,
-        borderLeftWidth: 0,
-        borderColor: T.inputBorder,
-        borderTopRightRadius: 10,
-        borderBottomRightRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    suffixText: {
-        color: T.primary,
-        fontSize: 14,
-        fontWeight: '700',
-    },
-    validationError: {
-        color: T.error,
-        fontSize: 11,
-        marginTop: 4,
-        fontWeight: '600',
-    },
-    changeHint: {
-        marginTop: 12,
-        borderRadius: 8,
-        padding: 10,
-        alignItems: 'center',
-    },
-    changeHintText: {
-        fontSize: 13,
-        fontWeight: '700',
-    },
-
-    /* Notes */
-    notesSection: {
-        marginBottom: 16,
-    },
-    notesInput: {
-        backgroundColor: T.inputBg,
-        borderWidth: 1,
-        borderColor: T.inputBorder,
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        color: T.white,
-        fontSize: 14,
+        borderRadius: Radius.md,
+        padding: 14,
         minHeight: 80,
     },
-
-    /* Tips */
-    tipsCard: {
-        backgroundColor: 'rgba(108,99,255,0.06)',
-        borderWidth: 1,
-        borderColor: 'rgba(108,99,255,0.15)',
-        borderRadius: 12,
-        padding: 16,
+    tipsAccordion: {
+        padding: Spacing.lg,
+        borderRadius: Radius.lg,
         marginBottom: 16,
     },
-    tipsTitle: {
-        color: T.white,
-        fontSize: 14,
-        fontWeight: '700',
-        marginBottom: 10,
-    },
-    tipItem: {
-        color: T.muted,
-        fontSize: 13,
-        lineHeight: 22,
-    },
-
-    /* Muted text */
-    mutedText: {
-        color: T.muted,
-        fontSize: 12,
-    },
-
-    /* Footer */
-    footer: {
+    footerContainer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(26,26,46,0.97)',
-        padding: 16,
+        paddingHorizontal: 16,
         paddingBottom: 32,
+        paddingTop: 16,
+        backgroundColor: 'transparent', // The user requested floating or similar
     },
     saveBtn: {
-        backgroundColor: T.primary,
         height: 56,
-        borderRadius: 14,
+        width: '100%',
+        borderRadius: 999,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: T.primary,
-        shadowOpacity: 0.5,
         shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 8,
-    },
-    saveBtnDisabled: {
-        opacity: 0.7,
-    },
-    saveBtnText: {
-        color: T.white,
-        fontSize: 16,
-        fontWeight: '800',
-    },
+    }
 });

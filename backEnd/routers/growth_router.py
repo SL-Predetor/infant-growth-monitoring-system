@@ -31,6 +31,7 @@ MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "mlModels", "Growth")
 LSTM_PATH   = os.path.join(MODEL_DIR, "lstm_weight_variantB.pth")
 SCALER_PATH = os.path.join(MODEL_DIR, "scaler_variantB.pkl")
 RISK_PATH   = os.path.join(MODEL_DIR, "rf_risk_2b.pkl")
+XGB_PATH    = os.path.join(MODEL_DIR, "xgb_risk_2a.pkl")
 
 # ── LSTM Architecture (must match training exactly) ───────────────────────────
 class LSTMForecaster(nn.Module):
@@ -75,6 +76,7 @@ BINARY_COLS = [
 lstm_model = None
 scaler      = None
 risk_model  = None
+xgb_model   = None
 
 def load_models():
     global lstm_model, scaler, risk_model
@@ -115,6 +117,13 @@ def load_models():
         print("✅ [Growth] Risk model loaded")
     except Exception as e:
         print(f"⚠️  [Growth] Risk model not loaded: {e}")
+
+    try:
+        global xgb_model
+        xgb_model = joblib.load(XGB_PATH)
+        print("✅ [Growth] XGBoost 2A loaded")
+    except Exception as e:
+        print(f"⚠️  [Growth] XGBoost 2A not loaded: {e}")
 
 load_models()
 
@@ -165,6 +174,83 @@ def build_feature_row(log: dict, infant: dict, age_days: int) -> dict:
         'FeedType_breastfed':     1 if feed_type == 'breastfed' else 0,
         'FeedType_formula':       1 if feed_type == 'formula' else 0,
         'FeedType_mixed':         1 if feed_type == 'mixed' else 0,
+    }
+
+# XGB 2A uses same 31 behavioral features as RF 2B for now.
+# When full 39-feature list is confirmed, update VARIANT_B_RISK_XGB.
+# Model routing is ready — swap features when spec is confirmed.
+VARIANT_B_RISK_XGB = None  # set after VARIANT_B_RISK is defined
+
+# ── Risk model feature order (31 features — MUST match training exactly) ──────
+VARIANT_B_RISK = [
+    'Age_in_Days', 'Gender_Male',
+    'F_Breast_Formula', 'F_Solid_Meal', 'F_Nutritious_Snacks',
+    'F_Iron_Rich', 'F_Animal_Protein', 'F_Plant_Based', 'F_Junk_Food',
+    'Feeding_Frequency', 'Feeding_Source_Diversity', 'Feeding_Compliance',
+    'Daily_Calorie_Intake', 'Sleep_Hours',
+    'Illness_Day', 'Recovery_Day', 'Has_Illness_Episode',
+    'SES_Level', 'Maternal_BMI', 'Gestational_Diabetes',
+    'Maternal_Nutrition_Score', 'Gestational_Age_Weeks', 'Birth_Weight_g',
+    'IllType_diarrhoea', 'IllType_fever', 'IllType_none',
+    'IllType_persistent', 'IllType_respiratory',
+    'FeedType_breastfed', 'FeedType_formula', 'FeedType_mixed'
+]
+
+# ── Build one feature row for risk model (31 features) ────────────────────────
+def build_risk_feature_row(log: dict, infant: dict,
+                            age_days: int) -> dict:
+    feed_type = log.get('feed_type', 'breastfed')
+    illness_type = (log.get('illness_type') or 'none').lower()
+    # normalize illness type values
+    if illness_type not in ['diarrhoea','fever','respiratory','persistent']:
+        illness_type = 'none'
+
+    ff = float(log.get('feeding_frequency', 0) or 0)
+
+    # Feeding_Source_Diversity: count of non-zero food groups
+    food_vals = [
+        log.get('f_breast_formula', 0), log.get('f_solid_meal', 0),
+        log.get('f_nutritious_snacks', 0), log.get('f_iron_rich', 0),
+        log.get('f_animal_protein', 0), log.get('f_plant_based', 0),
+        log.get('f_junk_food', 0)
+    ]
+    diversity = float(sum(1 for v in food_vals if float(v or 0) > 0))
+
+    # Feeding_Compliance: actual feeds / expected (8 per day)
+    compliance = min(ff / 8.0, 1.0)
+
+    return {
+        'Age_in_Days':              age_days,
+        'Gender_Male':              1 if str(infant.get('gender','male')).lower() == 'male' else 0,
+        'F_Breast_Formula':         float(log.get('f_breast_formula', 0) or 0),
+        'F_Solid_Meal':             float(log.get('f_solid_meal', 0) or 0),
+        'F_Nutritious_Snacks':      float(log.get('f_nutritious_snacks', 0) or 0),
+        'F_Iron_Rich':              float(log.get('f_iron_rich', 0) or 0),
+        'F_Animal_Protein':         float(log.get('f_animal_protein', 0) or 0),
+        'F_Plant_Based':            float(log.get('f_plant_based', 0) or 0),
+        'F_Junk_Food':              float(log.get('f_junk_food', 0) or 0),
+        'Feeding_Frequency':        ff,
+        'Feeding_Source_Diversity': diversity,
+        'Feeding_Compliance':       compliance,
+        'Daily_Calorie_Intake':     float(log.get('daily_calorie_intake', 0) or 0),
+        'Sleep_Hours':              float(log.get('sleep_hours', 12.0) or 12.0),
+        'Illness_Day':              1 if log.get('has_illness', False) else 0,
+        'Recovery_Day':             int(log.get('recovery_day', 0) or 0),
+        'Has_Illness_Episode':      1 if log.get('has_illness_episode', False) else 0,
+        'SES_Level':                int(infant.get('ses_level', 1) or 1),
+        'Maternal_BMI':             float(infant.get('maternal_bmi', 22.0) or 22.0),
+        'Gestational_Diabetes':     1 if infant.get('gestational_diabetes', False) else 0,
+        'Maternal_Nutrition_Score': float(infant.get('maternal_nutrition_quality', 1) or 1),
+        'Gestational_Age_Weeks':    int(infant.get('gestational_age_weeks', 38) or 38),
+        'Birth_Weight_g':           float((infant.get('birth_weight_kg', 3.2) or 3.2)) * 1000,
+        'IllType_diarrhoea':        1 if illness_type == 'diarrhoea' else 0,
+        'IllType_fever':            1 if illness_type == 'fever' else 0,
+        'IllType_none':             1 if illness_type == 'none' else 0,
+        'IllType_persistent':       1 if illness_type == 'persistent' else 0,
+        'IllType_respiratory':      1 if illness_type == 'respiratory' else 0,
+        'FeedType_breastfed':       1 if feed_type == 'breastfed' else 0,
+        'FeedType_formula':         1 if feed_type == 'formula' else 0,
+        'FeedType_mixed':           1 if feed_type == 'mixed' else 0,
     }
 
 # ── Scale features (continuous only, binary stays raw) ───────────────────────
@@ -220,14 +306,45 @@ def run_risk(feature_row: dict) -> dict:
     if risk_model is None:
         return {"risk_score": 0.15, "stub": True}
     try:
-        X = np.array([[feature_row[f] for f in VARIANT_B]], dtype=float)
+        X = np.array(
+            [[feature_row[f] for f in VARIANT_B_RISK]],
+            dtype=float
+        )
         prob = float(risk_model.predict_proba(X)[0][1])
         return {"risk_score": round(prob, 4), "stub": False}
     except Exception as e:
         print(f"Risk model error: {e}")
+        import traceback; traceback.print_exc()
         return {"risk_score": 0.15, "stub": True, "error": str(e)}
 
+# Set XGB feature alias now that VARIANT_B_RISK is defined
+VARIANT_B_RISK_XGB = VARIANT_B_RISK  # same 31 for now
+
+def run_xgb_risk(feature_row: dict) -> dict:
+    """Use XGBoost 2A when weight measurement is available.
+    Falls back to RF 2B if XGB not loaded."""
+    if xgb_model is None:
+        print("XGB not loaded, falling back to RF 2B")
+        return run_risk(feature_row)
+    try:
+        X = np.array(
+            [[feature_row[f] for f in VARIANT_B_RISK_XGB]],
+            dtype=float
+        )
+        prob = float(xgb_model.predict_proba(X)[0][1])
+        return {
+            "risk_score": round(prob, 4),
+            "stub": False,
+            "model_used": "xgb_2a"
+        }
+    except Exception as e:
+        print(f"XGB error: {e}, falling back to RF 2B")
+        result = run_risk(feature_row)
+        result['model_used'] = 'rf_2b_fallback'
+        return result
+
 # ── Rule engine ───────────────────────────────────────────────────────────────
+
 def run_rule_engine(
     current_waz: float,
     predicted_weight_change_g: float,
@@ -314,7 +431,8 @@ def growth_status():
     return {
         "lstm_loaded":       lstm_model is not None,
         "scaler_loaded":     scaler is not None,
-        "risk_model_loaded": risk_model is not None,
+        "risk_rf_loaded":    risk_model is not None,
+        "risk_xgb_loaded":   xgb_model is not None,
         "mode": "live" if lstm_model is not None else "stub"
     }
 
@@ -379,7 +497,27 @@ def get_dashboard(infant_id: str):
 
             padded      = pad_window(feature_rows, 7)
             lstm_result = run_lstm(padded)
-            risk_result = run_risk(feature_rows[-1])
+            risk_feature = build_risk_feature_row(
+                last7[-1], infant,
+                (datetime.strptime(last7[-1]['log_date'], '%Y-%m-%d').date() - dob).days
+            )
+            # Route to XGBoost 2A if weight measured within last 14 days
+            weight_available = (
+                latest_meas is not None and
+                latest_meas.get('weight_g') is not None and
+                (date.today() - datetime.strptime(
+                    latest_meas['measured_date'], '%Y-%m-%d'
+                ).date()).days <= 14
+            )
+
+            if weight_available and xgb_model is not None:
+                risk_result = run_xgb_risk(risk_feature)
+                risk_result['model_used'] = 'xgb_2a'
+                print(f"  Using XGBoost 2A (weight available, {(date.today() - datetime.strptime(latest_meas['measured_date'], '%Y-%m-%d').date()).days} days ago)")
+            else:
+                risk_result = run_risk(risk_feature)
+                risk_result['model_used'] = 'rf_2b'
+                print(f"  Using RF 2B (no recent weight measurement)")
 
             if current_waz is not None and latest_meas:
                 alert_result = run_rule_engine(

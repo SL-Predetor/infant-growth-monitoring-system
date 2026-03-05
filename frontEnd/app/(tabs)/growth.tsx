@@ -11,72 +11,28 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, {
-  Polyline,
-  Line,
-  Text as SvgText,
+  Path,
   Circle,
+  Text as SvgText,
+  Defs,
+  LinearGradient,
+  Stop,
 } from 'react-native-svg';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors, Typography, Spacing, Radius, Shadows, wazColor } from '@/constants/theme';
 
-// ── Theme ─────────────────────────────────────────────
-const T = {
-  bg: '#1a1a2e',
-  cardBg: '#16213e',
-  cardBorder: '#2a2d4e',
-  primary: '#6C63FF',
-  primaryOp: 'rgba(108, 99, 255, 0.12)',
-  secondary: '#FF8FB1',
-  white: '#FFFFFF',
-  muted: '#8892a4',
-  label: '#a8b2c1',
-  success: '#4CAF50',
-  warning: '#FF9800',
-  error: '#FF5252',
-};
-
+const API_URL = 'http://localhost:8000/api';
 const screenWidth = Dimensions.get('window').width;
 
-// ── WAZ Calculation ──────────────────────────────────
-const calculateWAZ = (
-  weightKg: number,
-  ageDays: number,
-  gender: string,
-): number => {
-  const maleRef: Record<number, number> = {
-    0: 3.346, 30: 4.4, 60: 5.6, 90: 6.4, 120: 7.0,
-    150: 7.5, 180: 7.9, 210: 8.3, 240: 8.6, 270: 9.2,
-    300: 9.5, 330: 9.8, 365: 10.2,
-  };
-  const femaleRef: Record<number, number> = {
-    0: 3.232, 30: 4.2, 60: 5.1, 90: 5.8, 120: 6.4,
-    150: 6.9, 180: 7.3, 210: 7.7, 240: 8.1, 270: 8.6,
-    300: 8.9, 330: 9.2, 365: 9.5,
-  };
-  const ref = gender.toLowerCase() === 'male' ? maleRef : femaleRef;
-  const keys = Object.keys(ref).map(Number).sort((a, b) => a - b);
-  let closestKey = keys[0];
-  for (const k of keys) {
-    if (k <= ageDays) closestKey = k;
-  }
-  const median = ref[closestKey];
-  const sd = median * 0.13;
-  return parseFloat(((weightKg - median) / sd).toFixed(2));
-};
-
 // ── Helpers ──────────────────────────────────────────
-const wazColor = (waz: number | null) => {
-  if (waz === null) return T.cardBorder;
-  if (waz > -1) return T.success;
-  if (waz > -2) return T.warning;
-  return T.error;
-};
 
 const wazLabel = (waz: number | null) => {
   if (waz === null) return '';
-  if (waz > -1) return 'Healthy Growth ✓';
-  if (waz > -2) return 'Monitor Closely';
-  return 'At Risk — See Doctor';
+  if (waz > -1) return '✓ Healthy Growth';
+  if (waz > -2) return '⚠ Monitor Closely';
+  return '⚠ At Risk — See Doctor';
 };
 
 const formatAge = (days: number) => {
@@ -94,9 +50,37 @@ const formatDate = (dateStr: string) => {
   }
 };
 
+// Smooth curve generator
+const controlPoint = (current: number[], previous: number[], next: number[], reverse?: boolean) => {
+  const p = previous || current;
+  const n = next || current;
+  const smoothing = 0.2;
+  const o = [n[0] - p[0], n[1] - p[1]];
+  const angle = Math.atan2(o[1], o[0]) + (reverse ? Math.PI : 0);
+  const length = Math.sqrt(Math.pow(o[0], 2) + Math.pow(o[1], 2)) * smoothing;
+  const x = current[0] + Math.cos(angle) * length;
+  const y = current[1] + Math.sin(angle) * length;
+  return [x, y];
+};
+
+const bezierCommand = (point: number[], i: number, a: number[][]) => {
+  const [cpsX, cpsY] = controlPoint(a[i - 1], a[i - 2], point);
+  const [cpeX, cpeY] = controlPoint(point, a[i - 1], a[i + 1], true);
+  return `C ${cpsX},${cpsY} ${cpeX},${cpeY} ${point[0]},${point[1]}`;
+};
+
+const svgPath = (points: number[][]) => {
+  return points.reduce((acc, point, i, a) => i === 0
+    ? `M ${point[0]},${point[1]}`
+    : `${acc} ${bezierCommand(point, i, a)}`
+    , '');
+};
+
 export default function GrowthScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const colorScheme = useColorScheme() ?? 'light';
+  const C = Colors[colorScheme];
 
   // ── State ──────────────────────────────────────────
   const [infant, setInfant] = useState<any>(null);
@@ -109,109 +93,70 @@ export default function GrowthScreen() {
   const [personalBaseline, setPersonalBaseline] = useState<number | null>(null);
   const [baselineAlert, setBaselineAlert] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [aiReady, setAiReady] = useState(false);
+  const [logsNeeded, setLogsNeeded] = useState(7);
+  const [prediction, setPrediction] = useState<any>(null);
+  const [riskScore, setRiskScore] = useState<number | null>(null);
+  const [riskLevel, setRiskLevel] = useState<string>('unknown');
+  const [alertData, setAlertData] = useState<any>(null);
+
+  const [baselineExpanded, setBaselineExpanded] = useState(false);
 
   // ── Data fetch ─────────────────────────────────────
   useEffect(() => {
     const fetchDashboard = async () => {
-      if (!user) {
-        setPageLoading(false);
-        return;
-      }
+      if (!user) { setPageLoading(false); return; }
       try {
-        // 1. Get infant
+        // Get infant_id from Supabase
         const { data: infantData } = await supabase
           .from('infants')
-          .select('*')
+          .select('id, name, date_of_birth, gender')
           .eq('parent_id', user.id)
           .maybeSingle();
 
-        if (!infantData) {
-          setPageLoading(false);
-          return;
-        }
+        if (!infantData) { setPageLoading(false); return; }
         setInfant(infantData);
 
-        // 2. Age in days
-        const dob = new Date(infantData.date_of_birth);
-        const today = new Date();
-        const ageInDays = Math.floor(
-          (today.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24),
+        // Fetch everything from backend API
+        const response = await fetch(
+          `${API_URL}/growth/dashboard/${infantData.id}`
         );
-        setAgeDays(ageInDays);
+        if (!response.ok) throw new Error('Backend unavailable');
+        const data = await response.json();
 
-        // 3. Log count
-        const { count } = await supabase
-          .from('daily_logs')
-          .select('*', { count: 'exact', head: true })
-          .eq('infant_id', infantData.id);
-        setLogCount(count || 0);
+        // Set state from API response
+        setAgeDays(data.age_days ?? 0);
+        setLogCount(data.log_count ?? 0);
+        setLogsNeeded(data.logs_needed ?? 7);
+        setAiReady(data.ai_ready ?? false);
+        setMeasurements(data.chart_data ?? []);
+        setLatestMeasurement(
+          data.chart_data?.length > 0
+            ? data.chart_data[data.chart_data.length - 1]
+            : null
+        );
+        setWazScore(data.current_waz ?? null);
+        setPersonalBaseline(data.personal_baseline ?? null);
+        setBaselineAlert(
+          data.personal_baseline !== null &&
+          data.current_waz !== null &&
+          data.current_waz < data.personal_baseline - 0.5
+        );
+        setPrediction(data.prediction ?? null);
+        setRiskScore(data.risk_score ?? null);
+        setRiskLevel(data.risk_level ?? 'unknown');
+        setAlertData(data.alert ?? null);
 
-        // 4. Last 30 measurements for chart
-        const { data: measData } = await supabase
-          .from('measurements')
-          .select('measured_date, weight_g, height_cm')
-          .eq('infant_id', infantData.id)
-          .order('measured_date', { ascending: true })
-          .limit(30);
-        setMeasurements(measData || []);
-
-        // 5. Latest measurement for WAZ display
-        const latest =
-          measData && measData.length > 0
-            ? measData[measData.length - 1]
-            : null;
-        setLatestMeasurement(latest);
-
-        // 6. Calculate WAZ from latest weight
-        let currentWaz: number | null = null;
-        if (latest?.weight_g) {
-          currentWaz = calculateWAZ(
-            parseFloat(latest.weight_g) / 1000,
-            ageInDays,
-            infantData.gender || 'male',
-          );
-          setWazScore(currentWaz);
-        }
-
-        // 7. Today's log
-        const todayStr = today.toISOString().split('T')[0];
+        // Check today's log
+        const todayStr = new Date().toISOString().split('T')[0];
         const { data: todayLog } = await supabase
           .from('daily_logs')
-          .select('*')
+          .select('id')
           .eq('infant_id', infantData.id)
           .eq('log_date', todayStr)
           .maybeSingle();
         setHasLoggedToday(!!todayLog);
 
-        // 8. Personal WAZ baseline
-        if (measData && measData.length >= 2) {
-          const baselineMeas = measData.slice(0, 7);
-
-          const baselineWAZs = baselineMeas
-            .filter((m: any) => m.weight_g)
-            .map((m: any) => {
-              const mDate = new Date(m.measured_date);
-              const mAgeDays = Math.floor(
-                (mDate.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24),
-              );
-              return calculateWAZ(
-                parseFloat(m.weight_g) / 1000,
-                mAgeDays,
-                infantData.gender || 'male',
-              );
-            });
-
-          if (baselineWAZs.length > 0) {
-            const pBaseline =
-              baselineWAZs.reduce((a: number, b: number) => a + b, 0) /
-              baselineWAZs.length;
-            setPersonalBaseline(pBaseline);
-
-            if (currentWaz !== null) {
-              setBaselineAlert(currentWaz < pBaseline - 0.5);
-            }
-          }
-        }
       } catch (err: any) {
         console.error('Dashboard error:', err.message);
       } finally {
@@ -224,17 +169,17 @@ export default function GrowthScreen() {
   // ── Loading ────────────────────────────────────────
   if (pageLoading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color={T.primary} />
-        <Text style={[styles.mutedSmall, { marginTop: 12 }]}>Loading…</Text>
+      <View style={[styles.container, { backgroundColor: C.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={C.primary} />
+        <Text style={[{ marginTop: 12, color: C.labelTertiary }, Typography.subheadline]}>Loading…</Text>
       </View>
     );
   }
 
   // ── Chart helpers ──────────────────────────────────
-  const chartW = screenWidth - 64;
-  const chartH = 160;
-  const pad = { top: 10, bottom: 30, left: 45, right: 10 };
+  const chartW = screenWidth - 64; // width minus screen padding (32) and card padding (32)
+  const chartH = 180;
+  const pad = { top: 20, bottom: 20, left: 10, right: 10 };
 
   const validMeas = measurements.filter((m) => m.weight_g);
   const weights = validMeas.map((m) => parseFloat(m.weight_g));
@@ -251,179 +196,311 @@ export default function GrowthScreen() {
     pad.bottom -
     ((w - minW) / (maxW - minW || 1)) * (chartH - pad.top - pad.bottom);
 
-  const points = validMeas
-    .map((m, i) => `${xScale(i)},${yScale(parseFloat(m.weight_g))}`)
-    .join(' ');
+  const pointsArr = validMeas.map((m, i) => [xScale(i), yScale(parseFloat(m.weight_g))]);
+  const curvePath = pointsArr.length > 0 ? svgPath(pointsArr) : '';
+  const areaPath = pointsArr.length > 0
+    ? `${curvePath} L ${pointsArr[pointsArr.length - 1][0]},${chartH} L ${pointsArr[0][0]},${chartH} Z`
+    : '';
 
-  // WHO median reference line
-  const gender = infant?.gender || 'male';
-  const ref = gender.toLowerCase() === 'male'
-    ? { 0: 3346, 30: 4400, 60: 5600, 90: 6400, 120: 7000, 150: 7500, 180: 7900, 210: 8300, 240: 8600, 270: 9200, 300: 9500, 330: 9800, 365: 10200 }
-    : { 0: 3232, 30: 4200, 60: 5100, 90: 5800, 120: 6400, 150: 6900, 180: 7300, 210: 7700, 240: 8100, 270: 8600, 300: 8900, 330: 9200, 365: 9500 };
-
-  // Get WHO median points that fall within our chart weight range
-  const dob = infant ? new Date(infant.date_of_birth) : new Date();
-  const refPoints: string[] = [];
-  if (validMeas.length >= 2) {
-    validMeas.forEach((m, i) => {
-      const mDate = new Date(m.measured_date);
-      const mAge = Math.floor(
-        (mDate.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      const refKeys = Object.keys(ref).map(Number).sort((a, b) => a - b);
-      let closest = refKeys[0];
-      for (const k of refKeys) {
-        if (k <= mAge) closest = k;
-      }
-      const medianG = (ref as Record<number, number>)[closest];
-      if (medianG >= minW && medianG <= maxW) {
-        refPoints.push(`${xScale(i)},${yScale(medianG)}`);
-      }
-    });
-  }
+  const currentWazColor = wazColor(wazScore, colorScheme);
+  const wazBadgeBg = wazScore === null ? C.cardTertiary :
+    wazScore > -1 ? C.successSoft :
+      wazScore > -2 ? C.warningSoft : C.dangerSoft;
 
   // ── Render ─────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: C.background }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: Platform.OS === 'ios' ? 60 : 40 }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── HEADER ────────────────────────────── */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerName}>
+            <Text style={[Typography.title1, { color: C.label }]}>
               {infant?.name || 'Baby'}
             </Text>
-            <Text style={styles.headerAge}>{formatAge(ageDays)}</Text>
+            <Text style={[Typography.footnote, { color: C.labelTertiary, marginTop: 2 }]}>
+              {formatAge(ageDays)}
+            </Text>
           </View>
           <TouchableOpacity
-            onPress={() =>
-              router.push('/(tabs)/edit-profile' as any)
-            }
-            style={styles.settingsBtn}
+            onPress={() => router.push('/(tabs)/edit-profile' as any)}
+            style={[styles.settingsBtn, { backgroundColor: C.cardSecondary }]}
           >
-            <Text style={styles.settingsIcon}>⚙️</Text>
+            <Text style={{ fontSize: 20 }}>⚙️</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── TODAY'S LOG STATUS ─────────────────── */}
-        {!hasLoggedToday ? (
-          <View style={styles.logBannerWarn}>
-            <View style={styles.logBannerRow}>
-              <Text style={styles.logBannerText}>
-                📋 Log today's feeding and sleep
-              </Text>
-              <TouchableOpacity
-                onPress={() =>
-                  router.push('/(tabs)/daily-log' as any)
-                }
-              >
-                <Text style={styles.logBannerLink}>Log Now →</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.logBannerOk}>
-            <Text style={styles.logBannerOkText}>
-              ✅ Today's log complete
+        {/* ── LOG REMINDER ──────────────────────── */}
+        {!hasLoggedToday && (
+          <TouchableOpacity
+            style={[
+              styles.logReminder,
+              { backgroundColor: C.primarySoft, borderColor: C.primary, marginBottom: 12 }
+            ]}
+            onPress={() => router.push('/(tabs)/daily-log' as any)}
+          >
+            <Text style={[Typography.subheadline, { color: C.primary, flex: 1 }]}>
+              📋 Log today's feeding and sleep
             </Text>
-            <Text style={styles.mutedSmall}>
-              Come back tomorrow to log again
+            <Text style={[Typography.footnote, { color: C.primary, fontWeight: '700' }]}>
+              Log Now →
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
 
-        {/* ── AI READINESS ──────────────────────── */}
-        <View style={styles.card}>
-          {logCount < 7 ? (
-            <>
-              <View style={styles.aiRow}>
-                <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>
-                <Text style={styles.cardText}>
-                  AI needs {7 - logCount} more day
-                  {7 - logCount !== 1 ? 's' : ''}
-                </Text>
-              </View>
-              <View style={styles.progressBg}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${(logCount / 7) * 100}%` },
-                  ]}
-                />
-              </View>
-              <Text style={styles.mutedSmall}>
-                Log daily to activate growth predictions
-              </Text>
-            </>
-          ) : (
-            <View style={styles.aiRow}>
-              <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>
-              <View style={styles.aiBadge}>
-                <Text style={styles.aiBadgeText}>AI Active ✓</Text>
-              </View>
-              <Text style={[styles.cardText, { marginLeft: 8 }]}>
-                Growth predictions running
-              </Text>
+        {/* ── CRITICAL ALERT ────────────────────── */}
+        {alertData?.alert_fired && (
+          <TouchableOpacity
+            style={[
+              styles.logReminder,
+              { backgroundColor: C.dangerSoft, borderColor: C.danger, marginBottom: 12, flexDirection: 'column', alignItems: 'stretch' }
+            ]}
+            onPress={() => {/* Navigate to alert details if exists */ }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={[Typography.headline, { color: C.danger }]}>🚨 Growth Alert</Text>
+              <Text style={[Typography.footnote, { color: C.danger }]}>Tap for details →</Text>
             </View>
-          )}
-        </View>
+            <Text style={[Typography.subheadline, { color: C.label }]}>
+              {alertData.alert_message}
+            </Text>
+          </TouchableOpacity>
+        )}
 
-        {/* ── WAZ SCORE ─────────────────────────── */}
+        {/* ── HERO WAZ CARD ─────────────────────── */}
         <View
           style={[
-            styles.card,
-            styles.accentCard,
-            { borderLeftColor: wazColor(wazScore) },
+            styles.heroCard,
+            Shadows.md,
+            { backgroundColor: C.card, borderLeftColor: currentWazColor, marginBottom: 12 }
           ]}
         >
-          <Text style={styles.cardTitle}>⚖️ Growth Status</Text>
+          <Text style={[Typography.caption2, { color: C.labelTertiary, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 }]}>
+            GROWTH STATUS
+          </Text>
 
           {wazScore !== null ? (
             <>
-              <Text
-                style={[styles.wazNumber, { color: wazColor(wazScore) }]}
-              >
+              <Text style={[{ fontSize: 72, fontWeight: '900', color: currentWazColor, textAlign: 'center', marginBottom: 4 }]}>
                 {wazScore.toFixed(2)}
               </Text>
-              <Text style={styles.wazLabel}>Weight-for-Age Z-Score</Text>
+              <Text style={[Typography.footnote, { color: C.labelTertiary, textAlign: 'center', marginBottom: 16 }]}>
+                Weight-for-Age Z-Score
+              </Text>
 
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: wazColor(wazScore) },
-                ]}
-              >
-                <Text style={styles.statusBadgeText}>
+              <View style={[styles.statusBadge, { backgroundColor: wazBadgeBg, marginBottom: 20 }]}>
+                <Text style={[Typography.callout, { fontWeight: '600', color: currentWazColor }]}>
                   {wazLabel(wazScore)}
                 </Text>
               </View>
 
-              {latestMeasurement && (
-                <Text style={styles.mutedSmall}>
-                  Last recorded:{' '}
-                  {latestMeasurement.weight_g
-                    ? `${parseFloat(latestMeasurement.weight_g).toLocaleString()}g`
-                    : '—'}{' '}
-                  on {formatDate(latestMeasurement.measured_date)}
-                </Text>
-              )}
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.separator, marginBottom: 16 }} />
+
+              <View style={styles.statsRow}>
+                <View style={styles.statCol}>
+                  <Text style={[Typography.display4, { color: C.label }]}>
+                    {latestMeasurement?.weight_g ? (parseFloat(latestMeasurement.weight_g) / 1000).toFixed(2) : '-'}
+                    <Text style={[Typography.title3, { color: C.labelTertiary }]}> kg</Text>
+                  </Text>
+                  <Text style={[Typography.caption1, { color: C.labelTertiary, marginTop: 4 }]}>
+                    {latestMeasurement ? formatDate(latestMeasurement.measured_date) : ''}
+                  </Text>
+                </View>
+
+                <View style={{ width: StyleSheet.hairlineWidth, height: 40, backgroundColor: C.separator }} />
+
+                <View style={styles.statCol}>
+                  <Text style={[Typography.display4, { color: C.secondary }]}>
+                    {latestMeasurement?.height_cm ? latestMeasurement.height_cm : '-'}
+                    <Text style={[Typography.title3, { color: C.labelTertiary }]}> cm</Text>
+                  </Text>
+                  <Text style={[Typography.caption1, { color: C.labelTertiary, marginTop: 4 }]}>
+                    {latestMeasurement ? formatDate(latestMeasurement.measured_date) : ''}
+                  </Text>
+                </View>
+              </View>
             </>
           ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📏</Text>
-              <Text style={styles.emptyText}>No measurements yet</Text>
+            <View style={{ alignItems: 'center', marginVertical: 20 }}>
+              <Text style={{ fontSize: 36, marginBottom: 8 }}>📏</Text>
+              <Text style={[Typography.subheadline, { color: C.labelTertiary, marginBottom: 16 }]}>
+                No measurements yet
+              </Text>
               <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() =>
-                  router.push('/(tabs)/update-measurements' as any)
-                }
+                style={{ backgroundColor: C.primarySoft, borderColor: C.primary, borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 }}
+                onPress={() => router.push('/(tabs)/update-measurements' as any)}
               >
-                <Text style={styles.emptyBtnText}>
-                  Add First Measurement →
-                </Text>
+                <Text style={[Typography.caption1, { color: C.primary, fontWeight: '700' }]}>Add First Measurement</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* ── AI FORECAST ROW ───────────────────── */}
+        {aiReady && prediction && (
+          <View style={[styles.forecastRow, { marginBottom: 12 }]}>
+            <View style={[styles.forecastCard, Shadows.sm, { backgroundColor: C.card, borderLeftColor: C.primary }]}>
+              <Text style={[Typography.caption2, { color: C.labelTertiary, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }]}>TOMORROW</Text>
+              {(() => {
+                const wt = prediction.predicted_weight_change_g;
+                const trend = wt > 0 ? '↑' : '↓';
+                const label = wt > 20 ? 'Good gain' : wt > 10 ? 'Steady gain' : wt > 0 ? 'Slow gain' : 'Monitor closely';
+                return (
+                  <>
+                    <Text style={[Typography.display4, { color: C.primary }]}>{trend} ~{Math.abs(wt).toFixed(1)}g</Text>
+                    <Text style={[Typography.caption1, { color: C.labelTertiary, marginTop: 4 }]}>{label}</Text>
+                  </>
+                );
+              })()}
+            </View>
+
+            <View style={[styles.forecastCard, Shadows.sm, { backgroundColor: C.card, borderLeftColor: C.secondary }]}>
+              <Text style={[Typography.caption2, { color: C.labelTertiary, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }]}>TREND</Text>
+              {(() => {
+                const ht = prediction.predicted_height_change_cm || 0;
+                let trendTitle = '';
+                let trendSub = '';
+                let titleColor = '';
+
+                if (ht >= 0.5) {
+                  trendTitle = '↑ Growing';
+                  trendSub = 'good height gain';
+                  titleColor = C.secondary; // pink
+                } else if (ht >= 0.1) {
+                  trendTitle = '↑ Steady';
+                  trendSub = 'normal height gain';
+                  titleColor = C.secondary; // pink
+                } else if (ht >= 0.0) {
+                  trendTitle = '→ Stable';
+                  trendSub = 'height holding steady';
+                  titleColor = C.labelTertiary; // grey
+                } else {
+                  trendTitle = '↓ Check';
+                  trendSub = 'monitor height closely';
+                  titleColor = C.warning; // orange
+                }
+
+                return (
+                  <>
+                    <Text style={[Typography.display4, { color: titleColor }]}>{trendTitle}</Text>
+                    <Text style={[Typography.caption1, { color: C.labelTertiary, marginTop: 4 }]}>{trendSub}</Text>
+                  </>
+                );
+              })()}
+            </View>
+          </View>
+        )}
+
+        {/* ── AI PROGRESS ───────────────────────── */}
+        {!aiReady && (
+          <View style={[styles.aiProgressCard, Shadows.sm, { backgroundColor: C.card, marginBottom: 12 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, marginRight: 12 }}>🤖</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.headline, { color: C.label }]}>AI needs {logsNeeded} more day{logsNeeded !== 1 ? 's' : ''}</Text>
+                <Text style={[Typography.footnote, { color: C.labelTertiary, marginTop: 2 }]}>Log daily to activate predictions</Text>
+              </View>
+            </View>
+            <View style={{ height: 4, backgroundColor: C.cardTertiary, borderRadius: 2, marginTop: 12, overflow: 'hidden' }}>
+              <View style={{ height: 4, backgroundColor: C.primary, width: `${Math.round(((7 - logsNeeded) / 7) * 100)}%` }} />
+            </View>
+            <Text style={[Typography.caption2, { color: C.labelTertiary, marginTop: 4 }]}>Day {7 - logsNeeded} of 7</Text>
+          </View>
+        )}
+
+        {/* ── RISK CARD ─────────────────────────── */}
+        {(riskLevel === 'Medium' || riskLevel === 'High') && (
+          <View style={[
+            styles.riskCard,
+            {
+              backgroundColor: riskLevel === 'High' ? C.dangerSoft : C.warningSoft,
+              borderColor: riskLevel === 'High' ? C.danger : C.warning,
+              marginBottom: 12
+            }
+          ]}>
+            <Text style={[Typography.headline, { color: riskLevel === 'High' ? C.danger : C.warning, marginBottom: 4 }]}>
+              {riskLevel === 'High' ? '🚨' : '⚠️'} {(riskScore !== null ? (riskScore * 100).toFixed(0) : 0)}% {riskLevel} Risk
+            </Text>
+            <Text style={[Typography.subheadline, { color: C.labelSecondary }]}>
+              {riskLevel === 'High' ? 'Please visit a healthcare provider soon' : 'Monitor feeding and sleep closely this week'}
+            </Text>
+          </View>
+        )}
+
+        {/* ── WEIGHT CHART ──────────────────────── */}
+        <View style={[styles.chartCard, Shadows.sm, { backgroundColor: C.card, marginBottom: 12 }]}>
+          <Text style={[Typography.headline, { color: C.label }]}>Weight Progress</Text>
+          <Text style={[Typography.caption1, { color: C.labelTertiary, marginBottom: 16 }]}>Last {validMeas.length} measurements</Text>
+
+          {validMeas.length >= 2 ? (
+            <Svg width={chartW} height={chartH}>
+              <Defs>
+                <LinearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={C.primary} stopOpacity={0.18} />
+                  <Stop offset="1" stopColor={C.primary} stopOpacity={0.01} />
+                </LinearGradient>
+              </Defs>
+
+              <Path
+                d={areaPath}
+                fill="url(#gradient)"
+              />
+              <Path
+                d={curvePath}
+                fill="none"
+                stroke={C.primary}
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Last data point */}
+              {pointsArr.length > 0 && (
+                <>
+                  <Circle
+                    cx={pointsArr[pointsArr.length - 1][0]}
+                    cy={pointsArr[pointsArr.length - 1][1]}
+                    r={5}
+                    fill={C.card}
+                    stroke={C.primary}
+                    strokeWidth={2.5}
+                  />
+                  <SvgText
+                    x={pointsArr[pointsArr.length - 1][0]}
+                    y={pointsArr[pointsArr.length - 1][1] - 12}
+                    fontSize={11}
+                    fill={C.label}
+                    textAnchor="middle"
+                    fontWeight="600"
+                  >
+                    {(parseFloat(validMeas[validMeas.length - 1].weight_g) / 1000).toFixed(2)}kg
+                  </SvgText>
+                </>
+              )}
+
+              {/* X-axis date labels */}
+              <SvgText x={pad.left} y={chartH - 4} fontSize={10} fill={C.labelTertiary}>
+                {formatDate(validMeas[0].measured_date)}
+              </SvgText>
+              <SvgText x={chartW - pad.right} y={chartH - 4} fontSize={10} fill={C.labelTertiary} textAnchor="end">
+                {formatDate(validMeas[validMeas.length - 1].measured_date)}
+              </SvgText>
+
+            </Svg>
+          ) : (
+            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+              <Text style={[Typography.subheadline, { color: C.labelTertiary, marginBottom: 12 }]}>Add 2+ measurements to see chart</Text>
+              <TouchableOpacity
+                style={{ backgroundColor: C.primarySoft, borderColor: C.primary, borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 }}
+                onPress={() => router.push('/(tabs)/update-measurements' as any)}
+              >
+                <Text style={[Typography.caption1, { color: C.primary, fontWeight: '700' }]}>Add Measurement</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -431,271 +508,65 @@ export default function GrowthScreen() {
 
         {/* ── PERSONAL BASELINE ─────────────────── */}
         {personalBaseline !== null && wazScore !== null && (
-          <View
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setBaselineExpanded(!baselineExpanded)}
             style={[
-              styles.card,
-              styles.accentCard,
-              {
-                borderLeftColor: baselineAlert ? T.error : T.success,
-              },
+              styles.baselineCard,
+              Shadows.sm,
+              { backgroundColor: C.card, borderColor: baselineAlert ? C.danger : C.success, marginBottom: 12 }
             ]}
           >
-            <Text style={styles.cardTitle}>👤 Personal Baseline</Text>
-            <Text style={styles.cardText}>
-              Your baby's baseline WAZ:{' '}
-              <Text style={{ fontWeight: '800', color: T.white }}>
-                {personalBaseline.toFixed(2)}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[Typography.subheadline, { color: C.label }]}>
+                👤 Personal baseline:{' '}
+                <Text style={{ color: baselineAlert ? C.danger : C.success }}>
+                  {baselineAlert ? 'Below Baseline ⚠' : 'On Track ✓'}
+                </Text>
               </Text>
-            </Text>
-            <Text style={[styles.cardText, { marginTop: 4 }]}>
-              Current WAZ:{' '}
-              <Text
-                style={{
-                  fontWeight: '800',
-                  color: wazColor(wazScore),
-                }}
-              >
-                {wazScore.toFixed(2)}
-              </Text>
-            </Text>
-
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: baselineAlert ? T.error : T.success,
-                  marginTop: 10,
-                },
-              ]}
-            >
-              <Text style={styles.statusBadgeText}>
-                {baselineAlert ? '⚠️ Below Personal Baseline' : '✓ On Track'}
-              </Text>
+              <Text style={{ color: C.labelTertiary }}>{baselineExpanded ? '▲' : '▼'}</Text>
             </View>
-            <Text style={[styles.mutedSmall, { marginTop: 6 }]}>
-              {baselineAlert
-                ? "WAZ has dropped more than 0.5 below your baby's personal growth baseline"
-                : "Growth is consistent with your baby's personal pattern"}
-            </Text>
-          </View>
+
+            {baselineExpanded && (
+              <>
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.separator, marginVertical: 12 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={[Typography.caption1, { color: C.labelTertiary, marginBottom: 4 }]}>Personal Baseline</Text>
+                    <Text style={[Typography.headline, { color: C.label }]}>{personalBaseline.toFixed(2)}</Text>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={[Typography.caption1, { color: C.labelTertiary, marginBottom: 4 }]}>Current WAZ</Text>
+                    <Text style={[Typography.headline, { color: currentWazColor }]}>{wazScore.toFixed(2)}</Text>
+                  </View>
+                </View>
+                <Text style={[Typography.footnote, { color: C.labelTertiary, marginTop: 12, textAlign: 'center' }]}>
+                  {baselineAlert
+                    ? "WAZ has dropped more than 0.5 below your baby's unique growth pattern."
+                    : "Growth is consistent with your baby's personal curve."}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         )}
-
-        {/* ── WEIGHT CHART ──────────────────────── */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>📈 Weight Progress</Text>
-          <Text style={styles.mutedSmall}>Last 30 measurements</Text>
-
-          {validMeas.length >= 2 ? (
-            <View style={styles.chartContainer}>
-              <Svg width={chartW} height={chartH}>
-                {/* Y-axis labels */}
-                <SvgText
-                  x={4}
-                  y={pad.top + 10}
-                  fontSize={10}
-                  fill={T.muted}
-                >
-                  {Math.round(maxW)}g
-                </SvgText>
-                <SvgText
-                  x={4}
-                  y={chartH - pad.bottom + 4}
-                  fontSize={10}
-                  fill={T.muted}
-                >
-                  {Math.round(minW)}g
-                </SvgText>
-
-                {/* Grid lines */}
-                <Line
-                  x1={pad.left}
-                  y1={pad.top}
-                  x2={chartW - pad.right}
-                  y2={pad.top}
-                  stroke={T.cardBorder}
-                  strokeWidth={0.5}
-                />
-                <Line
-                  x1={pad.left}
-                  y1={chartH - pad.bottom}
-                  x2={chartW - pad.right}
-                  y2={chartH - pad.bottom}
-                  stroke={T.cardBorder}
-                  strokeWidth={0.5}
-                />
-                <Line
-                  x1={pad.left}
-                  y1={(pad.top + (chartH - pad.bottom)) / 2}
-                  x2={chartW - pad.right}
-                  y2={(pad.top + (chartH - pad.bottom)) / 2}
-                  stroke={T.cardBorder}
-                  strokeWidth={0.5}
-                  strokeDasharray="4,4"
-                />
-
-                {/* WHO median reference line */}
-                {refPoints.length >= 2 && (
-                  <Polyline
-                    points={refPoints.join(' ')}
-                    fill="none"
-                    stroke={T.primary}
-                    strokeWidth={1.5}
-                    strokeDasharray="6,4"
-                    opacity={0.5}
-                  />
-                )}
-
-                {/* Actual weight line */}
-                <Polyline
-                  points={points}
-                  fill="none"
-                  stroke={T.secondary}
-                  strokeWidth={2.5}
-                />
-
-                {/* Last data point */}
-                <Circle
-                  cx={xScale(validMeas.length - 1)}
-                  cy={yScale(
-                    parseFloat(validMeas[validMeas.length - 1].weight_g),
-                  )}
-                  r={4}
-                  fill={T.secondary}
-                />
-                <SvgText
-                  x={xScale(validMeas.length - 1)}
-                  y={
-                    yScale(
-                      parseFloat(
-                        validMeas[validMeas.length - 1].weight_g,
-                      ),
-                    ) - 10
-                  }
-                  fontSize={10}
-                  fill={T.white}
-                  textAnchor="middle"
-                  fontWeight="700"
-                >
-                  {parseFloat(
-                    validMeas[validMeas.length - 1].weight_g,
-                  ).toLocaleString()}
-                  g
-                </SvgText>
-
-                {/* X-axis date labels — first and last */}
-                <SvgText
-                  x={pad.left}
-                  y={chartH - 6}
-                  fontSize={9}
-                  fill={T.muted}
-                >
-                  {formatDate(validMeas[0].measured_date)}
-                </SvgText>
-                <SvgText
-                  x={chartW - pad.right}
-                  y={chartH - 6}
-                  fontSize={9}
-                  fill={T.muted}
-                  textAnchor="end"
-                >
-                  {formatDate(
-                    validMeas[validMeas.length - 1].measured_date,
-                  )}
-                </SvgText>
-              </Svg>
-
-              {/* Legend */}
-              <View style={styles.legendRow}>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendLine, { backgroundColor: T.secondary }]}
-                  />
-                  <Text style={styles.mutedSmall}>Actual</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendLine,
-                      {
-                        backgroundColor: T.primary,
-                        opacity: 0.5,
-                      },
-                    ]}
-                  />
-                  <Text style={styles.mutedSmall}>WHO Median</Text>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>
-                Add at least 2 measurements to see chart
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() =>
-                  router.push('/(tabs)/update-measurements' as any)
-                }
-              >
-                <Text style={styles.emptyBtnText}>📏 Add Measurement</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* ── QUICK STATS ───────────────────────── */}
-        <View style={styles.statRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Latest Weight</Text>
-            <Text style={styles.statValue}>
-              {latestMeasurement?.weight_g
-                ? `${parseFloat(latestMeasurement.weight_g).toLocaleString()} g`
-                : '—'}
-            </Text>
-            <Text style={styles.mutedSmall}>
-              {latestMeasurement
-                ? formatDate(latestMeasurement.measured_date)
-                : 'No data'}
-            </Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Latest Height</Text>
-            <Text style={styles.statValue}>
-              {latestMeasurement?.height_cm
-                ? `${latestMeasurement.height_cm} cm`
-                : '—'}
-            </Text>
-            <Text style={styles.mutedSmall}>
-              {latestMeasurement
-                ? formatDate(latestMeasurement.measured_date)
-                : 'No data'}
-            </Text>
-          </View>
-        </View>
 
         {/* ── QUICK ACTIONS ─────────────────────── */}
         <View style={styles.actionRow}>
           <TouchableOpacity
-            style={styles.actionBtnPrimary}
-            onPress={() =>
-              router.push('/(tabs)/daily-log' as any)
-            }
+            style={[styles.actionBtnLeft, { backgroundColor: C.primary }]}
+            onPress={() => router.push('/(tabs)/daily-log' as any)}
           >
-            <Text style={styles.actionBtnPrimaryText}>📋 Log Today</Text>
+            <Text style={[Typography.callout, { color: '#FFF', fontWeight: '600' }]}>📋 Log Today</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={styles.actionBtnOutline}
-            onPress={() =>
-              router.push('/(tabs)/update-measurements' as any)
-            }
+            style={[styles.actionBtnRight, Shadows.sm, { backgroundColor: C.card, borderColor: C.primary }]}
+            onPress={() => router.push('/(tabs)/update-measurements' as any)}
           >
-            <Text style={styles.actionBtnOutlineText}>
-              📏 Update Weight
-            </Text>
+            <Text style={[Typography.callout, { color: C.primary, fontWeight: '600' }]}>📏 Update Weight</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: 24 }} />
       </ScrollView>
     </View>
   );
@@ -705,279 +576,98 @@ export default function GrowthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: T.bg,
-  },
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 40,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
-
-  /* Header */
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  headerName: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: T.white,
-  },
-  headerAge: {
-    fontSize: 14,
-    color: T.muted,
-    marginTop: 2,
+    marginBottom: 12, // overall gap
   },
   settingsBtn: {
-    padding: 8,
-  },
-  settingsIcon: {
-    fontSize: 22,
-  },
-
-  /* Log banners */
-  logBannerWarn: {
-    backgroundColor: 'rgba(255,152,0,0.12)',
-    borderWidth: 1,
-    borderColor: T.warning,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-  },
-  logBannerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  logBannerText: {
-    color: T.warning,
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
-  },
-  logBannerLink: {
-    color: T.warning,
-    fontSize: 14,
-    fontWeight: '800',
-    marginLeft: 8,
-  },
-  logBannerOk: {
-    backgroundColor: 'rgba(76,175,80,0.12)',
+  logReminder: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12, // Spatial.md ideally but raw for now
     borderWidth: 1,
-    borderColor: T.success,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
+    borderRadius: 12, // lg roughly
   },
-  logBannerOkText: {
-    color: T.success,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  /* Cards */
-  card: {
-    backgroundColor: T.cardBg,
-    borderWidth: 1,
-    borderColor: T.cardBorder,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-  },
-  accentCard: {
+  heroCard: {
+    padding: 20,
+    borderRadius: 20,
     borderLeftWidth: 4,
   },
-  cardTitle: {
-    color: T.white,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  cardText: {
-    color: T.label,
-    fontSize: 14,
-  },
-
-  /* AI readiness */
-  aiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  progressBg: {
-    height: 6,
-    backgroundColor: T.cardBorder,
-    borderRadius: 3,
-    marginBottom: 8,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 6,
-    backgroundColor: T.primary,
-    borderRadius: 3,
-  },
-  aiBadge: {
-    backgroundColor: T.success,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  aiBadgeText: {
-    color: T.white,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  /* WAZ */
-  wazNumber: {
-    fontSize: 52,
-    fontWeight: '900',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  wazLabel: {
-    color: T.muted,
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
   statusBadge: {
-    alignSelf: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 8,
+    borderRadius: 999,
+    alignSelf: 'center',
   },
-  statusBadgeText: {
-    color: T.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  /* Empty state */
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  emptyIcon: {
-    fontSize: 36,
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: T.muted,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  emptyBtn: {
-    backgroundColor: T.primaryOp,
-    borderWidth: 1,
-    borderColor: T.primary,
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  emptyBtnText: {
-    color: T.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  /* Chart */
-  chartContainer: {
-    marginTop: 14,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 20,
-    marginTop: 10,
-  },
-  legendItem: {
+  statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-evenly',
   },
-  legendLine: {
-    width: 16,
-    height: 3,
-    borderRadius: 2,
+  statCol: {
+    alignItems: 'center',
   },
-
-  /* Stats */
-  statRow: {
+  forecastRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    gap: 8,
   },
-  statCard: {
+  forecastCard: {
     flex: 1,
-    backgroundColor: T.cardBg,
-    borderWidth: 1,
-    borderColor: T.cardBorder,
+    padding: 16,
+    borderRadius: 16,
+    borderLeftWidth: 3,
+  },
+  aiProgressCard: {
+    padding: 16,
+    borderRadius: 16,
+  },
+  riskCard: {
+    padding: 16,
     borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
+    borderWidth: 1,
   },
-  statLabel: {
-    color: T.muted,
-    fontSize: 12,
-    marginBottom: 6,
+  chartCard: {
+    padding: 16,
+    borderRadius: 16,
   },
-  statValue: {
-    color: T.white,
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 4,
+  baselineCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-
-  /* Quick actions */
   actionRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 8,
+    gap: 8,
   },
-  actionBtnPrimary: {
+  actionBtnLeft: {
     flex: 1,
     height: 50,
-    backgroundColor: T.primary,
-    borderRadius: 12,
+    borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionBtnPrimaryText: {
-    color: T.white,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  actionBtnOutline: {
+  actionBtnRight: {
     flex: 1,
     height: 50,
-    backgroundColor: T.cardBg,
     borderWidth: 1.5,
-    borderColor: T.primary,
-    borderRadius: 12,
+    borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  actionBtnOutlineText: {
-    color: T.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  /* Shared */
-  mutedSmall: {
-    color: T.muted,
-    fontSize: 12,
   },
 });
