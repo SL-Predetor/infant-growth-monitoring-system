@@ -256,17 +256,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-toolArrow: {
-  width: '100%',
-  paddingTop: Spacing.sm,
-  borderTopWidth: 1,
-  borderTopColor: 'rgba(0,0,0,0.1)',
-  alignItems: 'flex-end',
-},
+  toolArrow: {
+    width: '100%',
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'flex-end',
+  },
 
-// Main Cry Analysis Card
-mainCard: {
-  borderRadius: BorderRadius.lg,
+  // Main Cry Analysis Card
+  mainCard: {
+    borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     marginBottom: Spacing.xl,
     shadowOffset: {
@@ -335,12 +335,6 @@ mainCard: {
     marginBottom: Spacing.lg,
   },
 
-  sectionTitle: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.semiBold,
-    marginBottom: Spacing.xs,
-  },
-
   sectionSubtitle: {
     fontSize: Typography.sizes.sm,
   },
@@ -353,9 +347,9 @@ mainCard: {
     marginBottom: Spacing.xl,
   },
 
-  toolCard: {
+  toolCardAlt: {
     width: (screenWidth - Spacing.lg * 2 - Spacing.md) / 2,
-    ...BorderRadius.md,
+    borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.md,
     shadowOffset: {
@@ -368,7 +362,7 @@ mainCard: {
     minHeight: 120,
   },
 
-  toolIcon: {
+  toolIconAlt: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -416,7 +410,7 @@ mainCard: {
   modalContent: {
     width: '100%',
     maxWidth: 400,
-    ...BorderRadius.lg,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.xl,
   },
 
@@ -435,7 +429,7 @@ mainCard: {
 
   // Option Cards
   optionCard: {
-    ...BorderRadius.md,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
@@ -479,7 +473,7 @@ mainCard: {
   newBadge: {
     paddingHorizontal: Spacing.xs,
     paddingVertical: 2,
-    ...BorderRadius.sm,
+    borderRadius: BorderRadius.sm,
   },
 
   newBadgeText: {
@@ -500,7 +494,7 @@ mainCard: {
   // Cancel Button
   cancelButton: {
     borderWidth: 1,
-    ...BorderRadius.md,
+    borderRadius: BorderRadius.md,
     padding: Spacing.md,
     alignItems: 'center',
     marginTop: Spacing.md,
