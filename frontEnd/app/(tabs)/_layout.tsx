@@ -78,6 +78,22 @@ export default function TabLayout() {
           headerShown: false,
         }}
       />
+
+      <Tabs.Screen
+        name="daily-log"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="update-measurements"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 }
