@@ -23,6 +23,27 @@ const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;
 
+// Network test function
+const testNetworkConnection = async () => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+  
+  try {
+    console.log('🌐 Testing network connection to:', BASE_URL);
+    const response = await fetch(`${BASE_URL}/`, { 
+      method: 'GET',
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    console.log('✅ Server reachable, status:', response.status);
+    return true;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error('❌ Network test failed:', error);
+    return false;
+  }
+};
+
 export default function CryTranslatorScreen() {
   type AudioResult = {
     label: string;
@@ -215,8 +236,18 @@ export default function CryTranslatorScreen() {
     try {
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) { Alert.alert("Permission needed"); return; }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      
+      // Set proper audio mode for recording
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+      
       const rec = new Audio.Recording();
+      
+      // Use HIGH_QUALITY preset which works across platforms
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await rec.startAsync();
       setRecording(rec);
@@ -309,6 +340,16 @@ export default function CryTranslatorScreen() {
       return;
     }
 
+    // Test network connection first
+    const networkOk = await testNetworkConnection();
+    if (!networkOk) {
+      Alert.alert(
+        "Connection Failed", 
+        `Cannot reach server at ${BASE_URL}\n\nPlease check:\n• Backend server is running\n• IP address is correct\n• You're on the same network\n• Firewall isn't blocking the connection`
+      );
+      return;
+    }
+
     setLoading(true);
     setResult(null);
     abortActiveRequest();
@@ -320,37 +361,86 @@ export default function CryTranslatorScreen() {
       if (Platform.OS === 'web') {
           const response = await fetch(uri);
           const blob = await response.blob();
-          formData.append("file", blob, isAudio ? "audio.webm" : "face.jpg");
+          const fileName = isAudio ? "audio.m4a" : "face.jpg";
+          formData.append("file", blob, fileName);
       } else {
+          // Use format that matches HIGH_QUALITY preset
           const type = isAudio ? 'audio/m4a' : 'image/jpeg';
           const name = isAudio ? 'recording.m4a' : 'face.jpg';
-          formData.append("file", { uri, name, type } as any);
+          formData.append("file", {
+            uri,
+            name,
+            type
+          } as any);
       }
+      
+      console.log(`📤 Uploading ${isAudio ? 'audio' : 'image'} file:`, {
+        uri: uri?.substring(0, 50) + '...',
+        platform: Platform.OS,
+        endpoint: api
+      });
 
       const res = await fetch(api, {
         method: "POST",
         body: formData,
-        headers: { 'Accept': 'application/json' },
+        headers: { 
+          'Accept': 'application/json',
+          // Don't set Content-Type for FormData - let browser set it
+        },
         signal: abortControllerRef.current.signal,
       });
+      
+      console.log(`📥 Response status: ${res.status}`);
 
       const contentType = res.headers.get('content-type') || '';
-      const isJson = contentType.includes('application/json');
-      const json = isJson ? await res.json() : null;
+      console.log('📝 Response Content-Type:', contentType);
+      
+      let json;
+      try {
+        const textResponse = await res.text();
+        console.log('📄 Raw response:', textResponse.substring(0, 200));
+        json = JSON.parse(textResponse);
+      } catch (parseError) {
+        console.error('❌ JSON Parse Error:', parseError);
+        Alert.alert("Error", "Invalid response from server");
+        return;
+      }
+      
       if (!res.ok) {
-        Alert.alert("Error", json?.detail || `Request failed (${res.status})`);
+        console.error('❌ API Error:', json);
+        Alert.alert("Analysis Failed", json?.detail || json?.message || `Server error (${res.status})`);
         return;
       }
+      
       if (!json) {
-        Alert.alert("Error", `Unexpected response (${res.status})`);
+        Alert.alert("Error", `No response data (${res.status})`);
         return;
       }
+      
+      console.log('✅ Analysis successful:', json);
       if (isMountedRef.current) setResult(json);
 
-    } catch (e) {
-      const isAbort = (e as { name?: string } | null)?.name === 'AbortError';
+    } catch (e: any) {
+      const isAbort = e?.name === 'AbortError';
       if (!isAbort) {
-        Alert.alert("Connection Failed", "Check Backend IP.");
+        console.error('🔥 Network Error Details:', {
+          name: e?.name,
+          message: e?.message,
+          stack: e?.stack?.substring(0, 300)
+        });
+        
+        let errorMessage = "Connection Failed";
+        let errorDetails = "Unable to connect to server.";
+        
+        if (e?.message?.includes('Network request failed')) {
+          errorDetails = `Network request failed to ${BASE_URL}\n\nPossible causes:\n• Backend server is not running\n• Wrong IP address (${BASE_URL})\n• Network connectivity issues\n• Firewall blocking connection\n• Server is on different network`;
+        } else if (e?.message?.includes('fetch')) {
+          errorDetails = `Fetch error: ${e.message}\n\nCheck server status and network connection.`;
+        } else {
+          errorDetails = `Error: ${e.message}\n\nCheck backend server at ${BASE_URL}`;
+        }
+        
+        Alert.alert(errorMessage, errorDetails);
       }
     } finally {
       abortControllerRef.current = null;
@@ -426,6 +516,16 @@ export default function CryTranslatorScreen() {
     }
     console.log('✓ Validation passed, starting analysis');
 
+    // Test network first
+    const networkOk = await testNetworkConnection();
+    if (!networkOk) {
+      Alert.alert(
+        "Connection Failed", 
+        `Cannot reach server at ${BASE_URL}\n\nPlease check:\n• Backend server is running\n• IP address is correct\n• You're on the same network`
+      );
+      return;
+    }
+
     setLoading(true);
     abortActiveRequest();
     abortControllerRef.current = new AbortController();
@@ -444,9 +544,13 @@ export default function CryTranslatorScreen() {
           if (Platform.OS === 'web') {
             const response = await fetch(audioUri);
             const blob = await response.blob();
-            formData.append("file", blob, "audio.webm");
+            formData.append("file", blob, "audio.m4a");
           } else {
-            formData.append("file", { uri: audioUri, name: 'recording.m4a', type: 'audio/m4a' } as any);
+            formData.append("file", { 
+              uri: audioUri, 
+              name: 'recording.m4a', 
+              type: 'audio/m4a' 
+            } as any);
           }
 
           const audioRes = await fetch(AUDIO_API, {
@@ -457,9 +561,16 @@ export default function CryTranslatorScreen() {
           });
 
           const audioContentType = audioRes.headers.get('content-type') || '';
-          const audioJson = audioContentType.includes('application/json')
-            ? await audioRes.json()
-            : null;
+          let audioJson;
+          try {
+            const textResponse = await audioRes.text();
+            audioJson = JSON.parse(textResponse);
+          } catch (parseError) {
+            console.error('Audio JSON Parse Error:', parseError);
+            Alert.alert("Error", "Invalid audio response from server");
+            return;
+          }
+          
           if (audioRes.ok && audioJson) {
             audioPrediction = mapAudioLabel(audioJson.label);
             audioConfidence = to01(audioJson.confidence);
@@ -477,7 +588,11 @@ export default function CryTranslatorScreen() {
             const blob = await response.blob();
             formData.append("file", blob, "face.jpg");
           } else {
-            formData.append("file", { uri: faceUri, name: 'face.jpg', type: 'image/jpeg' } as any);
+            formData.append("file", { 
+              uri: faceUri, 
+              name: 'face.jpg', 
+              type: 'image/jpeg' 
+            } as any);
           }
 
           const faceRes = await fetch(FACE_API, {
@@ -488,9 +603,16 @@ export default function CryTranslatorScreen() {
           });
 
           const faceContentType = faceRes.headers.get('content-type') || '';
-          const faceJson = faceContentType.includes('application/json')
-            ? await faceRes.json()
-            : null;
+          let faceJson;
+          try {
+            const textResponse = await faceRes.text();
+            faceJson = JSON.parse(textResponse);
+          } catch (parseError) {
+            console.error('Face JSON Parse Error:', parseError);
+            Alert.alert("Error", "Invalid face response from server");
+            return;
+          }
+          
           if (faceRes.ok && faceJson) {
             imagePrediction = mapFaceLabel(faceJson.label);
             imageConfidence = to01(faceJson.confidence);
@@ -562,10 +684,20 @@ export default function CryTranslatorScreen() {
         Alert.alert('Error', json.detail || 'Failed to analyze');
       }
     } catch (e: any) {
-      const isAbort = (e as { name?: string } | null)?.name === 'AbortError';
+      const isAbort = e?.name === 'AbortError';
       if (!isAbort) {
         console.error('Comprehensive analysis error:', e);
-        Alert.alert('Connection Failed', e.message || 'Check Backend IP and ensure server is running.');
+        
+        let errorMessage = 'Connection Failed';
+        let errorDetails = 'Unable to connect to server.';
+        
+        if (e?.message?.includes('Network request failed')) {
+          errorDetails = `Network request failed to ${BASE_URL}\n\nPlease check:\n• Backend server is running\n• Correct IP address\n• Network connectivity\n• Firewall settings`;
+        } else {
+          errorDetails = `Error: ${e.message}\n\nCheck backend server status.`;
+        }
+        
+        Alert.alert(errorMessage, errorDetails);
       }
     } finally {
       abortControllerRef.current = null;
@@ -579,6 +711,22 @@ export default function CryTranslatorScreen() {
         
         <ThemedText type="title" style={styles.title}>Cry Translator</ThemedText>
         <ThemedText style={styles.subtitle}>AI-powered infant communication analysis</ThemedText>
+
+        {/* Network Test Button */}
+        <Pressable 
+          style={styles.networkTestBtn} 
+          onPress={async () => {
+            const isConnected = await testNetworkConnection();
+            Alert.alert(
+              "Network Test", 
+              isConnected 
+                ? `✅ Server is reachable at ${BASE_URL}` 
+                : `❌ Cannot reach server at ${BASE_URL}\n\nCheck if:\n• Backend server is running\n• IP address is correct\n• You're on the same network`
+            );
+          }}
+        >
+          <ThemedText style={styles.networkTestText}>🌐 Test Server Connection</ThemedText>
+        </Pressable>
 
         {/* --- TABS --- */}
         <View style={styles.tabContainer}>
@@ -620,7 +768,7 @@ export default function CryTranslatorScreen() {
                 </View>
                 
                 <ThemedText style={styles.instruction}>
-                  {recording ? 'Recording...' : 'Record 5 seconds of crying'}
+                  {recording ? 'Recording... (Auto-stop in 5 seconds)' : 'Record baby crying for audio analysis'}
                 </ThemedText>
                 
                 {!recording ? (
@@ -653,7 +801,7 @@ export default function CryTranslatorScreen() {
                     </View>
                     
                     <ThemedText style={styles.instruction}>
-                      Capture a clear photo of baby's face
+                      Capture baby's face for pain expression analysis
                     </ThemedText>
                     
                     <View style={styles.row}>
@@ -829,114 +977,152 @@ export default function CryTranslatorScreen() {
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <ThemedText style={styles.btnText}>🔍 Analyze Now</ThemedText>
+                <ThemedText style={styles.btnText}>
+                  {mode === 'audio' ? '🎤 Analyze Audio' : '📸 Analyze Face'}
+                </ThemedText>
               )}
             </Pressable>
+          )}
+
+          {/* --- INDIVIDUAL RESULTS (Audio/Face Only) --- */}
+          {result && mode !== 'comprehensive' && !isFusionResult(result) && (
+            <View style={styles.resultContainer}>
+              <View style={[
+                styles.resultBox,
+                mode === 'audio' ? (
+                  result.label === 'pain_cry' ? styles.resultPain : styles.resultNormal
+                ) : (
+                  result.label === 'pain_expression' ? styles.resultPain : styles.resultNormal
+                )
+              ]}>
+                <View style={styles.resultIconContainer}>
+                  <ThemedText style={styles.resultIcon}>
+                    {mode === 'audio' ? (
+                      result.label === 'pain_cry' ? '😢' :
+                      result.label === 'hunger_cry' ? '🍼' : '👶'
+                    ) : (
+                      result.label === 'pain_expression' ? '😣' : '😊'
+                    )}
+                  </ThemedText>
+                </View>
+                
+                <View style={styles.modelBadge}>
+                  <ThemedText style={styles.modelBadgeText}>
+                    {mode === 'audio' ? '🎤 AUDIO MODEL' : '📸 FACE MODEL'}
+                  </ThemedText>
+                </View>
+                
+                <ThemedText style={styles.resultTitle}>
+                  {mode === 'audio' ? (
+                    result.label === 'pain_cry' ? 'Pain Cry Detected' :
+                    result.label === 'hunger_cry' ? 'Hunger Cry Detected' :
+                    'Normal Cry'
+                  ) : (
+                    result.label === 'pain_expression' ? 'Pain Expression' : 'No Pain Detected'
+                  )}
+                </ThemedText>
+                
+                <View style={styles.confidenceBar}>
+                  <View style={[styles.confidenceFill, { width: `${nonFusionConfidencePct}%` }]} />
+                </View>
+                
+                <ThemedText style={styles.confText}>{nonFusionConfidencePct.toFixed(1)}% Confidence</ThemedText>
+                
+                {result.message && (
+                  <ThemedText style={styles.msgText}>{result.message}</ThemedText>
+                )}
+                
+                <View style={styles.modelDetailsBox}>
+                  <ThemedText style={styles.modelDetailsTitle}>Model Details:</ThemedText>
+                  <ThemedText style={styles.modelDetailsText}>
+                    Raw Label: {result.label}
+                  </ThemedText>
+                  <ThemedText style={styles.modelDetailsText}>
+                    Confidence Score: {result.confidence}
+                  </ThemedText>
+                  {mode === 'face' && 'pain_probability' in result && result.pain_probability !== undefined && (
+                    <ThemedText style={styles.modelDetailsText}>
+                      Pain Probability: {(result.pain_probability * 100).toFixed(1)}%
+                    </ThemedText>
+                  )}
+                </View>
+              </View>
+            </View>
           )}
           
           
 
-          {/* --- RESULT --- */}
-          {result && (mode !== 'comprehensive' || isFusionResult(result)) && (
+          {/* --- FUSION RESULTS (Comprehensive Only) --- */}
+          {result && mode === 'comprehensive' && isFusionResult(result) && (
             <View style={styles.resultContainer}>
-              {isFusionResult(result) ? (
-                // Fusion Result Display
-                <View style={[
-                  styles.resultBox,
-                  { borderColor: result.confidence_level === 'High' ? '#4ECDC4' : 
-                               result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B' }
-                ]}>
-                  <View style={styles.fusionBadge}>
-                    <ThemedText style={styles.fusionBadgeText}>🧠 COMPREHENSIVE ANALYSIS</ThemedText>
-                  </View>
-                  
-                  <View style={styles.resultIconContainer}>
-                    <ThemedText style={styles.resultIcon}>
-                      {result.predicted_cry_reason === 'Hunger' ? '🍼' :
-                       result.predicted_cry_reason === 'Pain' ? '😢' :
-                       result.predicted_cry_reason === 'Discomfort' ? '😣' :
-                       result.predicted_cry_reason === 'Tiredness' ? '😴' :
-                       result.predicted_cry_reason === 'Diaper' ? '🚼' : '👶'}
-                    </ThemedText>
-                  </View>
-                  
-                  <ThemedText style={styles.resultTitle}>{result.predicted_cry_reason}</ThemedText>
-                  
-                  <View style={styles.confidenceLevelBadge}>
-                    <ThemedText style={[
-                      styles.confidenceLevelText,
-                      { color: result.confidence_level === 'High' ? '#4ECDC4' : 
-                               result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B' }
-                    ]}>
-                      {result.confidence_level} Confidence
-                    </ThemedText>
-                  </View>
-                  
-                  <View style={styles.confidenceBar}>
-                    <View style={[
-                      styles.confidenceFill, 
-                      { 
-                        width: `${result.confidence * 100}%`,
-                        backgroundColor: result.confidence_level === 'High' ? '#4ECDC4' : 
-                                       result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B'
-                      }
-                    ]} />
-                  </View>
-                  
-                  <ThemedText style={styles.confText}>{(result.confidence * 100).toFixed(1)}%</ThemedText>
-                  <ThemedText style={styles.msgText}>{result.confidence_message}</ThemedText>
-                  
-                  {result.context_info && (
-                    <View style={styles.contextInfoBox}>
-                      <ThemedText style={styles.contextInfoTitle}>📌 Context:</ThemedText>
-                      <ThemedText style={styles.contextInfoText}>{result.context_info}</ThemedText>
-                    </View>
-                  )}
-                  
-                  {result.all_class_probabilities && (
-                    <View style={styles.allProbabilities}>
-                      <ThemedText style={styles.allProbTitle}>All Predictions:</ThemedText>
-                      {Object.entries(result.all_class_probabilities).map(([cls, prob]: [string, any]) => (
-                        <View key={cls} style={styles.probRow}>
-                          <ThemedText style={styles.probLabel}>{cls}</ThemedText>
-                          <ThemedText style={styles.probValue}>{(prob * 100).toFixed(1)}%</ThemedText>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  
-                  <View style={styles.disclaimer}>
-                    <ThemedText style={styles.disclaimerText}>⚠️ {result.disclaimer}</ThemedText>
-                  </View>
+              <View style={[
+                styles.resultBox,
+                { borderColor: result.confidence_level === 'High' ? '#4ECDC4' : 
+                             result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B' }
+              ]}>
+                <View style={styles.fusionBadge}>
+                  <ThemedText style={styles.fusionBadgeText}>🧠 COMPREHENSIVE ANALYSIS</ThemedText>
                 </View>
-              ) : (
-                // Standard Result Display
-                <View style={[
-                  styles.resultBox,
-                  isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry')
-                    ? styles.resultPain 
-                    : styles.resultNormal
-                ]}>
-                  <View style={styles.resultIconContainer}>
-                    <ThemedText style={styles.resultIcon}>
-                      {isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry') ? '😣' : '😊'}
-                    </ThemedText>
-                  </View>
-                  
-                  <ThemedText style={styles.resultTitle}>
-                    {isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry') 
-                      ? 'Pain Detected' 
-                      : 'Normal / No Pain'}
+                
+                <View style={styles.resultIconContainer}>
+                  <ThemedText style={styles.resultIcon}>
+                    {result.predicted_cry_reason === 'Hunger' ? '🍼' :
+                     result.predicted_cry_reason === 'Pain' ? '😢' :
+                     result.predicted_cry_reason === 'Discomfort' ? '😣' :
+                     result.predicted_cry_reason === 'Tiredness' ? '😴' :
+                     result.predicted_cry_reason === 'Diaper' ? '🚼' : '👶'}
                   </ThemedText>
-                  
-                  <View style={styles.confidenceBar}>
-                    <View style={[styles.confidenceFill, { width: `${nonFusionConfidencePct}%` }]} />
-                  </View>
-                  
-                  <ThemedText style={styles.confText}>{nonFusionConfidencePct.toFixed(1)}% Confidence</ThemedText>
-                  <ThemedText style={styles.msgText}>{result.message}</ThemedText>
                 </View>
-              )}
+                
+                <ThemedText style={styles.resultTitle}>{result.predicted_cry_reason}</ThemedText>
+                
+                <View style={styles.confidenceLevelBadge}>
+                  <ThemedText style={[
+                    styles.confidenceLevelText,
+                    { color: result.confidence_level === 'High' ? '#4ECDC4' : 
+                             result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B' }
+                  ]}>
+                    {result.confidence_level} Confidence
+                  </ThemedText>
+                </View>
+                
+                <View style={styles.confidenceBar}>
+                  <View style={[
+                    styles.confidenceFill, 
+                    { 
+                      width: `${result.confidence * 100}%`,
+                      backgroundColor: result.confidence_level === 'High' ? '#4ECDC4' : 
+                                     result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B'
+                    }
+                  ]} />
+                </View>
+                
+                <ThemedText style={styles.confText}>{(result.confidence * 100).toFixed(1)}%</ThemedText>
+                <ThemedText style={styles.msgText}>{result.confidence_message}</ThemedText>
+                
+                {result.context_info && (
+                  <View style={styles.contextInfoBox}>
+                    <ThemedText style={styles.contextInfoTitle}>📌 Context:</ThemedText>
+                    <ThemedText style={styles.contextInfoText}>{result.context_info}</ThemedText>
+                  </View>
+                )}
+                
+                {result.all_class_probabilities && (
+                  <View style={styles.allProbabilities}>
+                    <ThemedText style={styles.allProbTitle}>All Predictions:</ThemedText>
+                    {Object.entries(result.all_class_probabilities).map(([cls, prob]: [string, any]) => (
+                      <View key={cls} style={styles.probRow}>
+                        <ThemedText style={styles.probLabel}>{cls}</ThemedText>
+                        <ThemedText style={styles.probValue}>{(prob * 100).toFixed(1)}%</ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                
+                <View style={styles.disclaimer}>
+                  <ThemedText style={styles.disclaimerText}>⚠️ {result.disclaimer}</ThemedText>
+                </View>
+              </View>
             </View>
           )}
 
@@ -1459,6 +1645,62 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.8,
     lineHeight: 16,
+  },
+
+  // Network Test Button
+  networkTestBtn: {
+    backgroundColor: 'rgba(108, 92, 231, 0.1)',
+    borderWidth: 1,
+    borderColor: '#6C5CE7',
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+
+  networkTestText: {
+    color: '#6C5CE7',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Model Testing Badges
+  modelBadge: {
+    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+
+  modelBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#4ECDC4',
+    letterSpacing: 0.5,
+  },
+
+  modelDetailsBox: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 12,
+    width: '100%',
+  },
+
+  modelDetailsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+    color: '#666',
+  },
+
+  modelDetailsText: {
+    fontSize: 12,
+    opacity: 0.8,
+    marginBottom: 4,
+    fontFamily: 'monospace',
   },
 });
 
