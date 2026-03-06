@@ -5,7 +5,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
-  Platform, 
+  Platform,
   Image,
   ScrollView,
   TextInput
@@ -18,7 +18,7 @@ import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 // --- CONFIGURATION ---
-const BASE_URL = "http://192.168.8.119:8000";
+const BASE_URL = "http://localhost:8000";
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;
@@ -56,19 +56,19 @@ export default function CryTranslatorScreen() {
 
   // --- STATE ---
   const [mode, setMode] = useState<'audio' | 'face' | 'comprehensive'>('audio');
-  
+
   // Audio State
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  
+
   // Face State
   const [faceUri, setFaceUri] = useState<string | null>(null);
 
   // Shared State
   const [result, setResult] = useState<ResultState>(null);
   const [loading, setLoading] = useState(false);
-  
+
   // Contextual Data for Fusion Analysis
   const [contextData, setContextData] = useState({
     baby_age_months: '',
@@ -168,7 +168,7 @@ export default function CryTranslatorScreen() {
     if (soundRef.current) {
       try {
         await soundRef.current.unloadAsync();
-      } catch (e) {}
+      } catch (e) { }
       soundRef.current = null;
       setSound(null);
     }
@@ -181,7 +181,7 @@ export default function CryTranslatorScreen() {
       if (status.isRecording) {
         await recordingRef.current.stopAndUnloadAsync();
       }
-    } catch (e) {}
+    } catch (e) { }
     recordingRef.current = null;
     setRecording(null);
   };
@@ -192,7 +192,7 @@ export default function CryTranslatorScreen() {
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
       });
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -223,17 +223,17 @@ export default function CryTranslatorScreen() {
       recordingRef.current = rec;
       stopTimeoutRef.current = setTimeout(async () => {
         try {
-            const status = await rec.getStatusAsync();
-            if (status.isRecording) {
-                await rec.stopAndUnloadAsync();
-                setRecording(null);
-                setAudioUri(rec.getURI() || null);
-                recordingRef.current = null;
-                await setNonRecordingAudioMode();
-            }
-        } catch (e) {}
+          const status = await rec.getStatusAsync();
+          if (status.isRecording) {
+            await rec.stopAndUnloadAsync();
+            setRecording(null);
+            setAudioUri(rec.getURI() || null);
+            recordingRef.current = null;
+            await setNonRecordingAudioMode();
+          }
+        } catch (e) { }
       }, 5000);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const stopRecording = async () => {
@@ -276,23 +276,23 @@ export default function CryTranslatorScreen() {
 
     let pickerResult;
     if (useCamera) {
-        pickerResult = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 1,
-        });
+      pickerResult = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
     } else {
-        pickerResult = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 1,
-        });
+      pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
     }
 
     if (!pickerResult.canceled) {
-        setFaceUri(pickerResult.assets[0].uri);
+      setFaceUri(pickerResult.assets[0].uri);
     }
   };
 
@@ -316,15 +316,15 @@ export default function CryTranslatorScreen() {
 
     try {
       const formData = new FormData();
-      
+
       if (Platform.OS === 'web') {
-          const response = await fetch(uri);
-          const blob = await response.blob();
-          formData.append("file", blob, isAudio ? "audio.webm" : "face.jpg");
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        formData.append("file", blob, isAudio ? "audio.webm" : "face.jpg");
       } else {
-          const type = isAudio ? 'audio/m4a' : 'image/jpeg';
-          const name = isAudio ? 'recording.m4a' : 'face.jpg';
-          formData.append("file", { uri, name, type } as any);
+        const type = isAudio ? 'audio/m4a' : 'image/jpeg';
+        const name = isAudio ? 'recording.m4a' : 'face.jpg';
+        formData.append("file", { uri, name, type } as any);
       }
 
       const res = await fetch(api, {
@@ -402,8 +402,8 @@ export default function CryTranslatorScreen() {
 
     // Validate context data (room temp is optional)
     console.log('Validating context data...');
-    if (!contextData.baby_age_months || !contextData.time_since_feed_hours || 
-        !contextData.time_since_sleep_hours) {
+    if (!contextData.baby_age_months || !contextData.time_since_feed_hours ||
+      !contextData.time_since_sleep_hours) {
       console.log('ERROR: Missing required context fields');
       Alert.alert('Missing Information', 'Please fill in baby age, time since feed, and time since sleep.');
       return;
@@ -413,7 +413,7 @@ export default function CryTranslatorScreen() {
     const age = parseFloat(contextData.baby_age_months);
     const temp = contextData.room_temperature_celsius ? parseFloat(contextData.room_temperature_celsius) : 24; // Default 24°C
     console.log('Parsed age:', age, 'temp:', temp);
-    
+
     if (isNaN(age) || age < 0 || age > 36) {
       console.log('ERROR: Invalid age');
       Alert.alert('Invalid Input', 'Baby age must be between 0-36 months');
@@ -576,105 +576,105 @@ export default function CryTranslatorScreen() {
   return (
     <ThemedView style={[styles.container, { backgroundColor: bgColor }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        
+
         <ThemedText type="title" style={styles.title}>Cry Translator</ThemedText>
         <ThemedText style={styles.subtitle}>AI-powered infant communication analysis</ThemedText>
 
         {/* --- TABS --- */}
         <View style={styles.tabContainer}>
-            <Pressable 
-                style={[styles.tab, mode === 'audio' && styles.activeTab]} 
-                onPress={() => { setMode('audio'); clearAll(); }}
-            >
-                <ThemedText style={[styles.tabText, mode === 'audio' && styles.activeTabText]}>
-                  {mode === 'audio' ? '🎤' : '🎵'} Audio
-                </ThemedText>
-            </Pressable>
-            <Pressable 
-                style={[styles.tab, mode === 'face' && styles.activeTab]} 
-                onPress={() => { setMode('face'); clearAll(); }}
-            >
-                <ThemedText style={[styles.tabText, mode === 'face' && styles.activeTabText]}>
-                  {mode === 'face' ? '📸' : '👶'} Face
-                </ThemedText>
-            </Pressable>
-            <Pressable 
-                style={[styles.tab, mode === 'comprehensive' && styles.activeTab]} 
-                onPress={() => { setMode('comprehensive'); clearAll(); }}
-            >
-                <ThemedText style={[styles.tabText, mode === 'comprehensive' && styles.activeTabText]}>
-                  {mode === 'comprehensive' ? '🧠' : '🔍'} Full
-                </ThemedText>
-            </Pressable>
+          <Pressable
+            style={[styles.tab, mode === 'audio' && styles.activeTab]}
+            onPress={() => { setMode('audio'); clearAll(); }}
+          >
+            <ThemedText style={[styles.tabText, mode === 'audio' && styles.activeTabText]}>
+              {mode === 'audio' ? '🎤' : '🎵'} Audio
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            style={[styles.tab, mode === 'face' && styles.activeTab]}
+            onPress={() => { setMode('face'); clearAll(); }}
+          >
+            <ThemedText style={[styles.tabText, mode === 'face' && styles.activeTabText]}>
+              {mode === 'face' ? '📸' : '👶'} Face
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            style={[styles.tab, mode === 'comprehensive' && styles.activeTab]}
+            onPress={() => { setMode('comprehensive'); clearAll(); }}
+          >
+            <ThemedText style={[styles.tabText, mode === 'comprehensive' && styles.activeTabText]}>
+              {mode === 'comprehensive' ? '🧠' : '🔍'} Full
+            </ThemedText>
+          </Pressable>
         </View>
 
         <ThemedView style={[styles.card, { backgroundColor: cardColor }]}>
-          
+
           {/* --- AUDIO UI --- */}
           {mode === 'audio' && (
             <>
-                <View style={styles.iconContainer}>
-                  <View style={styles.iconCircle}>
-                    <ThemedText style={styles.iconEmoji}>{recording ? '⏺️' : '🎤'}</ThemedText>
-                  </View>
+              <View style={styles.iconContainer}>
+                <View style={styles.iconCircle}>
+                  <ThemedText style={styles.iconEmoji}>{recording ? '⏺️' : '🎤'}</ThemedText>
                 </View>
-                
-                <ThemedText style={styles.instruction}>
-                  {recording ? 'Recording...' : 'Record 5 seconds of crying'}
-                </ThemedText>
-                
-                {!recording ? (
-                  <Pressable style={styles.primaryBtn} onPress={startRecording}>
-                    <ThemedText style={styles.btnText}>{audioUri ? "🔄 Record Again" : "Start Recording"}</ThemedText>
-                  </Pressable>
-                ) : (
-                  <Pressable style={styles.stopBtn} onPress={stopRecording}>
-                    <ThemedText style={styles.btnText}>Stop Recording</ThemedText>
-                  </Pressable>
-                )}
-                
-                {audioUri && !recording && (
-                  <Pressable style={styles.secondaryBtn} onPress={playRecording}>
-                    <ThemedText style={styles.secondaryBtnText}>▶️ Play Recording</ThemedText>
-                  </Pressable> 
-                )}
+              </View>
+
+              <ThemedText style={styles.instruction}>
+                {recording ? 'Recording...' : 'Record 5 seconds of crying'}
+              </ThemedText>
+
+              {!recording ? (
+                <Pressable style={styles.primaryBtn} onPress={startRecording}>
+                  <ThemedText style={styles.btnText}>{audioUri ? "🔄 Record Again" : "Start Recording"}</ThemedText>
+                </Pressable>
+              ) : (
+                <Pressable style={styles.stopBtn} onPress={stopRecording}>
+                  <ThemedText style={styles.btnText}>Stop Recording</ThemedText>
+                </Pressable>
+              )}
+
+              {audioUri && !recording && (
+                <Pressable style={styles.secondaryBtn} onPress={playRecording}>
+                  <ThemedText style={styles.secondaryBtnText}>▶️ Play Recording</ThemedText>
+                </Pressable>
+              )}
             </>
           )}
 
           {/* --- FACE UI --- */}
           {mode === 'face' && (
             <>
-                {!faceUri ? (
-                  <>
-                    <View style={styles.iconContainer}>
-                      <View style={styles.iconCircle}>
-                        <ThemedText style={styles.iconEmoji}>📸</ThemedText>
-                      </View>
+              {!faceUri ? (
+                <>
+                  <View style={styles.iconContainer}>
+                    <View style={styles.iconCircle}>
+                      <ThemedText style={styles.iconEmoji}>📸</ThemedText>
                     </View>
-                    
-                    <ThemedText style={styles.instruction}>
-                      Capture a clear photo of baby's face
-                    </ThemedText>
-                    
-                    <View style={styles.row}>
-                      <Pressable style={[styles.primaryBtn, styles.halfBtn]} onPress={() => pickImage(true)}>
-                        <ThemedText style={styles.btnText}>📷 Camera</ThemedText>
-                      </Pressable>
-                      <Pressable style={[styles.secondaryBtn, styles.halfBtn]} onPress={() => pickImage(false)}>
-                        <ThemedText style={styles.secondaryBtnText}>🖼️ Gallery</ThemedText>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.imagePreviewContainer}>
-                      <Image source={{ uri: faceUri }} style={styles.previewImage} />
-                    </View>
-                    <Pressable style={styles.secondaryBtn} onPress={() => pickImage(true)}>
-                      <ThemedText style={styles.secondaryBtnText}>📷 Take Another Photo</ThemedText>
+                  </View>
+
+                  <ThemedText style={styles.instruction}>
+                    Capture a clear photo of baby's face
+                  </ThemedText>
+
+                  <View style={styles.row}>
+                    <Pressable style={[styles.primaryBtn, styles.halfBtn]} onPress={() => pickImage(true)}>
+                      <ThemedText style={styles.btnText}>📷 Camera</ThemedText>
                     </Pressable>
-                  </>
-                )}
+                    <Pressable style={[styles.secondaryBtn, styles.halfBtn]} onPress={() => pickImage(false)}>
+                      <ThemedText style={styles.secondaryBtnText}>🖼️ Gallery</ThemedText>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.imagePreviewContainer}>
+                    <Image source={{ uri: faceUri }} style={styles.previewImage} />
+                  </View>
+                  <Pressable style={styles.secondaryBtn} onPress={() => pickImage(true)}>
+                    <ThemedText style={styles.secondaryBtnText}>📷 Take Another Photo</ThemedText>
+                  </Pressable>
+                </>
+              )}
             </>
           )}
 
@@ -686,7 +686,7 @@ export default function CryTranslatorScreen() {
                   <ThemedText style={styles.iconEmoji}>🧠</ThemedText>
                 </View>
               </View>
-              
+
               <ThemedText style={styles.instruction}>
                 Complete analysis: Record cry + Take photo + Context
               </ThemedText>
@@ -695,8 +695,8 @@ export default function CryTranslatorScreen() {
               <View style={styles.comprehensiveSection}>
                 <ThemedText style={styles.sectionTitle}>🎤 Step 1: Record Crying</ThemedText>
                 {!recording ? (
-                  <Pressable 
-                    style={audioUri ? styles.secondaryBtn : styles.primaryBtn} 
+                  <Pressable
+                    style={audioUri ? styles.secondaryBtn : styles.primaryBtn}
                     onPress={startRecording}
                   >
                     <ThemedText style={audioUri ? styles.secondaryBtnText : styles.btnText}>
@@ -709,7 +709,7 @@ export default function CryTranslatorScreen() {
                   </Pressable>
                 )}
                 {audioUri && !recording && (
-                  <Pressable style={[styles.secondaryBtn, {marginTop: 8}]} onPress={playRecording}>
+                  <Pressable style={[styles.secondaryBtn, { marginTop: 8 }]} onPress={playRecording}>
                     <ThemedText style={styles.secondaryBtnText}>▶️ Play</ThemedText>
                   </Pressable>
                 )}
@@ -742,12 +742,12 @@ export default function CryTranslatorScreen() {
               {/* Context Form */}
               <View style={styles.comprehensiveSection}>
                 <ThemedText style={styles.sectionTitle}>📋 Step 3: Context Info</ThemedText>
-                
+
                 <ThemedText style={styles.contextLabel}>Baby Age (months)</ThemedText>
                 <TextInput
                   style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
                   value={contextData.baby_age_months}
-                  onChangeText={(val) => setContextData({...contextData, baby_age_months: val})}
+                  onChangeText={(val) => setContextData({ ...contextData, baby_age_months: val })}
                   placeholder="e.g., 6"
                   placeholderTextColor="#999"
                   keyboardType="numeric"
@@ -757,7 +757,7 @@ export default function CryTranslatorScreen() {
                 <TextInput
                   style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
                   value={contextData.time_since_feed_hours}
-                  onChangeText={(val) => setContextData({...contextData, time_since_feed_hours: val})}
+                  onChangeText={(val) => setContextData({ ...contextData, time_since_feed_hours: val })}
                   placeholder="e.g., 4.5"
                   placeholderTextColor="#999"
                   keyboardType="decimal-pad"
@@ -767,7 +767,7 @@ export default function CryTranslatorScreen() {
                 <TextInput
                   style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
                   value={contextData.time_since_sleep_hours}
-                  onChangeText={(val) => setContextData({...contextData, time_since_sleep_hours: val})}
+                  onChangeText={(val) => setContextData({ ...contextData, time_since_sleep_hours: val })}
                   placeholder="e.g., 1.2"
                   placeholderTextColor="#999"
                   keyboardType="decimal-pad"
@@ -782,7 +782,7 @@ export default function CryTranslatorScreen() {
                         styles.diaperBtn,
                         contextData.diaper_status === status && styles.diaperBtnActive
                       ]}
-                      onPress={() => setContextData({...contextData, diaper_status: status})}
+                      onPress={() => setContextData({ ...contextData, diaper_status: status })}
                     >
                       <ThemedText style={[
                         styles.diaperBtnText,
@@ -798,14 +798,14 @@ export default function CryTranslatorScreen() {
                 <TextInput
                   style={[styles.contextInput, { backgroundColor: inputBg, color: textColor }]}
                   value={contextData.room_temperature_celsius}
-                  onChangeText={(val) => setContextData({...contextData, room_temperature_celsius: val})}
+                  onChangeText={(val) => setContextData({ ...contextData, room_temperature_celsius: val })}
                   placeholder="e.g., 26 (leave empty for default)"
                   placeholderTextColor="#999"
                   keyboardType="decimal-pad"
                 />
 
-                <Pressable 
-                  style={[styles.analyzeBtn, loading && styles.analyzeDisabled]} 
+                <Pressable
+                  style={[styles.analyzeBtn, loading && styles.analyzeDisabled]}
                   onPress={comprehensiveAnalysis}
                   disabled={loading}
                 >
@@ -821,9 +821,9 @@ export default function CryTranslatorScreen() {
 
           {/* --- ANALYZE BUTTON --- */}
           {(audioUri || faceUri) && !recording && mode !== 'comprehensive' && (
-            <Pressable 
-              style={[styles.analyzeBtn, loading && styles.analyzeDisabled]} 
-              onPress={analyzeData} 
+            <Pressable
+              style={[styles.analyzeBtn, loading && styles.analyzeDisabled]}
+              onPress={analyzeData}
               disabled={loading}
             >
               {loading ? (
@@ -833,8 +833,8 @@ export default function CryTranslatorScreen() {
               )}
             </Pressable>
           )}
-          
-          
+
+
 
           {/* --- RESULT --- */}
           {result && (mode !== 'comprehensive' || isFusionResult(result)) && (
@@ -843,56 +843,60 @@ export default function CryTranslatorScreen() {
                 // Fusion Result Display
                 <View style={[
                   styles.resultBox,
-                  { borderColor: result.confidence_level === 'High' ? '#4ECDC4' : 
-                               result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B' }
+                  {
+                    borderColor: result.confidence_level === 'High' ? '#4ECDC4' :
+                      result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B'
+                  }
                 ]}>
                   <View style={styles.fusionBadge}>
                     <ThemedText style={styles.fusionBadgeText}>🧠 COMPREHENSIVE ANALYSIS</ThemedText>
                   </View>
-                  
+
                   <View style={styles.resultIconContainer}>
                     <ThemedText style={styles.resultIcon}>
                       {result.predicted_cry_reason === 'Hunger' ? '🍼' :
-                       result.predicted_cry_reason === 'Pain' ? '😢' :
-                       result.predicted_cry_reason === 'Discomfort' ? '😣' :
-                       result.predicted_cry_reason === 'Tiredness' ? '😴' :
-                       result.predicted_cry_reason === 'Diaper' ? '🚼' : '👶'}
+                        result.predicted_cry_reason === 'Pain' ? '😢' :
+                          result.predicted_cry_reason === 'Discomfort' ? '😣' :
+                            result.predicted_cry_reason === 'Tiredness' ? '😴' :
+                              result.predicted_cry_reason === 'Diaper' ? '🚼' : '👶'}
                     </ThemedText>
                   </View>
-                  
+
                   <ThemedText style={styles.resultTitle}>{result.predicted_cry_reason}</ThemedText>
-                  
+
                   <View style={styles.confidenceLevelBadge}>
                     <ThemedText style={[
                       styles.confidenceLevelText,
-                      { color: result.confidence_level === 'High' ? '#4ECDC4' : 
-                               result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B' }
+                      {
+                        color: result.confidence_level === 'High' ? '#4ECDC4' :
+                          result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B'
+                      }
                     ]}>
                       {result.confidence_level} Confidence
                     </ThemedText>
                   </View>
-                  
+
                   <View style={styles.confidenceBar}>
                     <View style={[
-                      styles.confidenceFill, 
-                      { 
+                      styles.confidenceFill,
+                      {
                         width: `${result.confidence * 100}%`,
-                        backgroundColor: result.confidence_level === 'High' ? '#4ECDC4' : 
-                                       result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B'
+                        backgroundColor: result.confidence_level === 'High' ? '#4ECDC4' :
+                          result.confidence_level === 'Medium' ? '#FFB347' : '#FF6B6B'
                       }
                     ]} />
                   </View>
-                  
+
                   <ThemedText style={styles.confText}>{(result.confidence * 100).toFixed(1)}%</ThemedText>
                   <ThemedText style={styles.msgText}>{result.confidence_message}</ThemedText>
-                  
+
                   {result.context_info && (
                     <View style={styles.contextInfoBox}>
                       <ThemedText style={styles.contextInfoTitle}>📌 Context:</ThemedText>
                       <ThemedText style={styles.contextInfoText}>{result.context_info}</ThemedText>
                     </View>
                   )}
-                  
+
                   {result.all_class_probabilities && (
                     <View style={styles.allProbabilities}>
                       <ThemedText style={styles.allProbTitle}>All Predictions:</ThemedText>
@@ -904,7 +908,7 @@ export default function CryTranslatorScreen() {
                       ))}
                     </View>
                   )}
-                  
+
                   <View style={styles.disclaimer}>
                     <ThemedText style={styles.disclaimerText}>⚠️ {result.disclaimer}</ThemedText>
                   </View>
@@ -914,7 +918,7 @@ export default function CryTranslatorScreen() {
                 <View style={[
                   styles.resultBox,
                   isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry')
-                    ? styles.resultPain 
+                    ? styles.resultPain
                     : styles.resultNormal
                 ]}>
                   <View style={styles.resultIconContainer}>
@@ -922,17 +926,17 @@ export default function CryTranslatorScreen() {
                       {isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry') ? '😣' : '😊'}
                     </ThemedText>
                   </View>
-                  
+
                   <ThemedText style={styles.resultTitle}>
-                    {isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry') 
-                      ? 'Pain Detected' 
+                    {isNonFusionResult(result) && (result.label === 'pain_expression' || result.label === 'pain_cry')
+                      ? 'Pain Detected'
                       : 'Normal / No Pain'}
                   </ThemedText>
-                  
+
                   <View style={styles.confidenceBar}>
                     <View style={[styles.confidenceFill, { width: `${nonFusionConfidencePct}%` }]} />
                   </View>
-                  
+
                   <ThemedText style={styles.confText}>{nonFusionConfidencePct.toFixed(1)}% Confidence</ThemedText>
                   <ThemedText style={styles.msgText}>{result.message}</ThemedText>
                 </View>
@@ -954,20 +958,20 @@ export default function CryTranslatorScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    paddingTop: 60, 
-    paddingHorizontal: 24 
+  container: {
+    flex: 1,
+    paddingTop: 60,
+    paddingHorizontal: 24
   },
-  
-  title: { 
-    fontSize: 36, 
-    fontWeight: "900", 
-    marginBottom: 8, 
+
+  title: {
+    fontSize: 36,
+    fontWeight: "900",
+    marginBottom: 8,
     textAlign: "center",
     letterSpacing: -0.5
   },
-  
+
   subtitle: {
     fontSize: 14,
     textAlign: 'center',
@@ -975,24 +979,24 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     fontWeight: '500'
   },
-  
+
   // Tabs
-  tabContainer: { 
-    flexDirection: 'row', 
-    marginBottom: 24, 
-    borderRadius: 16, 
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    borderRadius: 16,
     padding: 4,
     backgroundColor: 'rgba(0,0,0,0.03)'
   },
-  
-  tab: { 
-    flex: 1, 
-    paddingVertical: 12, 
-    alignItems: 'center', 
+
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
     borderRadius: 12,
     backgroundColor: 'transparent'
   },
-  
+
   activeTab: {
     backgroundColor: '#fff',
     shadowColor: '#000',
@@ -1001,22 +1005,22 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3
   },
-  
-  tabText: { 
-    fontWeight: '600', 
+
+  tabText: {
+    fontWeight: '600',
     fontSize: 15,
     opacity: 0.5
   },
-  
+
   activeTabText: {
     opacity: 1,
     color: '#4ECDC4',
     fontWeight: '700'
   },
-  
+
   // Card
-  card: { 
-    padding: 32, 
+  card: {
+    padding: 32,
     borderRadius: 28,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -1024,12 +1028,12 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8
   },
-  
+
   iconContainer: {
     alignItems: 'center',
     marginBottom: 24
   },
-  
+
   iconCircle: {
     width: 80,
     height: 80,
@@ -1038,24 +1042,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  
+
   iconEmoji: {
     fontSize: 40
   },
-  
-  instruction: { 
-    textAlign: 'center', 
-    opacity: 0.6, 
+
+  instruction: {
+    textAlign: 'center',
+    opacity: 0.6,
     marginBottom: 24,
     fontSize: 15,
     fontWeight: '500'
   },
-  
+
   // Buttons
-  primaryBtn: { 
-    padding: 18, 
-    borderRadius: 16, 
-    alignItems: 'center', 
+  primaryBtn: {
+    padding: 18,
+    borderRadius: 16,
+    alignItems: 'center',
     backgroundColor: '#4ECDC4',
     marginBottom: 12,
     shadowColor: '#4ECDC4',
@@ -1064,11 +1068,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4
   },
-  
-  stopBtn: { 
+
+  stopBtn: {
     backgroundColor: '#FF6B6B',
-    padding: 18, 
-    borderRadius: 16, 
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
     marginBottom: 12,
     shadowColor: '#FF6B6B',
@@ -1077,18 +1081,18 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4
   },
-  
-  secondaryBtn: { 
-    padding: 18, 
-    borderRadius: 16, 
+
+  secondaryBtn: {
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
     backgroundColor: 'rgba(78, 205, 196, 0.1)',
     borderWidth: 2,
     borderColor: '#4ECDC4',
     marginBottom: 12
   },
-  
-  analyzeBtn: { 
+
+  analyzeBtn: {
     backgroundColor: '#6C5CE7',
     padding: 20,
     borderRadius: 16,
@@ -1100,83 +1104,83 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4
   },
-  
+
   analyzeDisabled: {
     opacity: 0.6
   },
-  
-  halfBtn: { 
-    flex: 1, 
-    marginHorizontal: 6 
+
+  halfBtn: {
+    flex: 1,
+    marginHorizontal: 6
   },
-  
-  btnText: { 
-    color: '#fff', 
-    fontWeight: '700', 
-    fontSize: 16 
+
+  btnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16
   },
-  
+
   secondaryBtnText: {
     color: '#4ECDC4',
     fontWeight: '700',
     fontSize: 16
   },
-  
+
   // Layout
-  row: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between' 
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between'
   },
-  
+
   imagePreviewContainer: {
     marginBottom: 16,
     borderRadius: 20,
     overflow: 'hidden'
   },
-  
-  previewImage: { 
-    width: '100%', 
-    height: 280, 
+
+  previewImage: {
+    width: '100%',
+    height: 280,
     resizeMode: 'cover'
   },
-  
+
   // Results
   resultContainer: {
     marginTop: 24
   },
-  
-  resultBox: { 
-    padding: 28, 
-    borderRadius: 20, 
+
+  resultBox: {
+    padding: 28,
+    borderRadius: 20,
     alignItems: 'center',
     borderWidth: 2
   },
-  
+
   resultPain: {
     backgroundColor: 'rgba(255, 107, 107, 0.08)',
     borderColor: '#FF6B6B'
   },
-  
+
   resultNormal: {
     backgroundColor: 'rgba(78, 205, 196, 0.08)',
     borderColor: '#4ECDC4'
   },
-  
+
   resultIconContainer: {
     marginBottom: 12
   },
-  
+
   resultIcon: {
     fontSize: 48
   },
-  
-  resultTitle: { 
-    fontSize: 24, 
-    fontWeight: '800', 
+
+  resultTitle: {
+    fontSize: 24,
+    fontWeight: '800',
     marginBottom: 16,
     letterSpacing: -0.3
   },
-  
+
   confidenceBar: {
     width: '100%',
     height: 8,
@@ -1185,33 +1189,33 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 8
   },
-  
+
   confidenceFill: {
     height: '100%',
     backgroundColor: '#4ECDC4',
     borderRadius: 4
   },
-  
-  confText: { 
-    fontSize: 15, 
-    fontWeight: '600', 
+
+  confText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: '#4ECDC4',
     marginBottom: 8
   },
-  
-  msgText: { 
-    marginTop: 4, 
+
+  msgText: {
+    marginTop: 4,
     opacity: 0.6,
     textAlign: 'center',
     fontSize: 14
   },
-  
-  clearBtn: { 
-    marginTop: 20, 
+
+  clearBtn: {
+    marginTop: 20,
     alignItems: 'center',
     padding: 12
   },
-  
+
   clearText: {
     color: '#999',
     fontSize: 15,

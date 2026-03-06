@@ -9,41 +9,42 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const C = Colors[colorScheme ?? 'light'];
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].primary,
-        tabBarInactiveTintColor: Colors[colorScheme ?? 'light'].secondaryText,
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.labelTertiary,
         tabBarStyle: {
-          backgroundColor: Colors[colorScheme ?? 'light'].background,
-          borderTopColor: Colors[colorScheme ?? 'light'].border,
+          backgroundColor: C.tabBar,
+          borderTopColor: C.tabBarBorder,
+          borderTopWidth: 0.5,
+          height: Platform.OS === 'ios' ? 83 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+          paddingTop: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: colorScheme === 'dark' ? 0.3 : 0.06,
+          shadowRadius: 8,
+          elevation: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '500',
+          letterSpacing: 0.1,
+          fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
         },
         headerShown: false,
         tabBarButton: HapticTab,
       }}
     >
+      {/* ── VISIBLE TABS (5) ─────────────────────────────────── */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'BabySense AI',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="cry-translator"
-        options={{
-          title: 'Cry Translator',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="waveform" color={color} />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="behavior"
-        options={{
-          title: 'Behavior',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="brain.head.profile" color={color} />,
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="house.fill" color={color} />,
         }}
       />
 
@@ -51,15 +52,23 @@ export default function TabLayout() {
         name="growth"
         options={{
           title: 'Growth',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.line.uptrend.xyaxis" color={color} />,
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="chart.line.uptrend.xyaxis" color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="behavior"
+        options={{
+          title: 'Baby',
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="figure.and.child.holdinghands" color={color} />,
         }}
       />
 
       <Tabs.Screen
         name="recovery"
         options={{
-          title: 'Recovery',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="heart.fill" color={color} />,
+          title: 'Maternal',
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="heart.text.square.fill" color={color} />,
         }}
       />
 
@@ -67,18 +76,18 @@ export default function TabLayout() {
         name="Profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="person.fill" color={color} />,
         }}
       />
 
-      <Tabs.Screen
-        name="edit-profile"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
+      {/* ── HIDDEN TABS ──────────────────────────────────────── */}
+      <Tabs.Screen name="cry-translator" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="edit-profile" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="daily-log" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="update-measurements" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="growth-history" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="growth-alert" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="explore" options={{ href: null, headerShown: false }} />
     </Tabs>
   );
 }
-

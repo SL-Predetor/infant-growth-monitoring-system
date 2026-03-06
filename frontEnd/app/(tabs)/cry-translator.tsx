@@ -35,7 +35,7 @@ export default function CryTranslatorScreen() {
   const [mode, setMode] = useState<'audio' | 'face'>('audio');
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
-  
+
   const [state, setState] = useState<RecordingState>({
     recording: null,
     audioUri: null,
