@@ -616,8 +616,9 @@ Q-CHAT-10 = Quantitative Checklist for Autism in Toddlers
     ├─ FINAL MODEL: Retrained on all 7530 rows
     │   Saved: Stage_0/models/xgboost_qchat_combined.pkl  (406.1 KB)
     │   Saved: Stage_0/models/qchat_feature_columns.pkl   (0.2 KB)
-    ├─ KNOWN ISSUE: SHAP analysis failed (XGBoost 2.x / SHAP version mismatch)
-    │   → shap_summary_qchat.png and shap_bar_qchat.png NOT generated
+    ├─ SHAP ANALYSIS: shap.Explainer (XGBoost 2.x compatible) — generated successfully
+    │   → Stage_0/plots/shap_summary_qchat.png  (beeswarm, 15 features)
+    │   → Stage_0/plots/shap_bar_qchat.png      (mean |SHAP| bar chart)
     └─ OUTPUTS: results/, plots/, models/, data/ under Stage_0/
 
 31. Stage_1/qchat_model_training.ipynb  [ABLATION — 12 feat, Who cols removed, all rows]
