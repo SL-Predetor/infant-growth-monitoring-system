@@ -273,19 +273,17 @@ NOTEBOOKS — Layer 2 (Stage_0/)
      - Saved: Stage_0/models/qchat_feature_columns.pkl   (0.2 KB)
 
    SHAP Analysis:
-     STATUS: FAILED — AttributeError: 'XGBTreeModelLoader' has no attribute
-             'num_trees'. Root cause: version incompatibility between installed
-             SHAP and XGBoost 2.x. SHAP beeswarm and bar plots were NOT generated
-             in this run. Refer to QM.ipynb (Layer 1) for SHAP insights; the
-             top features (A9, A7, A6, A5) are expected to be consistent.
+     STATUS: SUCCESS — shap.Explainer used (XGBoost 2.x compatible).
+             SHAP beeswarm and bar plots generated successfully.
+             Top SHAP features: A9 > A7 > A6 > A5 (consistent with Layer 1 QM.ipynb).
 
    Saved Outputs:
      Stage_0/results/cv_results_qchat.csv       — 5-fold CV metrics (all models)
      Stage_0/results/test_results_qchat.csv     — test set metrics (all models)
      Stage_0/plots/confusion_matrix_qchat.png   — XGBoost confusion matrix heatmap
      Stage_0/plots/calibration_qchat.png        — reliability diagram + prob hist
-     Stage_0/plots/shap_summary_qchat.png       — NOT generated (SHAP error)
-     Stage_0/plots/shap_bar_qchat.png           — NOT generated (SHAP error)
+     Stage_0/plots/shap_summary_qchat.png       — SHAP beeswarm (15 features)
+     Stage_0/plots/shap_bar_qchat.png           — SHAP mean |SHAP| bar chart
      Stage_0/models/xgboost_qchat_combined.pkl  — final XGBoost (all 7530 rows)
      Stage_0/models/qchat_feature_columns.pkl   — ordered feature list (15 cols)
      Stage_0/data/qchat_probabilities_combined.csv — P(ASD) for all 7530 rows
@@ -316,7 +314,7 @@ NOTEBOOKS — Layer 2 (Stage_0/)
               Who_completed_the_test_Others,
               Who_completed_the_test_School and NGO
    Split    : Stratified 80/20  →  Train 6024 | Test 1506 rows (same as Stage_0)
-   SHAP fix : Uses shap.Explainer (XGBoost 2.x compatible — Stage_0 had FAILED)
+   SHAP     : Uses shap.Explainer (XGBoost 2.x compatible — same fix as Stage_0)
 
    5-Fold CV Results (sorted by ROC-AUC):
      Model               | Acc Mean±Std      | Recall | ROC-AUC Mean±Std
