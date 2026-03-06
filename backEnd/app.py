@@ -2,6 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
+from dotenv import load_dotenv
+
+# --- 0. LOAD ENVIRONMENT VARIABLES ---
+# Load .env file from current directory
+load_dotenv()
+print("[INFO] Environment variables loaded from .env file")
 
 # --- 1. SETUP FFMPEG (Crucial for Windows) ---
 # Adds the current folder to the system path so Python can find ffmpeg.exe
@@ -13,6 +19,9 @@ os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.abspath(__file__))
 from routers import cry_router_audio  # Your Audio Logic
 from routers import cry_router_img    # Your New Face Logic
 from routers import cry_router_fusion # Fusion Analysis Logic
+
+# postpartum module 
+from postpartum import router as postpartum_router
 
 app = FastAPI(title="Infant Growth Monitoring System API")
 
@@ -30,6 +39,9 @@ app.add_middleware(
 app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])
 app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])
 app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")
+
+# include postpartum endpoints
+app.include_router(postpartum_router)  # mounted at /postpartum
 
 @app.get("/")
 def home():
