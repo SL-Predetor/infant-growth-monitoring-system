@@ -14,6 +14,7 @@ import {
     UIManager,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -201,27 +202,33 @@ export default function UpdateMeasurementsScreen() {
 
     // ── Render ─────────────────────────────────────────
     return (
-        <View style={[styles.container, { backgroundColor: C.background }]}>
-            <ScrollView
-                style={styles.scroll}
-                contentContainerStyle={[styles.scrollContent, { paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}
-                showsVerticalScrollIndicator={false}
+        <View style={[styles.container, { backgroundColor: '#F8F9FF' }]}>
+            {/* ── PURPLE HEADER ──────────────────────────── */}
+            <LinearGradient
+                colors={['#5E5CE6', '#7B79FF']}
+                style={[styles.headerGradient, { paddingTop: Platform.OS === 'ios' ? 56 : 36 }]}
             >
-                {/* ── HEADER ────────────────────────────── */}
                 <View style={styles.headerRow}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.headerBtnLeft}>
-                        <Text style={{ color: C.primary, fontSize: 32, lineHeight: 34 }}>←</Text>
+                        <Text style={{ color: '#FFF', fontSize: 28, lineHeight: 32 }}>←</Text>
                     </TouchableOpacity>
                     <View style={styles.headerCenter}>
-                        <Text style={[Typography.headline, { color: C.label }]}>Update Measurements</Text>
+                        <Text style={[Typography.headline, { color: '#FFF', fontWeight: '700' }]}>Update Measurements</Text>
                         {infant && (
-                            <Text style={[Typography.caption1, { color: C.labelTertiary }]}>
+                            <Text style={[Typography.caption1, { color: 'rgba(255,255,255,0.75)' }]}>
                                 for {infant.name || 'Baby'}
                             </Text>
                         )}
                     </View>
                     <View style={styles.headerBtnRight} />
                 </View>
+            </LinearGradient>
+
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={[styles.scrollContent, { paddingTop: 16 }]}
+                showsVerticalScrollIndicator={false}
+            >
 
                 {/* ── LAST RECORDED CARD ────────────────── */}
                 <View style={[styles.card, Shadows.sm, { backgroundColor: C.card, paddingVertical: 16, marginBottom: 16 }]}>
@@ -426,6 +433,10 @@ export default function UpdateMeasurementsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    headerGradient: {
+        paddingHorizontal: 16,
+        paddingBottom: 16,
     },
     scroll: {
         flex: 1,

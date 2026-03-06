@@ -11,6 +11,7 @@ import {
     Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
@@ -233,25 +234,31 @@ export default function DailyLogScreen() {
 
     // ── Render ─────────────────────────────────────────
     return (
-        <View style={[styles.container, { backgroundColor: C.background }]}>
-            <ScrollView
-                style={styles.scroll}
-                contentContainerStyle={[styles.scrollContent, { paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 32 }]}
-                showsVerticalScrollIndicator={false}
+        <View style={[styles.container, { backgroundColor: '#F8F9FF' }]}>
+            {/* ── PURPLE HEADER ──────────────────────────── */}
+            <LinearGradient
+                colors={['#5E5CE6', '#7B79FF']}
+                style={[styles.headerGradient, { paddingTop: Platform.OS === 'ios' ? 56 : 36 }]}
             >
-                {/* ── HEADER ────────────────────────────── */}
                 <View style={styles.headerRow}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
-                        <Text style={{ color: C.primary, fontSize: 32, lineHeight: 34 }}>←</Text>
+                        <Text style={{ color: '#FFF', fontSize: 28, lineHeight: 32 }}>←</Text>
                     </TouchableOpacity>
                     <View style={styles.headerCenter}>
-                        <Text style={[Typography.headline, { color: C.label }]}>Daily Log</Text>
-                        <Text style={[Typography.caption1, { color: C.labelTertiary }]}>
+                        <Text style={[Typography.headline, { color: '#FFF', fontWeight: '700' }]}>Today's Log</Text>
+                        <Text style={[Typography.caption1, { color: 'rgba(255,255,255,0.75)' }]}>
                             {infant?.name || 'Baby'} · {todayStr}
                         </Text>
                     </View>
                     <View style={styles.headerBtn} />
                 </View>
+            </LinearGradient>
+
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={[styles.scrollContent, { paddingTop: 16, paddingBottom: 32 }]}
+                showsVerticalScrollIndicator={false}
+            >
 
                 {/* ── AI BANNER ─────────────────────────── */}
                 <View style={[styles.aiBanner, {
@@ -547,6 +554,10 @@ export default function DailyLogScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    headerGradient: {
+        paddingHorizontal: 16,
+        paddingBottom: 16,
     },
     scroll: {
         flex: 1,

@@ -1,0 +1,135 @@
+1. Growth dashboard file location
+frontEnd/app/(tabs)/growth.tsx — confirmed correct path.
+
+2. Does growth.tsx fetch from the backend API?
+Yes, it fetches from the backend. It calls:
+
+GET http://localhost:8000/api/growth/dashboard/${infantData.id}
+It also makes a second direct Supabase call to check if today's daily log exists.
+
+3. Where does measurements/chart data come from?
+From the growth dashboard API response. The field is data.chart_data which is set into measurements state. The backend fetches from the Supabase measurements table server-side and returns it inside the dashboard response. The frontend never queries measurements directly.
+
+4. Full API response fields from /api/growth/dashboard/{infant_id}
+
+From growth_router.py exactly:
+
+{
+  "baby_name": "string",
+  "age_days": 120,
+  "log_count": 10,
+  "logs_needed": 0,
+  "ai_ready": true,
+  "current_waz": -0.45,
+  "waz_color": "green",
+  "latest_weight_g": 6200.0,
+  "latest_height_cm": 63.5,
+  "chart_data": [
+    { "measured_date": "2026-02-01", "weight_g": 5900, "height_cm": 62.0 },
+    ...
+  ],
+  "personal_baseline": -0.3,
+  "prediction": {
+    "predicted_weight_change_g": 14.5,
+    "predicted_height_change_cm": 0.11,
+    "stub": false
+  },
+  "risk_score": 0.18,
+  "risk_level": "Low",
+  "alert": {
+    "alert_fired": false,
+    "trigger_type": "none",
+    "current_waz": -0.45,
+    "predicted_waz_7day": -0.41,
+    "waz_drop": -0.04,
+    "alert_message": "Baby's growth is on track.",
+    "recommendation": ""
+  }
+}
+
+The frontend currently uses: age_days, logs_needed, ai_ready, chart_data, current_waz, prediction, risk_score, risk_level. The alert, baby_name, waz_color, latest_weight_g, latest_height_cm, personal_baseline fields are returned by the API but not currently used in growth.tsx.
+
+5. daily-log.tsx
+Yes, fully working. It:
+
+- Fetches infant from Supabase by user.id
+- Checks if today's log already exists (update vs insert mode)
+- Has sleep slider (0-24h, step 0.5), feed type pills (breastfed/formula/mixed), counters for milk feeds / solid meals / snacks
+- Tracks illness type (Diarrhoea/Respiratory/Fever/Other) with animated expand
+- Auto-calculates calorie estimate and feeding_frequency
+- Auto-calculates recovery_day from yesterday's log
+- Shows AI progress dots (Day X/7)
+- Upserts to Supabase daily_logs table
+
+6. update-measurements.tsx
+Yes, fully working. It:
+
+- Inputs weight in grams (500-30000g) and height in cm (30-120cm)
+- Shows last recorded measurement as reference
+- Animates a weight change delta indicator (e.g. "up +150g since last measurement")
+- Manual date field (defaults to today)
+- Optional notes field
+- Upserts to measurements table with conflict on infant_id, measured_date
+
+7. growth-history.tsx
+Yes, fully working. It:
+
+- Fetches from GET http://localhost:8000/api/growth/history/{infant_id}?days=60
+- Shows summary stats (total days logged, avg sleep, avg feeds)
+- Filter pills: All / Healthy / Sick
+- Timeline cards per log entry showing date, health badge (Healthy/Sick/Recovery), sleep hours, feeds, calories, illness type pills
+
+8. How is infant_id obtained?
+Fetched fresh from Supabase each time — not stored in context or AsyncStorage. The pattern used throughout the app:
+
+const { user } = useAuth();  // gets Supabase auth user (has user.id)
+
+// Then inside useEffect:
+const { data: infantData } = await supabase
+  .from('infants')
+  .select('*')
+  .eq('parent_id', user.id)
+  .maybeSingle();
+
+// infantData.id is the infant_id used for API calls
+
+user.id comes from AuthContext which wraps Supabase session.user. infant_id is the Supabase UUID of the row in the infants table where parent_id = user.id. There is one infant per parent (.maybeSingle()).
+
+9. Current growth.tsx content
+
+Already fully read — here are the exact state variables and key sections:
+
+State:
+
+const [infant, setInfant] = useState<any>(null);
+const [ageDays, setAgeDays] = useState(0);
+const [logsNeeded, setLogsNeeded] = useState(7);
+const [aiReady, setAiReady] = useState(false);
+const [measurements, setMeasurements] = useState<any[]>([]);
+const [wazScore, setWazScore] = useState<number | null>(null);
+const [hasLoggedToday, setHasLoggedToday] = useState(false);
+const [pageLoading, setPageLoading] = useState(true);
+const [prediction, setPrediction] = useState<any>(null);
+const [riskScore, setRiskScore] = useState<number | null>(null);
+const [riskLevel, setRiskLevel] = useState<string>('Low');
+
+Screens rendered (top to bottom):
+
+1. Purple gradient header with WAZ score hero + baby name + age in months + Log Today button
+2. "AI Analysis Phases" — 3 cards: LSTM / Risk Forest / Rule Engine
+3. "7-Day Forecast" — 2 cards: Tomorrow's Weight + Height Trend (height is hardcoded "-> Stable / 0.07cm/week")
+4. "Risk Assessment" — left-bordered card with risk level label + percentage + progress bar
+5. "Weight History" — SVG line chart (custom WeightLineChart component, last 7 data points)
+6. AI Training progress bar (only shows when !aiReady) — dot progress Day X/7
+7. Two action buttons: "Log Today" -> daily-log, "Update Weight" -> update-measurements
+8. "View Full History" link
+
+WeightLineChart component is inline in the file — takes measurements[] (uses last 7), parses weight_g and measured_date, draws SVG path + circles + date labels.
+
+Notable gaps in current implementation:
+
+- alert from API response is fetched but never shown to the user
+- hasLoggedToday is checked but never used in the UI
+- Height forecast is hardcoded ("-> Stable / 0.07cm/week") instead of using prediction.predicted_height_change_cm
+- personal_baseline is returned by API but not displayed
+- latest_weight_g / latest_height_cm from API not displayed (only chart shows)

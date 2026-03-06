@@ -9,6 +9,7 @@ import {
     Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -106,22 +107,27 @@ export default function GrowthHistoryScreen() {
         : '0';
 
     return (
-        <View style={[styles.container, { backgroundColor: C.background, paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}>
-            {/* ── HEADER ────────────────────────────────────── */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backBtn}
-                    onPress={() => router.back()}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    <Text style={{ color: C.primary, fontSize: 24 }}>←</Text>
-                </TouchableOpacity>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={[Typography.title1, { color: C.label, fontWeight: '700' }]}>Growth History</Text>
-                    <Text style={[Typography.caption1, { color: C.labelTertiary }]}>last 30 days</Text>
+        <View style={[styles.container, { backgroundColor: '#F8F9FF' }]}>
+            {/* ── PURPLE HEADER ────────────────────────────── */}
+            <LinearGradient
+                colors={['#5E5CE6', '#7B79FF']}
+                style={[styles.headerGradient, { paddingTop: Platform.OS === 'ios' ? 56 : 36 }]}
+            >
+                <View style={styles.header}>
+                    <TouchableOpacity
+                        style={styles.backBtn}
+                        onPress={() => router.back()}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Text style={{ color: '#FFF', fontSize: 24 }}>←</Text>
+                    </TouchableOpacity>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={[Typography.title1, { color: '#FFF', fontWeight: '700' }]}>Growth History</Text>
+                        <Text style={[Typography.caption1, { color: 'rgba(255,255,255,0.75)' }]}>Last 60 days</Text>
+                    </View>
+                    <View style={{ width: 44 }} />
                 </View>
-                <View style={{ width: 44 }} /> {/* Spacer to balance back button */}
-            </View>
+            </LinearGradient>
 
             {loading ? (
                 <View style={styles.centerContent}>
@@ -216,55 +222,70 @@ export default function GrowthHistoryScreen() {
 
                         const hasBottomRow = log.f_solid_meal > 0 || log.f_nutritious_snacks > 0 || log.illness_type;
 
+                        const logDay = new Date(log.log_date + 'T00:00:00');
+
                         return (
-                            <View key={log.log_date} style={[styles.logCard, Shadows.sm, { backgroundColor: C.card }]}>
-                                {/* TOP ROW */}
-                                <View style={styles.logTopRow}>
-                                    <Text style={[Typography.headline, { color: C.label, fontWeight: '700' }]}>
-                                        {formatDate(log.log_date)}
+                            <View key={log.log_date} style={[styles.timelineRow, { marginBottom: 10 }]}>
+                                {/* DATE COLUMN */}
+                                <View style={[styles.dateCol, { backgroundColor: C.primarySoft }]}>
+                                    <Text style={[Typography.caption2, { color: C.primary, fontWeight: '700' }]}>
+                                        {logDay.toLocaleDateString('en-US', { month: 'short' })}
                                     </Text>
-                                    <View style={[styles.healthBadge, { backgroundColor: badgeBg }]}>
-                                        <Text style={[Typography.caption1, { color: badgeText, fontWeight: '600' }]}>{badgeLabel}</Text>
-                                    </View>
+                                    <Text style={{ fontSize: 22, fontWeight: '800', color: '#5E5CE6', lineHeight: 26 }}>
+                                        {logDay.getDate()}
+                                    </Text>
+                                    <Text style={[Typography.caption2, { color: C.labelTertiary }]}>
+                                        {logDay.toLocaleDateString('en-US', { weekday: 'short' })}
+                                    </Text>
                                 </View>
 
-                                {/* STATS ROW */}
-                                <View style={styles.logStatsRow}>
-                                    <View style={styles.logStatItem}>
-                                        <Text style={{ fontSize: 20, marginBottom: 4 }}>😴</Text>
-                                        <Text style={[Typography.subheadline, { color: C.primary, fontWeight: '600' }]}>{log.sleep_hours} hrs</Text>
+                                {/* CONTENT */}
+                                <View style={[styles.logContent, Shadows.sm, { backgroundColor: C.card }]}>
+                                    {/* BADGE ROW */}
+                                    <View style={[styles.logTopRow, { marginBottom: Spacing.md }]}>
+                                        <View style={[styles.healthBadge, { backgroundColor: badgeBg }]}>
+                                            <Text style={[Typography.caption1, { color: badgeText, fontWeight: '600' }]}>{badgeLabel}</Text>
+                                        </View>
                                     </View>
-                                    <View style={styles.logStatItem}>
-                                        <Text style={{ fontSize: 20, marginBottom: 4 }}>🍼</Text>
-                                        <Text style={[Typography.subheadline, { color: C.label, fontWeight: '600' }]}>{log.f_breast_formula} feeds</Text>
-                                        <Text style={[Typography.caption2, { color: C.labelTertiary, marginTop: 2, textTransform: 'capitalize' }]}>{log.feed_type || 'milk'}</Text>
-                                    </View>
-                                    <View style={styles.logStatItem}>
-                                        <Text style={{ fontSize: 20, marginBottom: 4 }}>🔥</Text>
-                                        <Text style={[Typography.subheadline, { color: C.label, fontWeight: '600' }]}>{log.daily_calorie_intake} kcal</Text>
-                                    </View>
-                                </View>
 
-                                {/* BOTTOM ROW */}
-                                {hasBottomRow && (
-                                    <View style={[styles.logBottomRow, { borderTopColor: C.border }]}>
-                                        {log.f_solid_meal > 0 && (
-                                            <View style={[styles.bottomPill, { backgroundColor: C.cardTertiary }]}>
-                                                <Text style={[Typography.footnote, { color: C.labelSecondary }]}>🥣 {log.f_solid_meal} meals</Text>
-                                            </View>
-                                        )}
-                                        {log.f_nutritious_snacks > 0 && (
-                                            <View style={[styles.bottomPill, { backgroundColor: C.cardTertiary }]}>
-                                                <Text style={[Typography.footnote, { color: C.labelSecondary }]}>🍎 {log.f_nutritious_snacks} snacks</Text>
-                                            </View>
-                                        )}
-                                        {log.illness_type && (
-                                            <View style={[styles.bottomPill, { backgroundColor: C.dangerSoft }]}>
-                                                <Text style={[Typography.footnote, { color: C.danger, fontWeight: '500' }]}>{log.illness_type}</Text>
-                                            </View>
-                                        )}
+                                    {/* STATS ROW */}
+                                    <View style={styles.logStatsRow}>
+                                        <View style={styles.logStatItem}>
+                                            <Text style={{ fontSize: 18, marginBottom: 2 }}>😴</Text>
+                                            <Text style={[Typography.subheadline, { color: C.primary, fontWeight: '600' }]}>{log.sleep_hours} hrs</Text>
+                                        </View>
+                                        <View style={styles.logStatItem}>
+                                            <Text style={{ fontSize: 18, marginBottom: 2 }}>🍼</Text>
+                                            <Text style={[Typography.subheadline, { color: C.label, fontWeight: '600' }]}>{log.f_breast_formula} feeds</Text>
+                                            <Text style={[Typography.caption2, { color: C.labelTertiary, marginTop: 2, textTransform: 'capitalize' }]}>{log.feed_type || 'milk'}</Text>
+                                        </View>
+                                        <View style={styles.logStatItem}>
+                                            <Text style={{ fontSize: 18, marginBottom: 2 }}>🔥</Text>
+                                            <Text style={[Typography.subheadline, { color: C.label, fontWeight: '600' }]}>{log.daily_calorie_intake} kcal</Text>
+                                        </View>
                                     </View>
-                                )}
+
+                                    {/* BOTTOM PILLS */}
+                                    {hasBottomRow && (
+                                        <View style={[styles.logBottomRow, { borderTopColor: C.border }]}>
+                                            {log.f_solid_meal > 0 && (
+                                                <View style={[styles.bottomPill, { backgroundColor: C.cardTertiary }]}>
+                                                    <Text style={[Typography.footnote, { color: C.labelSecondary }]}>🥣 {log.f_solid_meal} meals</Text>
+                                                </View>
+                                            )}
+                                            {log.f_nutritious_snacks > 0 && (
+                                                <View style={[styles.bottomPill, { backgroundColor: C.cardTertiary }]}>
+                                                    <Text style={[Typography.footnote, { color: C.labelSecondary }]}>🍎 {log.f_nutritious_snacks} snacks</Text>
+                                                </View>
+                                            )}
+                                            {log.illness_type && (
+                                                <View style={[styles.bottomPill, { backgroundColor: C.dangerSoft }]}>
+                                                    <Text style={[Typography.footnote, { color: C.danger, fontWeight: '500' }]}>{log.illness_type}</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    )}
+                                </View>
                             </View>
                         );
                     })}
@@ -284,6 +305,10 @@ export default function GrowthHistoryScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    headerGradient: {
+        paddingHorizontal: Spacing.screenPadding,
+        paddingBottom: 16,
     },
     centerContent: {
         flex: 1,
@@ -351,6 +376,23 @@ const styles = StyleSheet.create({
         borderRadius: Radius.lg,
         padding: Spacing.lg,
         marginBottom: 10,
+    },
+    timelineRow: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        gap: 10,
+    },
+    dateCol: {
+        width: 54,
+        borderRadius: Radius.lg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    logContent: {
+        flex: 1,
+        borderRadius: Radius.lg,
+        padding: Spacing.md,
     },
     logTopRow: {
         flexDirection: 'row',
