@@ -15,34 +15,22 @@ SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { session, isLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
-
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!session && !inAuthGroup) {
-      // Redirect to sign-in if no session
+    if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
-    } else if (session && inAuthGroup) {
-      // Allow add-infant screen for new signups
+    } else if (isAuthenticated && inAuthGroup) {
       const onAddInfant = segments[1] === 'add-infant';
       if (!onAddInfant) {
         router.replace('/(tabs)');
       }
     }
-  }, [session, isLoading, segments]);
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#6C63FF" />
-      </View>
-    );
-  }
+  }, [isAuthenticated, segments]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
