@@ -77,3 +77,9 @@ temp/
 .env
 .env.local
 .env.*.local
+
+# Large ML model weights (too large for git)
+*.h5
+
+# Accidental Windows device file
+nul
