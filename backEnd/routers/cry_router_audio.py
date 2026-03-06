@@ -21,6 +21,8 @@ import pandas as pd
 import uuid
 import librosa
 import noisereduce as nr
+import subprocess
+import shutil
 from pathlib import Path
 
 router = APIRouter()
@@ -30,6 +32,38 @@ router = APIRouter()
 # ──────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_DIR = BASE_DIR / "mlModels" / "Cry"
+
+
+def _check_ffmpeg() -> bool:
+    """Return True if ffmpeg is available on PATH."""
+    return shutil.which("ffmpeg") is not None
+
+
+def convert_to_wav(src: Path, dst: Path) -> bool:
+    """
+    Convert any audio file to 16-bit PCM WAV (22 050 Hz, mono) via ffmpeg.
+    Returns True on success, False when ffmpeg is missing or conversion fails.
+    """
+    if not _check_ffmpeg():
+        return False
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", str(src),
+                "-ar", "22050",
+                "-ac", "1",
+                "-sample_fmt", "s16",
+                str(dst),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+        return dst.exists()
+    except Exception as e:
+        print(f"⚠️  ffmpeg conversion failed: {e}")
+        return False
 
 # ──────────────────────────────────────────────
 # 2.  LAZY-LOADED GLOBALS
@@ -186,6 +220,25 @@ async def predict_cry(file: UploadFile = File(...)):
         with open(temp_path, "wb") as f:
             f.write(content)
 
+        # ── Convert non-WAV audio (e.g. webm from browsers) to WAV ──
+        wav_path = temp_path.with_suffix(".wav")
+        if ext.lower() not in ("wav", "wave"):
+            if convert_to_wav(temp_path, wav_path):
+                print(f"✅ Converted {ext} → WAV: {wav_path}")
+                temp_path.unlink(missing_ok=True)
+                temp_path = wav_path
+            else:
+                if not _check_ffmpeg():
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "ffmpeg is required but not installed. "
+                            "Please install ffmpeg: https://ffmpeg.org/download.html "
+                            "and make sure it is on your system PATH, then restart the server."
+                        ),
+                    )
+                print(f"⚠️  ffmpeg conversion failed for {ext}, trying librosa directly")
+
         # ── Extract features as DataFrame ──
         features_df = extract_audio_features(temp_path)
         if features_df is None:
@@ -279,8 +332,9 @@ async def predict_cry(file: UploadFile = File(...)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if temp_path.exists():
-            try:
-                temp_path.unlink()
-            except OSError:
-                pass
+        for p in (temp_path, temp_path.with_suffix(".wav")):
+            if p.exists():
+                try:
+                    p.unlink()
+                except OSError:
+                    pass

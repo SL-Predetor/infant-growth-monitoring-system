@@ -17,6 +17,14 @@ load_dotenv()
 # Adds the current folder to the system path so Python can find ffmpeg.exe
 os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.abspath(__file__))
 
+import shutil
+_ffmpeg_path = shutil.which("ffmpeg")
+if _ffmpeg_path:
+    print(f"[INFO] ffmpeg found: {_ffmpeg_path}")
+else:
+    print("[WARNING] ffmpeg NOT found on PATH! Audio analysis of webm/ogg files will fail.")
+    print("[WARNING] Install ffmpeg: https://ffmpeg.org/download.html  (and restart the server)")
+
 # --- 2. IMPORT ROUTERS ---
 # We import the routers from the 'routers' folder
 # Make sure the filenames in your 'routers' folder match these exactly!
