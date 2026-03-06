@@ -3,6 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import uvicorn
 import os
+from dotenv import load_dotenv
+
+# --- 0. LOAD ENVIRONMENT VARIABLES ---
+# Load .env file from current directory
+load_dotenv()
+print("[INFO] Environment variables loaded from .env file")
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,6 +26,9 @@ from routers import cry_router_fusion # Fusion Analysis Logic
 from routers.growth_router import router as growth_router
 from postpartum import router as postpartum_router
 
+
+# postpartum module 
+from postpartum import router as postpartum_router
 
 app = FastAPI(title="Infant Growth Monitoring System API")
 
@@ -47,6 +56,9 @@ app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/
 app.include_router(growth_router, prefix="/api", tags=["Growth"])
 app.include_router(postpartum_router)
 
+
+# include postpartum endpoints
+app.include_router(postpartum_router)  # mounted at /postpartum
 
 @app.get("/")
 def home():

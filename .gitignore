@@ -73,3 +73,8 @@ temp/
 *.tmp
 *.bak
 
+
+# Environment variables
+#.env
+#.env.local
+#.env.*.local*

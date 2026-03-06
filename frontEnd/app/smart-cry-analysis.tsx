@@ -228,7 +228,51 @@ export default function SmartAnalysisScreen() {
           return;
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Check permission status before requesting (if API available)
+        try {
+          if (navigator.permissions?.query) {
+            const permStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+            if (permStatus.state === 'denied') {
+              setIsRecording(false);
+              clearTimers();
+              Alert.alert(
+                'Microphone Blocked',
+                'Microphone access is blocked by your browser or system.\n\n' +
+                '1. Click the lock/info icon in the address bar\n' +
+                '2. Set Microphone to "Allow"\n' +
+                '3. Also check: Windows Settings → Privacy → Microphone → Allow apps to access your microphone\n' +
+                '4. Reload the page and try again'
+              );
+              return;
+            }
+          }
+        } catch (_permCheckErr) {
+          // permissions.query may not support 'microphone' in all browsers — continue anyway
+        }
+
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (micError: any) {
+          setIsRecording(false);
+          clearTimers();
+          const errName = micError?.name || '';
+          if (errName === 'NotAllowedError') {
+            Alert.alert(
+              'Microphone Permission Denied',
+              'The browser or your system blocked microphone access.\n\n' +
+              'To fix this:\n' +
+              '1. Click the lock/site-info icon in the address bar → set Microphone to "Allow"\n' +
+              '2. Check Windows Settings → Privacy & Security → Microphone → ensure "Let apps access your microphone" is ON and your browser is allowed\n' +
+              '3. Reload the page and try again'
+            );
+          } else if (errName === 'NotFoundError') {
+            Alert.alert('No Microphone', 'No microphone device was found. Please connect a microphone and try again.');
+          } else {
+            Alert.alert('Microphone Error', micError?.message || 'Failed to access microphone.');
+          }
+          return;
+        }
         mediaStreamRef.current = stream;
 
         // Try to pick a decent mimeType; browser will fallback if unsupported.
@@ -307,7 +351,20 @@ export default function SmartAnalysisScreen() {
       console.error('Recording error:', error);
       setIsRecording(false);
       clearTimers();
-      Alert.alert('Error', error?.message || 'Failed to start recording');
+
+      // Catch any permission errors that slipped through
+      if (Platform.OS === 'web' && error?.name === 'NotAllowedError') {
+        Alert.alert(
+          'Microphone Permission Denied',
+          'The browser or your system blocked microphone access.\n\n' +
+          'To fix this:\n' +
+          '1. Click the lock/site-info icon in the address bar → set Microphone to "Allow"\n' +
+          '2. Check Windows Settings → Privacy & Security → Microphone → ensure "Let apps access your microphone" is ON\n' +
+          '3. Reload the page and try again'
+        );
+      } else {
+        Alert.alert('Error', error?.message || 'Failed to start recording');
+      }
     }
   };
 
