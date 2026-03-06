@@ -81,6 +81,14 @@ export default function TabLayout() {
 
       {/* HIDDEN TABS */}
       <Tabs.Screen
+        name="growth-history"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
         name="cry-translator"
         options={{
           href: null,

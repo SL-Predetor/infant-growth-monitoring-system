@@ -294,10 +294,32 @@ export default function GrowthScreen() {
                 Weight-for-Age Z-Score
               </Text>
 
-              <View style={[styles.statusBadge, { backgroundColor: wazBadgeBg, marginBottom: 20 }]}>
-                <Text style={[Typography.callout, { fontWeight: '600', color: currentWazColor }]}>
-                  {wazLabel(wazScore)}
-                </Text>
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={[styles.statusBadge, { backgroundColor: wazBadgeBg }]}>
+                  <Text style={[Typography.callout, { fontWeight: '600', color: currentWazColor }]}>
+                    {wazLabel(wazScore)}
+                  </Text>
+                </View>
+
+                {riskLevel !== 'unknown' && riskLevel !== null && riskLevel !== undefined && (
+                  <View style={[
+                    styles.statusBadge,
+                    {
+                      marginTop: 8,
+                      backgroundColor: riskLevel === 'High' ? C.dangerSoft : riskLevel === 'Medium' ? C.warningSoft : C.successSoft
+                    }
+                  ]}>
+                    <Text style={[
+                      Typography.caption1,
+                      {
+                        fontWeight: '600',
+                        color: riskLevel === 'High' ? C.danger : riskLevel === 'Medium' ? C.warning : C.success
+                      }
+                    ]}>
+                      {riskLevel === 'High' ? '🚨 High Risk' : riskLevel === 'Medium' ? '⚠️ Medium Risk' : '🛡️ Low Risk'}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.separator, marginBottom: 16 }} />
@@ -414,24 +436,7 @@ export default function GrowthScreen() {
           </View>
         )}
 
-        {/* ── RISK CARD ─────────────────────────── */}
-        {(riskLevel === 'Medium' || riskLevel === 'High') && (
-          <View style={[
-            styles.riskCard,
-            {
-              backgroundColor: riskLevel === 'High' ? C.dangerSoft : C.warningSoft,
-              borderColor: riskLevel === 'High' ? C.danger : C.warning,
-              marginBottom: 12
-            }
-          ]}>
-            <Text style={[Typography.headline, { color: riskLevel === 'High' ? C.danger : C.warning, marginBottom: 4 }]}>
-              {riskLevel === 'High' ? '🚨' : '⚠️'} {(riskScore !== null ? (riskScore * 100).toFixed(0) : 0)}% {riskLevel} Risk
-            </Text>
-            <Text style={[Typography.subheadline, { color: C.labelSecondary }]}>
-              {riskLevel === 'High' ? 'Please visit a healthcare provider soon' : 'Monitor feeding and sleep closely this week'}
-            </Text>
-          </View>
-        )}
+        {/* ── OLD RISK CARD REMOVED ─────────────────────────── */}
 
         {/* ── WEIGHT CHART ──────────────────────── */}
         <View style={[styles.chartCard, Shadows.sm, { backgroundColor: C.card, marginBottom: 12 }]}>
@@ -566,6 +571,23 @@ export default function GrowthScreen() {
             <Text style={[Typography.callout, { color: C.primary, fontWeight: '600' }]}>📏 Update Weight</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[{
+            width: '100%',
+            height: 44,
+            borderRadius: 999,
+            backgroundColor: C.card,
+            borderWidth: 1,
+            borderColor: C.border,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginTop: 12
+          }, Shadows.sm]}
+          onPress={() => router.push('/(tabs)/growth-history' as any)}
+        >
+          <Text style={[Typography.callout, { color: C.labelSecondary }]}>📋 View History →</Text>
+        </TouchableOpacity>
 
       </ScrollView>
     </View>
