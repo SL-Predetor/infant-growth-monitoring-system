@@ -2,9 +2,9 @@ import { Platform, Alert } from 'react-native';
 
 // Configuration - Uses environment variable REACT_APP_API_BASE_URL from .env
 // Falls back to localhost:8000 if not set (for backward compatibility)
-const BASE_URL = Platform.OS === 'web' 
+const BASE_URL = Platform.OS === 'web'
   ? `http://${process.env.REACT_APP_API_BASE_URL || 'localhost:8000'}`
-  : `http://${process.env.REACT_APP_API_BASE_URL || '192.168.8.119:8000'}`;
+  : `http://${process.env.REACT_APP_API_BASE_URL || 'localhost:8000'}`;
 
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
@@ -75,18 +75,18 @@ export const normalizeConfidence = (value: number | string | null | undefined): 
 // Core API functions
 export const analyzeAudio = async (audioUri: string, abortSignal?: AbortSignal): Promise<AudioResult> => {
   console.log('🎤 Starting audio analysis for:', audioUri);
-  
+
   const formData = new FormData();
-  
+
   if (Platform.OS === 'web') {
     const response = await fetch(audioUri);
     const blob = await response.blob();
     formData.append("file", blob, "audio.webm");
   } else {
-    formData.append("file", { 
-      uri: audioUri, 
-      name: 'recording.m4a', 
-      type: 'audio/m4a' 
+    formData.append("file", {
+      uri: audioUri,
+      name: 'recording.m4a',
+      type: 'audio/m4a'
     } as any);
   }
 
@@ -99,13 +99,13 @@ export const analyzeAudio = async (audioUri: string, abortSignal?: AbortSignal):
 
   const contentType = response.headers.get('content-type') || '';
   const json = contentType.includes('application/json') ? await response.json() : null;
-  
+
   console.log('🎤 Audio API Response:', json);
 
   if (!response.ok) {
     throw new Error(json?.detail || `Audio analysis failed (${response.status})`);
   }
-  
+
   if (!json) {
     throw new Error(`Unexpected audio response format (${response.status})`);
   }
@@ -119,18 +119,18 @@ export const analyzeAudio = async (audioUri: string, abortSignal?: AbortSignal):
 
 export const analyzeFace = async (faceUri: string, abortSignal?: AbortSignal): Promise<FaceResult> => {
   console.log('📸 Starting face analysis for:', faceUri);
-  
+
   const formData = new FormData();
-  
+
   if (Platform.OS === 'web') {
     const response = await fetch(faceUri);
     const blob = await response.blob();
     formData.append("file", blob, "face.jpg");
   } else {
-    formData.append("file", { 
-      uri: faceUri, 
-      name: 'face.jpg', 
-      type: 'image/jpeg' 
+    formData.append("file", {
+      uri: faceUri,
+      name: 'face.jpg',
+      type: 'image/jpeg'
     } as any);
   }
 
@@ -143,13 +143,13 @@ export const analyzeFace = async (faceUri: string, abortSignal?: AbortSignal): P
 
   const contentType = response.headers.get('content-type') || '';
   const json = contentType.includes('application/json') ? await response.json() : null;
-  
+
   console.log('📸 Face API Response:', json);
 
   if (!response.ok) {
     throw new Error(json?.detail || `Face analysis failed (${response.status})`);
   }
-  
+
   if (!json) {
     throw new Error(`Unexpected face response format (${response.status})`);
   }
@@ -164,7 +164,7 @@ export const analyzeFace = async (faceUri: string, abortSignal?: AbortSignal): P
 
 export const runFusion = async (payload: FusionPayload, abortSignal?: AbortSignal): Promise<FusionResult> => {
   console.log('🧠 Starting fusion analysis with payload:', payload);
-  
+
   const response = await fetch(FUSION_API, {
     method: 'POST',
     headers: {
@@ -188,24 +188,24 @@ export const runFusion = async (payload: FusionPayload, abortSignal?: AbortSigna
       body: JSON.stringify(payload),
       signal: abortSignal,
     });
-    
+
     const fallbackContentType = fallbackResponse.headers.get('content-type') || '';
     json = fallbackContentType.includes('application/json') ? await fallbackResponse.json() : null;
-    
+
     if (!fallbackResponse.ok) {
       throw new Error(json?.detail || `Fusion analysis failed (${fallbackResponse.status})`);
     }
   } else {
     const contentType = response.headers.get('content-type') || '';
     json = contentType.includes('application/json') ? await response.json() : null;
-    
+
     if (!response.ok) {
       throw new Error(json?.detail || `Fusion analysis failed (${response.status})`);
     }
   }
-  
+
   console.log('🧠 Fusion API Response:', json);
-  
+
   if (!json) {
     throw new Error('Unexpected fusion response format');
   }
@@ -216,7 +216,7 @@ export const runFusion = async (payload: FusionPayload, abortSignal?: AbortSigna
 // High-level analysis functions
 export const performCompleteAnalysis = async (
   audioUri: string | null,
-  faceUri: string | null, 
+  faceUri: string | null,
   context: FusionContext,
   abortSignal?: AbortSignal
 ): Promise<{
@@ -263,7 +263,7 @@ export const performCompleteAnalysis = async (
         ...context,
         audio_predicted_class: audioResult ? mapAudioLabel(audioResult.label) : 'Unknown',
         audio_confidence: audioResult ? audioResult.confidence : 0,
-        image_predicted_class: faceResult ? mapFaceLabel(faceResult.label) : 'Unknown', 
+        image_predicted_class: faceResult ? mapFaceLabel(faceResult.label) : 'Unknown',
         image_confidence: faceResult ? faceResult.confidence : 0,
       };
 
@@ -288,27 +288,27 @@ export const performCompleteAnalysis = async (
 
 export const validateContext = (context: Partial<FusionContext>): string[] => {
   const errors: string[] = [];
-  
+
   if (!context.baby_age_months || context.baby_age_months < 0 || context.baby_age_months > 36) {
     errors.push('Baby age must be between 0-36 months');
   }
-  
+
   if (context.time_since_feed_hours === undefined || context.time_since_feed_hours < 0) {
     errors.push('Time since feed must be provided and >= 0');
   }
-  
+
   if (context.time_since_sleep_hours === undefined || context.time_since_sleep_hours < 0) {
-    errors.push('Time since sleep must be provided and >= 0'); 
+    errors.push('Time since sleep must be provided and >= 0');
   }
-  
+
   if (!context.diaper_status) {
     errors.push('Diaper status must be provided');
   }
-  
-  if (context.room_temperature_celsius !== undefined && 
-      (context.room_temperature_celsius < 5 || context.room_temperature_celsius > 35)) {
+
+  if (context.room_temperature_celsius !== undefined &&
+    (context.room_temperature_celsius < 5 || context.room_temperature_celsius > 35)) {
     errors.push('Room temperature must be between 5-35°C');
   }
-  
+
   return errors;
 };

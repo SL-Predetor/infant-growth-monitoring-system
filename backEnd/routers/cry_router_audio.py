@@ -84,11 +84,31 @@ def extract_audio_features(audio_path):
 # --- 4. PREDICTION ROUTE ---
 @router.post("/predict-cry")
 async def predict_cry(file: UploadFile = File(...)):
+    print(f"Received file: {file.filename}")
+    print(f"Content type: {file.content_type}")
+    content = await file.read()
+    print(f"File size bytes: {len(content)}")
+    await file.seek(0)
+
     if models is None:
         raise HTTPException(status_code=503, detail="Models not loaded properly")
 
-    # Save Temp File
-    extension = file.filename.split(".")[-1] if "." in file.filename else "wav"
+    # Save Temp File based on content type mapping
+    content_types_map = {
+        "audio/wav": "wav",
+        "audio/webm": "webm",
+        "audio/mpeg": "mp3",
+        "audio/mp4": "m4a",
+        "audio/ogg": "ogg",
+        "audio/webm;codecs=pcm": "webm",
+        "audio/webm; codecs=opus": "webm",
+        "video/webm": "webm"
+    }
+    ext_from_mime = content_types_map.get(file.content_type)
+    if ext_from_mime:
+        extension = ext_from_mime
+    else:
+        extension = file.filename.split(".")[-1] if "." in file.filename else "wav"
     temp_dir = os.path.join(current_dir, '..', 'tmp')
     os.makedirs(temp_dir, exist_ok=True)
     temp_filename = os.path.join(temp_dir, f"{uuid.uuid4()}.{extension}")

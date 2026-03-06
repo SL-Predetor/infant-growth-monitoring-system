@@ -39,13 +39,12 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
       }}
     >
+      {/* ── VISIBLE TABS (5) ─────────────────────────────────── */}
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="house.fill" color={color} />
-          ),
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="house.fill" color={color} />,
         }}
       />
 
@@ -53,19 +52,23 @@ export default function TabLayout() {
         name="growth"
         options={{
           title: 'Growth',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="chart.line.uptrend.xyaxis" color={color} />
-          ),
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="chart.line.uptrend.xyaxis" color={color} />,
         }}
       />
 
       <Tabs.Screen
         name="behavior"
         options={{
-          title: 'Insights',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="brain.head.profile" color={color} />
-          ),
+          title: 'Baby',
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="figure.and.child.holdinghands" color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="recovery"
+        options={{
+          title: 'Maternal',
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="heart.text.square.fill" color={color} />,
         }}
       />
 
@@ -73,68 +76,18 @@ export default function TabLayout() {
         name="Profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="person.fill" color={color} />
-          ),
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="person.fill" color={color} />,
         }}
       />
 
-      {/* HIDDEN TABS */}
-      <Tabs.Screen
-        name="growth-history"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-
-      <Tabs.Screen
-        name="cry-translator"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-
-      <Tabs.Screen
-        name="recovery"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-
-      <Tabs.Screen
-        name="edit-profile"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-
-      <Tabs.Screen
-        name="daily-log"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-
-      <Tabs.Screen
-        name="update-measurements"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-
-      <Tabs.Screen
-        name="explore"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
+      {/* ── HIDDEN TABS ──────────────────────────────────────── */}
+      <Tabs.Screen name="cry-translator" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="edit-profile" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="daily-log" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="update-measurements" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="growth-history" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="growth-alert" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="explore" options={{ href: null, headerShown: false }} />
     </Tabs>
   );
 }

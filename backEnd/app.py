@@ -24,7 +24,14 @@ app = FastAPI(title="Infant Growth Monitoring System API")
 # --- 3. CORS SETUP (Allows Phone/Web to connect) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8082",
+        "http://localhost:8081",
+        "http://localhost:3000",
+        "http://localhost:19006",
+        "http://127.0.0.1:8082",
+        "*" # Keeping "*" as requested to not remove existing allowed origins if any, though user asked to add these if not there. 
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

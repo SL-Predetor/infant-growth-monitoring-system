@@ -10,7 +10,7 @@ const { width: screenWidth } = Dimensions.get('window');
 const GRID_GAP = Spacing.lg;
 const HORIZONTAL_PADDING = Spacing.lg;
 const isSmallScreen = screenWidth < 768;
-const CARD_WIDTH = isSmallScreen 
+const CARD_WIDTH = isSmallScreen
   ? screenWidth - HORIZONTAL_PADDING * 2
   : (screenWidth - HORIZONTAL_PADDING * 2 - GRID_GAP) / 2;
 
@@ -61,7 +61,7 @@ const TOOLS: Tool[] = [
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useColorScheme() ?? 'light';
-  
+
   const backgroundColor = Colors[theme].background;
   const textColor = Colors[theme].text;
   const secondaryText = Colors[theme].secondaryText;
