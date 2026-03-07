@@ -27,7 +27,6 @@ try:
         "csection": joblib.load(os.path.join(MODEL_DIR, "csection_RandomForest.joblib")),
         "back_pelvic": joblib.load(os.path.join(MODEL_DIR, "back_pelvic_Ridge.joblib")),
     }
-    print("✅ Postpartum models loaded")
 except Exception as e:
     print(f"Warning: Could not load models: {e}")
     models = {}

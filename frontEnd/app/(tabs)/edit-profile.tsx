@@ -207,7 +207,7 @@ export default function EditProfileScreen() {
                     .from('profiles')
                     .update({ full_name: fullName.trim(), bio: bio.trim() || null })
                     .eq('id', user?.id)
-                    .then((res) => { if (res.error) throw res.error; })
+                    .then((res: { error: any }) => { if (res.error) throw res.error; })
             );
 
             // Update infant if exists
@@ -232,7 +232,7 @@ export default function EditProfileScreen() {
                         })
                         .eq('id', infant.id)
                         .eq('parent_id', user?.id)
-                        .then((res) => { if (res.error) throw res.error; })
+                        .then((res: { error: any }) => { if (res.error) throw res.error; })
                 );
             }
 

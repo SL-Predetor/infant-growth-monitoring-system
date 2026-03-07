@@ -19,7 +19,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
 
 // --- CONFIGURATION ---
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://192.168.8.119:8000";
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;
@@ -74,7 +74,7 @@ export default function SmartAnalysisScreen() {
   const [roomTemperature, setRoomTemperature] = useState('');
 
   // Result
-  const [analysisResult, setAnalysisResult] = useState<FusionApiResult & {
+  const [analysisResult, setAnalysisResult] = useState<FusionApiResult & { 
     recommendations: string[];
     audioPrediction?: string;
     audioConfidence?: number;
@@ -120,7 +120,7 @@ export default function SmartAnalysisScreen() {
   const cleanupWebRecorder = () => {
     try {
       mediaRecorderRef.current?.stop();
-    } catch { }
+    } catch {}
     mediaRecorderRef.current = null;
 
     if (mediaStreamRef.current) {
@@ -145,36 +145,36 @@ export default function SmartAnalysisScreen() {
 
   const validateContext = (ctx: FusionContext) => {
     const errors: string[] = [];
-
+    
     // Check if fields are filled
     if (!babyAge.trim()) {
       errors.push('Baby age is required');
     } else if (!Number.isFinite(ctx.baby_age_months) || ctx.baby_age_months < 0 || ctx.baby_age_months > 36) {
       errors.push('Baby age must be between 0-36 months');
     }
-
+    
     if (!feedingTime.trim()) {
       errors.push('Time since last feeding is required');
     } else if (!Number.isFinite(ctx.time_since_feed_hours) || ctx.time_since_feed_hours < 0 || ctx.time_since_feed_hours > 48) {
       errors.push('Time since last feeding must be between 0-48 hours');
     }
-
+    
     if (!sleepTime.trim()) {
       errors.push('Time since last sleep is required');
     } else if (!Number.isFinite(ctx.time_since_sleep_hours) || ctx.time_since_sleep_hours < 0 || ctx.time_since_sleep_hours > 48) {
       errors.push('Time since last sleep must be between 0-48 hours');
     }
-
+    
     if (!['Clean', 'Wet', 'Soiled'].includes(ctx.diaper_status)) {
       errors.push('Diaper status must be Clean/Wet/Soiled');
     }
-
+    
     if (!roomTemperature.trim()) {
       errors.push('Room temperature is required');
     } else if (!Number.isFinite(ctx.room_temperature_celsius) || ctx.room_temperature_celsius < 15 || ctx.room_temperature_celsius > 35) {
       errors.push('Room temperature must be between 15-35°C');
     }
-
+    
     return errors;
   };
 
@@ -228,7 +228,51 @@ export default function SmartAnalysisScreen() {
           return;
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Check permission status before requesting (if API available)
+        try {
+          if (navigator.permissions?.query) {
+            const permStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+            if (permStatus.state === 'denied') {
+              setIsRecording(false);
+              clearTimers();
+              Alert.alert(
+                'Microphone Blocked',
+                'Microphone access is blocked by your browser or system.\n\n' +
+                '1. Click the lock/info icon in the address bar\n' +
+                '2. Set Microphone to "Allow"\n' +
+                '3. Also check: Windows Settings → Privacy → Microphone → Allow apps to access your microphone\n' +
+                '4. Reload the page and try again'
+              );
+              return;
+            }
+          }
+        } catch (_permCheckErr) {
+          // permissions.query may not support 'microphone' in all browsers — continue anyway
+        }
+
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (micError: any) {
+          setIsRecording(false);
+          clearTimers();
+          const errName = micError?.name || '';
+          if (errName === 'NotAllowedError') {
+            Alert.alert(
+              'Microphone Permission Denied',
+              'The browser or your system blocked microphone access.\n\n' +
+              'To fix this:\n' +
+              '1. Click the lock/site-info icon in the address bar → set Microphone to "Allow"\n' +
+              '2. Check Windows Settings → Privacy & Security → Microphone → ensure "Let apps access your microphone" is ON and your browser is allowed\n' +
+              '3. Reload the page and try again'
+            );
+          } else if (errName === 'NotFoundError') {
+            Alert.alert('No Microphone', 'No microphone device was found. Please connect a microphone and try again.');
+          } else {
+            Alert.alert('Microphone Error', micError?.message || 'Failed to access microphone.');
+          }
+          return;
+        }
         mediaStreamRef.current = stream;
 
         // Try to pick a decent mimeType; browser will fallback if unsupported.
@@ -307,7 +351,20 @@ export default function SmartAnalysisScreen() {
       console.error('Recording error:', error);
       setIsRecording(false);
       clearTimers();
-      Alert.alert('Error', error?.message || 'Failed to start recording');
+
+      // Catch any permission errors that slipped through
+      if (Platform.OS === 'web' && error?.name === 'NotAllowedError') {
+        Alert.alert(
+          'Microphone Permission Denied',
+          'The browser or your system blocked microphone access.\n\n' +
+          'To fix this:\n' +
+          '1. Click the lock/site-info icon in the address bar → set Microphone to "Allow"\n' +
+          '2. Check Windows Settings → Privacy & Security → Microphone → ensure "Let apps access your microphone" is ON\n' +
+          '3. Reload the page and try again'
+        );
+      } else {
+        Alert.alert('Error', error?.message || 'Failed to start recording');
+      }
     }
   };
 
@@ -417,7 +474,7 @@ export default function SmartAnalysisScreen() {
       const json = ct.includes('application/json') ? await res.json() : null;
 
       if (!res.ok) throw new Error(json?.detail || `Audio request failed (${res.status})`);
-
+      
       console.log('✅ Audio upload successful:', json);
       return json;
     } catch (error: any) {
@@ -451,7 +508,7 @@ export default function SmartAnalysisScreen() {
       const json = ct.includes('application/json') ? await res.json() : null;
 
       if (!res.ok) throw new Error(json?.detail || `Face request failed (${res.status})`);
-
+      
       console.log('✅ Face upload successful:', json);
       return json;
     } catch (error: any) {
@@ -527,8 +584,8 @@ export default function SmartAnalysisScreen() {
 
       const recommendations = getRecommendations(fusionJson.predicted_cry_reason, context);
 
-      setAnalysisResult({
-        ...fusionJson,
+      setAnalysisResult({ 
+        ...fusionJson, 
         recommendations,
         audioPrediction,
         audioConfidence,
@@ -539,7 +596,7 @@ export default function SmartAnalysisScreen() {
 
     } catch (error: any) {
       console.error('❌ Analysis error:', error);
-
+      
       // Better error message extraction
       let errorMessage = 'Analysis failed';
       if (error instanceof Error) {
@@ -549,7 +606,7 @@ export default function SmartAnalysisScreen() {
       } else if (error && typeof error === 'object' && error.message) {
         errorMessage = error.message;
       }
-
+      
       Alert.alert('Analysis Failed', errorMessage);
     } finally {
       setIsLoading(false);
@@ -892,8 +949,8 @@ export default function SmartAnalysisScreen() {
               <View style={[styles.resultIcon, { backgroundColor: '#F0FFFE' }]}>
                 <ThemedText style={styles.resultIconText}>
                   {analysisResult.predicted_cry_reason === 'Pain' ? '😟' :
-                    analysisResult.predicted_cry_reason === 'Hunger' ? '🍼' :
-                      analysisResult.predicted_cry_reason === 'Discomfort' ? '😤' : '😴'}
+                   analysisResult.predicted_cry_reason === 'Hunger' ? '🍼' :
+                   analysisResult.predicted_cry_reason === 'Discomfort' ? '😤' : '😴'}
                 </ThemedText>
               </View>
 
@@ -911,7 +968,7 @@ export default function SmartAnalysisScreen() {
                 <View style={[styles.confidenceBar, { backgroundColor: Colors.light.border }]}>
                   <View style={[styles.confidenceFill, {
                     backgroundColor: (analysisResult.confidence ?? 0) > 0.8 ? Colors.light.success :
-                      (analysisResult.confidence ?? 0) > 0.6 ? Colors.light.warning : Colors.light.error,
+                                    (analysisResult.confidence ?? 0) > 0.6 ? Colors.light.warning : Colors.light.error,
                     width: `${Math.round((analysisResult.confidence ?? 0) * 100)}%`,
                   }]} />
                 </View>
@@ -933,7 +990,7 @@ export default function SmartAnalysisScreen() {
                 </ThemedText>
                 <View style={styles.modelConfidenceRow}>
                   <View style={[styles.modelConfidenceBar, { backgroundColor: '#E5E7EB' }]}>
-                    <View style={[styles.modelConfidenceFill, {
+                    <View style={[styles.modelConfidenceFill, { 
                       width: `${Math.round((analysisResult.audioConfidence ?? 0) * 100)}%`,
                       backgroundColor: '#3B82F6'
                     }]} />
@@ -954,7 +1011,7 @@ export default function SmartAnalysisScreen() {
                 </ThemedText>
                 <View style={styles.modelConfidenceRow}>
                   <View style={[styles.modelConfidenceBar, { backgroundColor: '#E5E7EB' }]}>
-                    <View style={[styles.modelConfidenceFill, {
+                    <View style={[styles.modelConfidenceFill, { 
                       width: `${Math.round((analysisResult.imageConfidence ?? 0) * 100)}%`,
                       backgroundColor: '#EF4444'
                     }]} />

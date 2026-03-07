@@ -1,16 +1,16 @@
 import React from 'react';
-import { StyleSheet, View, Pressable, Dimensions, ScrollView } from 'react-native';
+import { StyleSheet, View, Pressable, Dimensions, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 const GRID_GAP = Spacing.lg;
 const HORIZONTAL_PADDING = Spacing.lg;
 const isSmallScreen = screenWidth < 768;
-const CARD_WIDTH = isSmallScreen
+const CARD_WIDTH = isSmallScreen 
   ? screenWidth - HORIZONTAL_PADDING * 2
   : (screenWidth - HORIZONTAL_PADDING * 2 - GRID_GAP) / 2;
 
@@ -29,7 +29,7 @@ const TOOLS: Tool[] = [
     name: 'Cry Analysis',
     description: 'Understand your baby\'s cry patterns',
     icon: '🎤',
-    color: '#6C63FF',
+    color: '#4ECDC4',
     route: '/smart-cry-analysis',
   },
   {
@@ -37,7 +37,7 @@ const TOOLS: Tool[] = [
     name: 'Growth Forecaster',
     description: 'Track your baby\'s development',
     icon: '📈',
-    color: '#FF8FB1',
+    color: '#FF6B9D',
     route: '/growth-forecaster',
   },
   {
@@ -45,7 +45,7 @@ const TOOLS: Tool[] = [
     name: 'Behavior & Development',
     description: 'Monitor developmental milestones',
     icon: '🧠',
-    color: '#4CAF50',
+    color: '#FFC75F',
     route: '/behavior-development',
   },
   {
@@ -53,20 +53,22 @@ const TOOLS: Tool[] = [
     name: 'Mom\'s Recovery',
     description: 'Your wellness and recovery guide',
     icon: '🌸',
-    color: '#FFC107',
-    route: '/moms-recovery',
+    color: '#95E1D3',
+    route: '/recovery',
   },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const theme = useColorScheme() ?? 'light';
 
-  const backgroundColor = Colors[theme].background;
-  const textColor = Colors[theme].text;
-  const secondaryText = Colors[theme].secondaryText;
-  const cardBackground = Colors[theme].cardBackground;
+  // Define theme colors
+  const backgroundColor = useThemeColor({}, 'background');
+  const cardBackground = useThemeColor({}, 'cardBackground');
+  const textColor = useThemeColor({}, 'text');
+  const secondaryText = useThemeColor({}, 'secondaryText');
 
+
+  // (rowOneItems/rowTwoItems defined but not used – grid rendered from TOOLS constant below)
   const rowOneItems = [
     {
       id: "cry-translator",
@@ -93,7 +95,7 @@ export default function HomeScreen() {
       title: "Behavior & Development",
       subtitle: "Screening & Eye Gaze Analysis.",
       iconName: "puzzlepiece",
-      onPress: () => router.push("/(tabs)/behavior"),
+      onPress: () => router.push("/behavior"),
       accentColor: "#FFE66D",
     },
     {
@@ -101,7 +103,7 @@ export default function HomeScreen() {
       title: "Mom's Recovery",
       subtitle: "Postpartum Pain & Nutrition.",
       iconName: "heart",
-      onPress: () => router.push("/(tabs)/recovery"),
+      onPress: () => router.push("/recovery"),
       accentColor: "#FF85B3",
     },
   ];
@@ -145,6 +147,15 @@ export default function HomeScreen() {
     <ScrollView style={[styles.container, { backgroundColor }]} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.headerSection}>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={() => router.push('/(tabs)/Profile')} style={styles.avatarBtn}>
+            <Image
+              source={{ uri: 'https://i.pravatar.cc/300' }}
+              style={styles.avatarImg}
+            />
+          </Pressable>
+        </View>
         <ThemedText style={[styles.mainTitle, { color: textColor }]}>
           Infant Care Assistant
         </ThemedText>
@@ -184,6 +195,25 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
     paddingHorizontal: HORIZONTAL_PADDING,
     alignItems: 'center',
+  },
+  headerRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  avatarBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
   },
 
   mainTitle: {
@@ -262,5 +292,246 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.1)',
     alignItems: 'flex-end',
+  },
+
+  // Main Cry Analysis Card
+  mainCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  mainCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+
+  mainIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+
+  mainIconText: {
+    fontSize: 28,
+  },
+
+  mainCardContent: {
+    flex: 1,
+  },
+
+  mainCardTitle: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.semiBold,
+    marginBottom: Spacing.xs,
+  },
+
+  mainCardSubtitle: {
+    fontSize: Typography.sizes.sm,
+  },
+
+  chevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  chevronText: {
+    fontSize: 16,
+    fontWeight: Typography.weights.semiBold,
+  },
+
+  mainCardDescription: {
+    fontSize: Typography.sizes.sm,
+    lineHeight: 20,
+  },
+
+  // Section Headers
+  sectionHeader: {
+    marginBottom: Spacing.lg,
+  },
+
+  sectionSubtitle: {
+    fontSize: Typography.sizes.sm,
+  },
+
+  // Tools Grid
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xl,
+  },
+
+  toolCardAlt: {
+    width: (screenWidth - Spacing.lg * 2 - Spacing.md) / 2,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 120,
+  },
+
+  toolIconAlt: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
+  },
+
+  toolIconText: {
+    fontSize: 20,
+  },
+
+  toolTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.semiBold,
+    marginBottom: Spacing.xs,
+    lineHeight: 18,
+  },
+
+  toolSubtitle: {
+    fontSize: Typography.sizes.xs,
+    lineHeight: 16,
+  },
+
+  // Advanced Link
+  advancedLink: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+
+  linkText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
+  },
+
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+  },
+
+  modalTitle: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.bold,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+
+  modalSubtitle: {
+    fontSize: Typography.sizes.sm,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+
+  // Option Cards
+  optionCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+
+  optionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+
+  optionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+
+  optionIconText: {
+    fontSize: 24,
+  },
+
+  optionContent: {
+    flex: 1,
+  },
+
+  optionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+
+  optionTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.semiBold,
+    marginRight: Spacing.sm,
+  },
+
+  newBadge: {
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: Typography.weights.bold,
+    color: 'white',
+  },
+
+  optionSubtitle: {
+    fontSize: Typography.sizes.sm,
+  },
+
+  optionDescription: {
+    fontSize: Typography.sizes.sm,
+    lineHeight: 18,
+  },
+
+  // Cancel Button
+  cancelButton: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+
+  cancelText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.medium,
   },
 });

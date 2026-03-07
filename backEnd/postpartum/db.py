@@ -63,7 +63,7 @@ def get_postpartum_collection() -> Optional[Collection]:
             _client = MongoClient(POSTPARTUM_MONGODB_URI, serverSelectionTimeoutMS=3000, connectTimeoutMS=3000)
             # Try to connect immediately to catch errors early
             _client.admin.command('ping')
-            print("✅ MongoDB connected")
+            print("[OK] MongoDB connected successfully!")
         except Exception as e:
             print(f"[WARNING] MongoDB unavailable: {type(e).__name__}")
             _client = None

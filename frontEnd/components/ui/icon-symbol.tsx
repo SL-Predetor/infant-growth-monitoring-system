@@ -18,11 +18,6 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
-  'waveform': 'graphic-eq',
-  'brain.head.profile': 'psychology',
-  'chart.line.uptrend.xyaxis': 'show-chart',
-  'heart.fill': 'favorite',
-  'person.fill': 'person',
 } as IconMapping;
 
 /**

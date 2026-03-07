@@ -1,0 +1,937 @@
+================================================================================
+          AUTISM SPECTRUM DISORDER (ASD) DETECTION SYSTEM
+                    ----- COMPREHENSIVE FILE SUMMARY -----
+                         (Last Updated: 2026-03-07)
+================================================================================
+
+PROJECT OVERVIEW:
+A multi-stage machine learning system to detect Autism Spectrum Disorder (ASD)
+in infants using TWO parallel approaches:
+  1. FACIAL IMAGE ANALYSIS  - Modified VGG-Face transfer learning on infant photos
+  2. QUESTIONNAIRE ANALYSIS - Machine learning on Q-CHAT-10 survey responses
+
+DATASET (Facial):
+  - Total images: 3,917  (1,952 Autistic | 1,965 Non-Autistic)
+  - Source: step4/ directory (preprocessed, deduplicated, augmented)
+  - Blind test set (permanent, isolated before any training): 392 images
+      Autistic=195, Non_Autistic=197
+  - Label convention enforced in code: Autistic = 1, Non_Autistic = 0
+    (alphabetical order gives Autistic index 0, so labels are flipped via 1 - y)
+
+================================================================================
+                        FOLDER STRUCTURE & FILE GUIDE
+================================================================================
+
+ROOT DIRECTORY: mlModels/autisumDetect/
+├── sector1/                    [Facial Image Analysis Pipeline]
+│   ├── Prep/                   [Data Preparation Phase]
+│   ├── Stage_1/                [Initial Model Training - simple split]
+│   ├── Stage_2/                [K-Fold Training & Evaluation]
+│   ├── Stage_3/                [Feature Extraction]
+│   └── Stage_4/                [Improved K-Fold + Mixed Precision + Fine-tune]
+└── sector2/                    [Questionnaire-Based Analysis]
+    ├── Q-CHAT-10/              [Layer 1: Single-source Q-CHAT-10 ML Models]
+    ├── Stage_0/                [Layer 2: Multi-source fusion — BASELINE (15 feat, all rows)]
+    │   ├── combine_datasets.ipynb      [5-dataset fusion → 7530 rows]
+    │   ├── qchat_model_training.ipynb  [Training & eval — BASELINE]
+    │   ├── models/                     [xgboost_qchat_combined.pkl]
+    │   ├── results/                    [cv_results_qchat.csv, test_results_qchat.csv]
+    │   ├── plots/                      [confusion_matrix, calibration plots]
+    │   └── data/                       [qchat_probabilities_combined.csv]
+    ├── Stage_1/                [Layer 3: Who-feature ablation — 12 feat, all rows]
+    │   ├── qchat_model_training.ipynb  [Training & eval — ABLATION]
+    │   ├── models/                     [xgboost_qchat_stage1.pkl]
+    │   ├── results/                    [stage_comparison.csv, test_results_qchat.csv]
+    │   └── plots/                      [shap_summary, shap_bar, stage_comparison]
+    ├── Stage_2/                [Layer 4: Parent-only population filter — PRODUCTION]
+    │   ├── qchat_model_training.ipynb  [Training & eval — PRODUCTION MODEL]
+    │   ├── models/                     [xgboost_qchat_stage2.pkl]
+    │   ├── results/                    [stage_comparison.csv, test_results_qchat.csv]
+    │   └── plots/                      [shap_summary, shap_bar, stage_comparison]
+    └── combine/                [Integration/Ensemble Layer (not implemented)]
+
+================================================================================
+                  SECTOR 1: FACIAL IMAGE ANALYSIS PIPELINE
+================================================================================
+
+===== PREP FOLDER - DATA PREPARATION & PREPROCESSING =====
+
+1. prep1.ipynb
+   ├─ PURPOSE: Face Detection & Facial Region Cropping
+   ├─ LIBRARY: MTCNN (Multi-task Cascaded Convolutional Networks)
+   ├─ PROCESS:
+   │   • Reads raw infant photos from: rawimg/Non_Autistic (and Autistic)
+   │   • Detects faces using MTCNN detector
+   │   • Crops detected face with 10% (margin=0.1) padding on all sides
+   │   • Saves cropped faces as sequential JPEGs to prepImg/step1/
+   │   • Deletes original raw file after successful processing
+   ├─ INPUT: rawimg/{Class}/  (raw infant photographs, various sizes/formats)
+   ├─ OUTPUT: prepImg/step1/{Class}/  (cropped face images)
+   └─ NOTE: An alternative DeepFace + RetinaFace approach is present as
+             commented-out code but was not used in the main pipeline.
+
+2. prep2.ipynb
+   ├─ PURPOSE: Duplicate Image Detection & Removal
+   ├─ METHOD: MD5 Cryptographic Hashing
+   ├─ PROCESS:
+   │   • Reads from prepImg/step3(S1+S2.2)/ (combined step1 + step2 images)
+   │   • Computes MD5 hash for every image
+   │   • Identifies duplicates by matching hash values
+   │   • Moves only unique originals to prepImg/step4/
+   ├─ ACTUAL RESULT: Found 29 duplicates in the Non_Autistic class
+   ├─ INPUT: prepImg/step3(S1+S2.2)/{Class}/
+   ├─ OUTPUT: prepImg/step4/{Class}/  (final clean dataset used for training)
+   └─ IMPORTANCE: Prevents data leakage across train/test splits.
+
+3. augment1.ipynb
+   ├─ PURPOSE: Data Augmentation (Synthetic Sample Generation)
+   ├─ INPUT: rawimg/{Class}/  (applied on raw images, not cropped faces)
+   ├─ OUTPUT: prepImg/step2/{Class}/  (augmented images, prefix "aug_")
+   ├─ SELECTION: Randomly selects 500 images from input for augmentation
+   ├─ AUGMENTATION TECHNIQUES (6 total, max 300 applications each):
+   │   • Random Rotation:    ±30 degrees
+   │   • Horizontal Flip:    Mirror left-to-right
+   │   • Zoom:               1.1x to 1.5x magnification with centre crop
+   │   • Positional Shift:   ±30 pixel random translation (affine transform)
+   │   • Brightness:         0.7x to 1.3x scaling via ImageEnhance
+   │   • Contrast:           0.7x to 1.3x scaling via ImageEnhance
+   ├─ LOGGING: Progress logged to process.log via Python logging module
+   └─ NOTE: step2 output is later merged with step1 into step3, which is then
+             deduplicated by prep2.ipynb to produce the final step4 dataset.
+
+4. changeName.ipynb
+   ├─ PURPOSE: File Renaming & Standardized Organization
+   ├─ PROCESS:
+   │   • Reads from prepImg/step2/{Class}/ (augmented images)
+   │   • Renames all files to sequential integers: 0.jpg, 1.jpg, 2.jpg, ...
+   │   • Moves renamed files to a new output folder
+   ├─ INPUT: prepImg/step2/{Class}/
+   ├─ OUTPUT: prepImg/New folder/{Class}/  (standardized naming)
+   └─ IMPORTANCE: Creates consistent filenames for reproducible dataset loading.
+
+---
+
+===== STAGE_1 FOLDER - BASELINE MODEL TRAINING =====
+
+SHARED ARCHITECTURE (model1.ipynb through model5.ipynb):
+  All Stage_1 models use an identical dual-output VGG-Face architecture:
+
+  INPUT (224×224×3)
+    → VGG-Face Backbone [conv2d_14 output, frozen] → (None, 1, 1, 4096)
+    → Global Average Pooling → (None, 4096)
+    → Dense(256, relu) [named: asd_feature_vector]
+    → Dense(1, sigmoid) [named: classification_output]
+
+  Total params:     135,309,633
+  Trainable (head): 1,049,089
+  Frozen (backbone):134,260,544
+
+TRAINING PROTOCOL (shared):
+  • Phase 1 - Frozen Backbone:
+      LR=0.0001, Adam optimizer, binary_crossentropy loss
+      20 epochs + optional 15-epoch extension (35 total)
+      EarlyStopping (patience=5 on val_loss)
+      ModelCheckpoint (best val_accuracy)
+  • Phase 2 - Partial Fine-Tuning:
+      Unfreeze last 4 layers of VGG-Face backbone
+      LR=1e-5, batch_size=16, up to 10 epochs
+      EarlyStopping (patience=5); early stopping triggered in all models
+  • Data split: 80% train (3134) / 10% val / 10% test (from 3917 images)
+  • Preprocessing: Pixel normalization to [0,1] via Rescaling(1./255)
+    NOTE: Stage_1 uses simple normalization. Stage_2+ uses proper VGG-Face
+    preprocessing (BGR + mean subtraction) - see ML1.ipynb and Stage_4.
+
+5. train1.ipynb
+   ├─ PURPOSE: Development Environment Setup & GPU Verification
+   ├─ TASKS:
+   │   • Checks CUDA/GPU availability
+   │   • Verifies package versions: TF 2.10.0, DeepFace 0.0.96, Python 3.10.19
+   └─ OUTPUT: Confirmed GPU-enabled environment ready for training.
+
+6. model1.ipynb
+   ├─ PURPOSE: Initial VGG-Face Baseline Classifier
+   ├─ CHECKPOINT: best_asd_model6.h5  (note: different suffix from model index)
+   ├─ SAVED MODEL: models/model_1.h5
+   ├─ PERFORMANCE (from mc1.ipynb evaluation):
+   │   • Accuracy:    82.29%
+   │   • Precision:   80.61%
+   │   • Recall:      84.04%  (Sensitivity)
+   │   • Specificity: 80.61%
+   │   • F1-Score:    82.29%
+   │   • Confusion: TP=158, TN=158, FP=38, FN=30  (on 384-image test set)
+   ├─ EXTRAS: t-SNE 2D visualization of 256-D feature vectors on test set
+   └─ TEST IMAGES: Copied to ModelTestingIMGS/model1/ (384 images)
+
+7. model2.ipynb
+   ├─ PURPOSE: VGG-Face Classifier - Variant with smaller fine-tune batch size
+   ├─ ARCHITECTURE: Same as model1 (Dense(256) → Dense(1))
+   ├─ CHECKPOINT: best_asd_model1.h5
+   ├─ SAVED MODEL: Models/model_2.h5
+   ├─ PERFORMANCE (from readMe.txt):
+   │   • Highest Accuracy: 83.07%  ← BEST accuracy in Stage_1
+   ├─ FINE-TUNING: Phase 2 batch_size=8, LR=1e-5; early stopped at epoch 8
+   │   Best fine-tune epoch: epoch 3 (val_acc ~84.46%)
+   └─ TEST IMAGES: Copied to ModelTestingIMGS/model2/
+
+8. model3.ipynb
+   ├─ PURPOSE: VGG-Face Classifier - Another fine-tuning configuration
+   ├─ ARCHITECTURE: Same as model1/model2 (NOT DeepFace+SVM as previously noted)
+   │   Note: A DeepFace+SVM snippet exists as commented-out code but was
+   │   never executed. The actual model trained is identical VGG-Face transfer.
+   ├─ CHECKPOINT: best_asd_model.h5
+   ├─ SAVED MODEL: models/model_3.h5
+   ├─ FINE-TUNING: Phase 2 batch_size=8; early stopped at epoch 6
+   │   Best epoch: epoch 1 (val_acc ~84.71%)
+   └─ TEST IMAGES: Copied to ModelTestingIMGS/model3/
+
+9. model4.ipynb
+   ├─ PURPOSE: VGG-Face Classifier - Configuration testing
+   ├─ ARCHITECTURE: Same VGG-Face dual-output architecture
+   ├─ CHECKPOINT: best_asd_model4.h5
+   ├─ SAVED MODEL: Models/ASD_Model_4.h5
+   ├─ FINE-TUNING: Phase 2 batch_size=16; evaluation cells appear incomplete
+   │   (Training was started but final test evaluation not run in recorded output)
+   └─ TEST IMAGES: Copied to ModelTestingIMGS/model4/
+
+10. model5.ipynb
+    ├─ PURPOSE: VGG-Face Classifier optimised for recall/sensitivity
+    ├─ ARCHITECTURE: Same VGG-Face dual-output architecture
+    ├─ CHECKPOINT: best_asd_model5.h5
+    ├─ SAVED MODEL: models/model_5.h5
+    ├─ PERFORMANCE (from readMe.txt):
+    │   • Highest Recall/Sensitivity: 85.64%  ← BEST recall in Stage_1
+    ├─ FINE-TUNING: Phase 2 batch_size=16; best epoch=2
+    └─ TEST IMAGES: Copied to ModelTestingIMGS/model5/
+
+11. mc1.ipynb, mc2.ipynb, mc3.ipynb, mc5.ipynb
+    ├─ PURPOSE: Model Comparison & Detailed Evaluation Notebooks
+    ├─ PROCESS:
+    │   • Load each saved model (model_1.h5, model_2.h5, etc.)
+    │   • Run inference on corresponding test set in ModelTestingIMGS/
+    │   • Compute: TP, TN, FP, FN, Accuracy, Precision, Recall, Specificity, F1
+    │   • Threshold: 0.5 (default sigmoid cutoff)
+    └─ CONFIRMED RESULT (mc1.ipynb for model1): Acc=82.29%, Rec=84.04%
+
+12. venvTest.ipynb
+    ├─ PURPOSE: Virtual Environment Isolation Testing
+    └─ FUNCTION: Verifies model compatibility in isolated Python environment.
+
+13. Untitled.ipynb, Untitled1.ipynb, Untitled2.ipynb
+    ├─ PURPOSE: Scratch / ad-hoc experimental notebooks
+    └─ STATUS: Not part of main pipeline. Can be archived.
+
+14. readMe.txt
+    ├─ CONTENT: Stage summary with baseline metrics
+    ├─ KEY NUMBERS:
+    │   • Model 2: Highest Accuracy (83.07%)
+    │   • Model 5: Highest Recall/Sensitivity (85.64%)
+    │   • Data split: 80/10/10 (Train/Val/Test)
+    │   • Augmentation: Random Flip, Rotation, Contrast (in-model layers)
+    │   • Regularization: 50% Dropout, L2 (in Stage_2 onward)
+    └─ REFERENCE: Baseline documentation for Stage_1
+
+---
+
+===== STAGE_2 FOLDER - K-FOLD TRAINING & EVALUATION =====
+
+15. ML1.ipynb
+    ├─ PURPOSE: Rigorous K-Fold Cross-Validation Training (IMPROVED PROTOCOL)
+    ├─ KEY IMPROVEMENTS OVER STAGE_1:
+    │   • Proper VGG-Face preprocessing (BGR conversion + mean subtraction)
+    │     Mean values: [93.5940, 104.7624, 129.1863]
+    │   • L2 regularization (l2=0.01) on Dense(256) layer
+    │   • Dropout(0.5) between Dense(256) and output
+    │   • Unfreeze last 12 backbone layers in Phase 2 (vs 4 in Stage_1)
+    │   • Data augmentation applied in pipeline (flip, rotation, contrast)
+    │   • ReduceLROnPlateau scheduler (factor=0.5, patience=3)
+    ├─ DATA SETUP:
+    │   • 10% isolated as permanent blind test set (392 images, stratified)
+    │   • Remaining 3,525 split into 5 folds: 2,820 train | 705 val per fold
+    │   • All fold paths/labels saved to disk (Folds/ directory as .npy files)
+    ├─ TRAINING PROTOCOL:
+    │   • Phase 1 (Frozen): LR=1e-4, batch=8, up to 30 epochs
+    │   • Phase 2 (Fine-tune last 12 layers): LR=1e-6, batch=8, up to 15 epochs
+    │   • Callbacks: EarlyStopping (patience=8), ReduceLROnPlateau, ModelCheckpoint
+    ├─ SAVED MODELS: fold_1_best.h5 through fold_5_best.h5
+    └─ FOLD RESULTS (peak validation accuracy per fold):
+        Fold 1: 71.63%
+        Fold 2: 74.33%
+        Fold 3: 75.60%
+        Fold 4: 77.16%  ← BEST FOLD
+        Fold 5: 71.35%
+
+16. eval1.ipynb
+    ├─ PURPOSE: K-Fold Evaluation & Best Model Assessment
+    ├─ CROSS-VALIDATION SUMMARY (all 5 folds on their val sets):
+    │   • Mean Accuracy: 74.01%  ±  2.25% (std)
+    ├─ BLIND TEST EVALUATION (Fold 4 model on 392 held-out images):
+    │   • Test Accuracy:   76.02%
+    │   • Non-Autistic:    Precision 70%, Recall 93%, F1 80%
+    │   • Autistic:        Precision 89%, Recall 59%, F1 71%
+    ├─ THRESHOLD ANALYSIS (clinical optimisation):
+    │   • Default threshold 0.50: Autistic recall only 59%
+    │   • Threshold 0.10 (recommended): recall 79.5%, precision 76.4%
+    │   • Recommended threshold justified by maximising F2-score (recall-biased)
+    │   • At 0.10: 155 true positives, 40 false negatives from 195 ASD cases
+    ├─ PREDICTION CONVENTION: predict > 0.10 → classified as Autistic
+    └─ STATUS: Evaluation complete; some later cells hit NameError (val_paths_fold
+               not defined in that kernel session) but core metrics are recorded.
+
+17. BestModelEval.ipynb
+    ├─ PURPOSE: Model Interpretability via Grad-CAM
+    ├─ METHOD: Gradient-weighted Class Activation Mapping
+    │   • Generates heatmaps showing which facial regions drive predictions
+    │   • Applied to Fold 4 best model (fold_4_best.h5)
+    ├─ OUTPUT: Heatmap overlays on infant face images
+    ├─ CLINICAL VALUE: Shows which facial features are most diagnostic for ASD
+    └─ IMPORTANCE: Required for explainable AI and clinical trust.
+
+18. predictInfants.ipynb
+    ├─ PURPOSE: Production Batch Inference Pipeline
+    ├─ MODEL: Loads fold_4_best.h5 (best performing model)
+    ├─ PREPROCESSING: VGG-Face standard (RGB→BGR, mean subtraction)
+    ├─ THRESHOLD: 0.10 (recall-optimised for clinical screening)
+    ├─ OUTPUT PER IMAGE: probability score (0-1) + binary label (Autistic/Not)
+    └─ DEPLOYMENT: Primary inference module for mobile app integration.
+
+19. selectedFold4Model.ipynb
+    ├─ PURPOSE: Deep-dive analysis of why Fold 4 outperformed other folds
+    ├─ INVESTIGATION: Data characteristics, convergence behaviour, comparison
+    └─ OUTCOME: Justification for selecting fold_4_best.h5 as production model.
+
+20. The code jumble.ipynb
+    ├─ PURPOSE: Legacy/scratch notebook with incomplete implementations
+    └─ STATUS: Not part of main pipeline. Can be archived.
+
+---
+
+===== STAGE_3 FOLDER - FEATURE EXTRACTION =====
+
+21. FeatureExtraction.ipynb
+    ├─ PURPOSE: Extract 256-D Feature Vectors from All Images
+    ├─ MODEL: Loads fold_4_best.h5
+    ├─ PREPROCESSING: VGG-Face (BGR + mean subtraction [93.59, 104.76, 129.19])
+    ├─ THRESHOLD: 0.10 used for binary classification labels
+    ├─ PROCESS: Runs single-image inference on all 3,917 images via tqdm loop
+    ├─ OUTPUT DATAFRAME COLUMNS:
+    │   • File_Name, Actual_Label, Model_Prob, Model_Pred
+    │   • V_0, V_1, ..., V_255  (256-dimensional feature vector)
+    ├─ INTENDED SAVE PATH: data/imgData/Extracted features/ImgFeatures.csv
+    ├─ KNOWN BUG: extract_features_to_dataframe() function does not return the
+    │   DataFrame (missing return statement). Bug is FIXED in Stage_4 eval.
+    └─ DOWNSTREAM USES: t-SNE/PCA visualization, ensemble modelling,
+                         combining with questionnaire features.
+
+---
+
+===== STAGE_4 FOLDER - IMPROVED K-FOLD WITH MIXED PRECISION =====
+
+MOTIVATION:
+  Stage_4 addresses two problems from Stage_2:
+    1. OOM errors during Phase 2 fine-tuning on 6GB VRAM GPU (conv2d_13
+       gradient tensor ~400MB under mixed precision)
+    2. Limited head capacity (single Dense(256)) and no BatchNorm
+
+ARCHITECTURE (improved head, same VGG-Face backbone cut point):
+  INPUT (224×224×3)
+    → VGG-Face Backbone [conv2d_14 output, frozen in Phase 1]
+    → GlobalAveragePooling2D
+    → Dense(512, relu, L2=0.001)  [named: asd_feature_vector_512]
+    → BatchNormalization
+    → Dropout(0.5)
+    → Dense(256, relu, L2=0.001)  [named: asd_feature_vector_256]
+    → Dropout(0.4)
+    → Dense(1, sigmoid, dtype=float32)  [named: classification_output]
+
+  Trainable params (head only, Phase 1): ~2,230,273
+  Mixed precision policy: mixed_float16 (output layer forced float32)
+
+KEY IMPROVEMENTS OVER STAGE_2:
+  • Mixed precision training (float16 activations, float32 accumulation)
+  • set_memory_growth(True) prevents TF pre-allocating all 6GB VRAM
+  • UNFREEZE_LAYERS=2 in Phase 2 (only conv2d_14 + activation)
+    — avoids conv2d_13 (7×7×512→4096, ~400MB gradient under fp16)
+  • LR_PHASE2=1e-6 (conservative, suitable for actual backbone weights)
+  • prefetch(1) instead of AUTOTUNE (caps dataset buffering on 6GB GPU)
+  • Full cleanup per fold: del all model/backbone/dataset/history references
+  • Two-session split: Phase 1 and Phase 2 run in separate scripts/notebooks
+    with a kernel restart in between (fully resets CUDA VRAM context)
+  • class_weight = {0: 1.0, 1: 2.0} — Autistic class gets 2× penalty
+  • StratifiedKFold (same 5-fold splits as Stage_2 reloaded from .npy files)
+
+TRAINING FILES:
+
+22. phase1_train_all_folds.ipynb  (also: phase1_train_all_folds.py)
+    ├─ PURPOSE: Phase 1 Training — Frozen Backbone, All 5 Folds
+    ├─ RUN FIRST, then restart kernel before running Phase 2
+    ├─ CONFIG: LR=1e-4, batch=16, max_epochs=35
+    │           EarlyStopping (patience=8), ReduceLROnPlateau (factor=0.5, patience=4)
+    ├─ OUTPUT: fold_1_p1_best.h5 through fold_5_p1_best.h5 (in models/)
+    │           plots/fold_{k}_p1_history.png for each fold
+    └─ RESULTS (best val_accuracy at early stopping per fold):
+        Fold 1: ~72.3%  (stopped epoch 16)
+        Fold 2: ~74.5%  (stopped epoch 35, full run)
+        Fold 3: ~75.7%  (stopped epoch 35, full run)
+        Fold 4: ~74.5%  (stopped epoch 25)
+        Fold 5: ~71.2%  (stopped epoch 26)
+
+23. phase2_finetune_all_folds.ipynb  (also: phase2_finetune_all_folds.py)
+    ├─ PURPOSE: Phase 2 Fine-tuning — Last 2 Backbone Layers, All 5 Folds
+    ├─ RUN AFTER kernel restart from Phase 1
+    ├─ CONFIG: UNFREEZE_LAYERS=2, LR=1e-6, batch=4, max_epochs=20
+    │           Loads fold_{k}_p1_best.h5 via model.load_weights()
+    │           Unfreezes only: conv2d_14 + its activation (skips conv2d_13)
+    ├─ OUTPUT PER FOLD:
+    │   • fold_{k}_p2_best.h5  (best Phase 2 checkpoint)
+    │   • fold_{k}_best.h5     (alias copy, used by eval notebook)
+    │   • plots/fold_{k}_p2_history.png
+    ├─ CV RESULTS (val set, threshold=0.5):
+    │   Fold 1: Acc=0.7135  Recall=0.6449  Precision=0.7467  F2=0.6630
+    │   Fold 2: Acc=0.7333  Recall=0.7017  Precision=0.7485  F2=0.7106
+    │   Fold 3: Acc=0.7376  Recall=0.7009  Precision=0.7546  F2=0.7110
+    │   Fold 4: Acc=0.7348  Recall=0.7322  Precision=0.7343  F2=0.7326
+    │   Fold 5: Acc=0.7078  Recall=0.7607  Precision=0.6864  F2=0.7446  ← BEST F2
+    ├─ MEAN CV SUMMARY:
+    │   Mean Accuracy : 72.54% ± 1.37%
+    │   Mean ASD Recall: 70.81% ± 4.31%
+    │   Mean F2-Score : 71.23% ± 3.12%
+    ├─ BEST MODEL: fold_5_best.h5  (selected by F2-score, not accuracy)
+    └─ SAVED TO: data/cv_results_stage4.csv + cv_results_stage4.json
+
+25. stage4_advanced_evaluation.ipynb
+    ├─ PURPOSE: Statistical analysis extending stage4_final_model_evaluation.ipynb
+    ├─ PRE-REQUISITE: stage4_final_model_evaluation.ipynb must be run first
+    │
+    ├─ SECTION 1 — Per-Fold Blind Test Summary (all 5 folds, t=0.50):
+    │   Fold 1: AUC=0.7141  Recall=0.4462  F1=0.5404  F2=0.4796  Acc=0.6224
+    │   Fold 2: AUC=0.7362  Recall=0.4821  F1=0.5749  F2=0.5154  Acc=0.6454
+    │   Fold 3: AUC=0.7370  Recall=0.4872  F1=0.5810  F2=0.5208  Acc=0.6505
+    │   Fold 4: AUC=0.7446  Recall=0.5231  F1=0.6000  F2=0.5514  Acc=0.6531
+    │   Fold 5: AUC=0.7626  Recall=0.5385  F1=0.6195  F2=0.5682  Acc=0.6709  ← BEST
+    │   NOTE: 118 non-finite (NaN/Inf) predictions per fold replaced with 0.5
+    │
+    ├─ SECTION 2 — Dual-Threshold Comparison (Fold 5, F2-optimal t=0.06):
+    │   Threshold   Acc     Prec    Recall  Spec    F1      F2      AUC
+    │   t=0.50     0.6709  0.7292  0.5385  0.8020  0.6195  0.5682  0.7626
+    │   t=0.06     0.6250  0.5723  0.9744  0.2792  0.7211  0.8543  0.7626
+    │   Confusion at t=0.50:  TP=105  TN=158  FP=39  FN=90
+    │   Confusion at t=0.06:  TP=190  TN=55   FP=142 FN=5
+    │
+    ├─ SECTION 3 — Bootstrap 95% CI (n=392, B=2000 iterations, Fold 5):
+    │   Metric               Estimate   95% CI Lower  95% CI Upper
+    │   AUC-ROC              0.7626     0.7178        0.8044
+    │   Accuracy (t=0.50)    0.6709     0.6249        0.7143
+    │   Precision (t=0.50)   0.7292     0.6571        0.7968
+    │   Recall    (t=0.50)   0.5385     0.4660        0.6033
+    │   F1        (t=0.50)   0.6195     0.5556        0.6743
+    │   Recall    (t=0.06)   0.9744     0.9519        0.9948
+    │   Saved: plots/bootstrap_confidence_intervals.png
+    │
+    ├─ SECTION 4 — Probability Calibration (Fold 5, 10-bin uniform):
+    │   Brier Score : 0.2111  (acceptable; < 0.25 threshold)
+    │   ECE         : 0.0982  (good; < 0.10 threshold)
+    │   Saved: plots/calibration_analysis.png (reliability diagram + prob histogram)
+    │
+    ├─ SECTION 5 — Ensemble vs Single-Best (all thresholds, blind test):
+    │   Model                   t       Acc     Prec    Recall  Spec    F1      F2      AUC
+    │   Single Best (Fold 5)   0.50   0.6709  0.7292  0.5385  0.8020  0.6195  0.5682  0.7626
+    │   Single Best (Fold 5)   0.06   0.6250  0.5723  0.9744  0.2792  0.7211  0.8543  0.7626
+    │   Ensemble (5-fold avg)  0.50   0.6684  0.7444  0.5077  0.8274  0.6037  0.5422  0.7641
+    │   Ensemble (5-fold avg)  0.06   0.5791  0.5424  0.9846  0.1777  0.6995  0.8466  0.7641
+    │   AUC improvement (ensemble − single): +0.0015
+    │   Ensemble AUC CI: 0.7641 [0.7194, 0.8059]
+    │   Ensemble Recall CI (t=0.50): 0.5077 [0.4343, 0.5714]
+    │   Saved: plots/roc_single_vs_ensemble.png
+    │
+    ├─ SECTION 6 — Embedding Quality — Quantitative (256-D):
+    │   Euclidean distance between class centroids : 5.5607
+    │   Cosine distance between class centroids    : 0.0645
+    │   Mean intra-class distance — ASD            : 19.8344
+    │   Mean intra-class distance — Non-ASD        : 18.7774
+    │   Fisher-like ratio (inter/intra)            : 0.2880  (< 1.0, classes overlap)
+    │   Logistic Regression on 256-D (5-fold CV)   : AUC=0.8593  Acc=0.7769
+    │     → LR AUC > NN blind-test AUC (0.7626) confirms embeddings carry
+    │       strong discriminative signal beyond the neural network head.
+    │   Saved: plots/roc_nn_vs_logreg_embeddings.png
+    │   t-SNE (recomputed): Silhouette 256-D=0.0173, 2-D=0.1271, KL=2.2687
+    │
+    └─ OUTPUTS: All plots saved to Stage_4/plots/
+
+26. tsne_embedding_visualization.ipynb
+    ├─ PURPOSE: Visual and quantitative analysis of 256-D feature embeddings
+    ├─ INPUT: data/ImgFeatures_Stage4.csv (3,917 rows × 260 cols)
+    │   Columns: File_Name, Actual_Label, Model_Prob, Model_Pred, V_0…V_255
+    │   Label distribution: Non-Autistic=1965, Autistic=1952  (balanced)
+    │   Data quality: 0 NaN rows, 0 Inf rows — no filtering required
+    │
+    ├─ PREPROCESSING: StandardScaler applied to all 256 feature columns
+    │   (mean≈0, std≈1 confirmed after scaling)
+    │
+    ├─ t-SNE SETTINGS (main run):
+    │   n_components=2, perplexity=40, max_iter=1000
+    │   learning_rate='auto', init='pca', random_state=42
+    │   Final KL divergence: 2.2687
+    │
+    ├─ PLOTS GENERATED:
+    │   • tsne_by_class.png       — 2-D scatter coloured by ASD/Non-ASD label
+    │   • tsne_by_probability.png — 2-D scatter coloured by model output probability
+    │     (RdYlBu_r colormap: blue=low ASD prob, red=high ASD prob)
+    │   • tsne_perplexity_sensitivity.png — 3-panel comparison at perp=10, 30, 50
+    │
+    ├─ SILHOUETTE SCORES (n=2000 subsample):
+    │   256-D space : 0.0173  ← weak/overlapping clusters (expected for subtle ASD signal)
+    │   2-D t-SNE   : 0.1271  ← 2-D projection enhances apparent cluster geometry
+    │   NOTE: 2-D > 256-D indicates t-SNE preserves/amplifies local structure;
+    │         true high-dimensional separation is confirmed by LogReg AUC (0.86).
+    │
+    ├─ PERPLEXITY SENSITIVITY (p=10, 30, 50):
+    │   Cluster structure is consistent across all three perplexity settings,
+    │   confirming the observed partial separation is real, not a t-SNE artifact.
+    │
+    └─ INTERPRETATION:
+       The embeddings show partial class separation in 2-D (soft boundaries,
+       overlapping clusters). This is the expected pattern for ASD detection
+       from facial images where the visual signal is subtle. The low silhouette
+       score in 256-D (0.0173) combined with high LogReg AUC (0.8593) indicates
+       that discriminative structure exists in the high-dimensional space but
+       does not project cleanly to 2-D — the representation is informative
+       across many weakly-discriminative dimensions rather than a few dominant axes.
+       This supports the validity of using the 256-D vectors for multi-modal fusion.
+
+24. stage4_final_model_evaluation.ipynb
+    ├─ PURPOSE: Comprehensive blind test evaluation, threshold analysis,
+    │            ROC curves, Grad-CAM, feature extraction, Stage 2 comparison
+    ├─ BLIND TEST SET: 392 images (Autistic=195, Non_Autistic=197)
+    │
+    ├─ SECTION 1 — Per-Fold Blind Test Evaluation (all 5 folds):
+    │   Runs inference on blind test set for each fold, reports F2.
+    │
+    ├─ SECTION 2 — Threshold Analysis (Fold 5, best model):
+    │   Sweeps threshold 0.05–0.95, optimises by F2-score (recall-biased).
+    │   KEY RESULT:
+    │     Optimal threshold = 0.05
+    │     ASD Recall  @0.05: 97.4%  ← Near-perfect screening sensitivity
+    │     ASD Recall  @0.50: 53.8%  (default)
+    │     ASD Precision @0.05: ~57%
+    │
+    ├─ SECTION 3 — ROC Curves (all 5 folds, blind test):
+    │   Mean AUC = 0.7389 ± 0.0156
+    │   Fold 5 AUC = 0.7626  (BEST)
+    │   Fold 1 AUC = 0.7141  (weakest)
+    │
+    ├─ SECTION 4 — Confusion Matrix (Fold 5, threshold=0.5, blind test):
+    │   TP=105, TN=158, FP=39, FN=90
+    │   Non-Autistic specificity: 80.2%  (158/197)
+    │   Autistic sensitivity:     53.8%  (105/195) at default threshold
+    │   → Lowering to 0.05 raises ASD sensitivity to 97.4%
+    │
+    ├─ SECTION 5 — Grad-CAM (Fold 5, conv2d_14 target layer):
+    │   Autistic predictions: activation concentrated on central face
+    │     (eyes, periorbital area, nose bridge). Confidence 0.538–1.000.
+    │   Non-Autistic predictions: diffuse/low activation, probability 0.011–0.025.
+    │   Saved: plots/gradcam_autistic.png, plots/gradcam_non_autistic.png
+    │
+    ├─ SECTION 6 — Feature Extraction (256-D vectors, all 3,917 images):
+    │   Uses sub-model: inputs → asd_feature_vector_256 layer output
+    │   Saved to: data/ImgFeatures_Stage4.csv
+    │   Fixes the Stage_3 bug (missing return statement — corrected here).
+    │
+    └─ SECTION 7 — Stage 2 vs Stage 4 Comparison:
+        Metric                  Stage 2    Stage 4
+        ──────────────────────────────────────────
+        Blind Test Accuracy     76.0%      67.1%
+        ASD Recall (thresh=0.5) 59.0%      53.8%
+        ASD Recall (thresh=opt) 79.5%      97.4%   ← Stage 4 wins decisively
+        Mean CV Accuracy        74.0%      64.8%*
+        ──────────────────────────────────────────
+        * Note: The comparison chart uses blind test accuracy for Stage 4
+          (67.1%), not the CV mean (72.5%). Stage 4's core advantage is the
+          dramatically higher recall at a lowered clinical threshold.
+        Saved: plots/stage2_vs_stage4_comparison.png
+
+================================================================================
+                    STAGE 2: QUESTIONNAIRE-BASED ANALYSIS
+================================================================================
+
+===== Q-CHAT-10 FOLDER - QUESTIONNAIRE ML MODELS =====
+
+Q-CHAT-10 = Quantitative Checklist for Autism in Toddlers
+10 binary questions assessing autism indicators in children aged 18-36 months.
+
+25. Q01.ipynb
+    ├─ PURPOSE: Q-CHAT-10 Dataset #1 Cleaning & EDA
+    ├─ DATA SOURCE: "Autism Dataset for Toddlers" (CSV)
+    ├─ CLEANING: Missing values, duplicates, IQR outlier removal on age & scores
+    ├─ EDA: Boxplots, histograms, skewness analysis, summary statistics
+    ├─ STRUCTURE: Binary questions A1-A10, age, total Q-CHAT-10 score, label
+    └─ OUTPUT: Clean CSV for model training.
+
+26. Q02.ipynb
+    ├─ PURPOSE: Q-CHAT-10 Dataset #2 Cleaning & EDA
+    ├─ DATA SOURCE: "Children_ASD.csv" (alternative dataset)
+    ├─ CLEANING: Remove irrelevant columns, standardise age to months,
+    │            IQR outlier removal
+    └─ OUTPUT: Harmonised clean CSV matching Q01 format.
+
+27. QM.ipynb
+    ├─ PURPOSE: Train 4 Classical ML Classifiers on Q-CHAT-10 Data
+    ├─ ALGORITHMS:
+    │   1. Logistic Regression  (linear baseline)
+    │   2. Random Forest        (ensemble, feature importance)
+    │   3. XGBoost              (gradient boosting, handles imbalance)
+    │   4. SVM                  (hyperplane classifier)
+    ├─ EVALUATION: 5-fold cross-validation, reports mean ± std for all metrics
+    ├─ METRICS: Accuracy, Precision, Recall, F1-Score, ROC-AUC
+    ├─ FEATURE IMPORTANCE: Identifies most predictive Q-CHAT-10 questions
+    └─ FINDING: Random Forest typically identifies the most predictive items.
+
+28. QM1.ipynb
+    ├─ PURPOSE: K-Fold Ensemble Learning on Q-CHAT-10
+    ├─ METHODOLOGY: Stratified k-fold, train per fold, ensemble predictions
+    └─ USE CASE: Production-ready questionnaire-based autism detector.
+
+---
+
+===== STAGE_0 FOLDER - COMBINED DATASET TRAINING =====
+
+29. Stage_0/combine_datasets.ipynb
+    ├─ PURPOSE: Multi-source dataset fusion (5 CSV/ARFF datasets)
+    ├─ OUTPUT: pre_processed_data_combined.csv (7530 rows × 16 cols)
+    ├─ Class balance: Non-ASD 58.6% | ASD 41.4%
+    └─ Details: see sector2/SUMMARY.txt notebook #5
+
+30. Stage_0/qchat_model_training.ipynb  [BASELINE — 15 feat, all 7530 rows]
+    ├─ PURPOSE: Full training & evaluation pipeline on combined 7530-row dataset
+    ├─ INPUT: pre_processed_data_combined.csv (15 features + 1 target)
+    ├─ SPLIT: Stratified 80/20 → Train 6024 | Test 1506 rows
+    ├─ MODELS: 4 classifiers with 5-fold Stratified CV (LR, RF, XGBoost, SVM)
+    ├─ BEST MODEL: XGBoost
+    │   • Test Accuracy : 94.56%
+    │   • Test Recall   : 95.51%
+    │   • Test F1       : 93.55%
+    │   • Test ROC-AUC  : 98.06%
+    │   • Brier Score   : 0.0448  (excellent calibration)
+    │   • ECE           : 0.0244  (excellent calibration)
+    ├─ CV SUMMARY (XGBoost): Acc=93.34% ± 0.40%  ROC-AUC=97.73% ± 0.10%
+    ├─ FINAL MODEL: Retrained on all 7530 rows
+    │   Saved: Stage_0/models/xgboost_qchat_combined.pkl  (406.1 KB)
+    │   Saved: Stage_0/models/qchat_feature_columns.pkl   (0.2 KB)
+    ├─ SHAP ANALYSIS: shap.Explainer (XGBoost 2.x compatible) — generated successfully
+    │   → Stage_0/plots/shap_summary_qchat.png  (beeswarm, 15 features)
+    │   → Stage_0/plots/shap_bar_qchat.png      (mean |SHAP| bar chart)
+    └─ OUTPUTS: results/, plots/, models/, data/ under Stage_0/
+
+31. Stage_1/qchat_model_training.ipynb  [ABLATION — 12 feat, Who cols removed, all rows]
+    ├─ PURPOSE: Quantify the contribution of Who_completed_the_test_* features
+    ├─ KEY CHANGE: Drop 3 OHE Who columns; 12 features remain (A1–A10, Sex_M, Family_ASD)
+    ├─ POPULATION: All 7530 rows (train 6024 | test 1506) — unchanged
+    ├─ SHAP FIX: shap.Explainer(model, X) instead of TreeExplainer (XGBoost 2.x compat)
+    ├─ BEST MODEL: XGBoost
+    │   • Test Accuracy : 83.27%  (↓ 11.3% from Stage_0 — Who cols encoded pop context)
+    │   • Test Recall   : 81.38%
+    │   • Test F1       : 80.09%
+    │   • Test ROC-AUC  : 91.51%
+    │   • Brier Score   : 0.1172  (degraded calibration)
+    │   • ECE           : 0.0527
+    ├─ CV SUMMARY (XGBoost): Acc=84.59% ± 0.83%  ROC-AUC=91.26% ± 0.61%
+    ├─ TOP SHAP FEATURES: A6 (A1–A10 questions dominate), A10, A5, A1, A4
+    ├─ INTERPRETATION: Drop exposed that "Others"/self-friends (70% of rows, 29.6% ASD)
+    │   dominated training and acted as noise; Who cols encoded this bias.
+    ├─ FINAL MODEL: Saved to Stage_1/models/xgboost_qchat_stage1.pkl
+    └─ OUTPUTS: results/stage_comparison.csv, plots/ under Stage_1/
+
+32. Stage_2/qchat_model_training.ipynb  [PRODUCTION — parent-only, 12 feat]
+    ├─ PURPOSE: Deployment-realistic model trained on app target population only
+    ├─ KEY CHANGE: Filter to Family Member rows (OHE reference = all Who cols = 0)
+    ├─ POPULATION ANALYSIS (pre-filter):
+    │   • Family Member (parent/relative): 1838 rows | ASD rate 68.5%  ← KEPT
+    │   • Others (self/friends):           5240 rows | ASD rate 29.6%  ← EXCLUDED
+    │   • Health Care Professional:          290 rows | ASD rate 67.5%  ← EXCLUDED
+    │   • School and NGO:                    162 rows | ASD rate  8.6%  ← EXCLUDED
+    ├─ FILTERED DATASET: 1838 rows (24.4% of 7530); 12 features; ASD rate 68.5%
+    ├─ SPLIT: Stratified 80/20 → Train 1470 | Test 368 rows
+    ├─ BEST MODEL: XGBoost
+    │   • Test Accuracy : 96.20%  (best across all three stages)
+    │   • Test Precision: 96.48%
+    │   • Test Recall   : 98.02%  (near-perfect ASD detection)
+    │   • Test F1       : 97.24%
+    │   • Test ROC-AUC  : 97.69%
+    │   • Brier Score   : 0.0380  (excellent calibration)
+    │   • ECE           : 0.0382
+    ├─ CV SUMMARY (XGBoost): Acc=93.33% ± 1.07%  ROC-AUC=97.33% ± 0.48%
+    ├─ TOP SHAP FEATURES: A4 (joint attention pointing, DSM-5 A2), A6, A10, A1, A5
+    │   Note: A4 displaces A6 as top feature vs Stage_1 — parent reporters
+    │   are more reliable raters of joint attention behaviours.
+    ├─ FINAL MODEL: Saved to Stage_2/models/xgboost_qchat_stage2.pkl
+    └─ OUTPUTS: results/stage_comparison.csv, plots/ under Stage_2/
+
+---
+
+3-STAGE RESEARCH NARRATIVE:
+  Stage_0 [BASELINE]  → Acc=94.56%  — inflated by Who feature + HCP referral bias
+  Stage_1 [ABLATION]  → Acc=83.27%  — -11.3% quantifies the Who-feature bias
+  Stage_2 [PRODUCTION]→ Acc=96.20%  — parent-only population, deployment-honest
+
+---
+
+===== COMBINE FOLDER - INTEGRATION LAYER =====
+
+33. combine/ [Directory - NOT YET IMPLEMENTED]
+    ├─ PURPOSE: Ensemble combining facial + questionnaire predictions
+    ├─ PLANNED APPROACH:
+    │   • Weighted ensemble / majority voting
+    │   • Feature concatenation of 256-D image vectors + questionnaire features
+    │   • Meta-classifier (stacking) on both modalities' outputs
+    ├─ STATUS: Empty / placeholder - highest priority future work
+    └─ BENEFIT: Multi-modal fusion expected to significantly improve robustness.
+
+================================================================================
+                         SYSTEM WORKFLOW (ACTUAL DATA FLOW)
+================================================================================
+
+RAW INFANT PHOTOS
+       │
+       ├──► prep1.ipynb (MTCNN face crop, 10% margin) ──► step1/
+       │
+       └──► augment1.ipynb (6 augmentation techniques) ──► step2/
+                                    │
+                    step3/ = merge of step1/ + step2/
+                                    │
+                           prep2.ipynb (MD5 dedup) ──► step4/  [3,917 images]
+                                    │
+                           changeName.ipynb (rename 0.jpg, 1.jpg...)
+                                    │
+                    ┌───────────────┴────────────────────────────┐
+                    ▼                                            ▼
+              STAGE_1 (simple split)                   Q-CHAT-10 Pipeline
+              model1 → model5                          Q01/Q02 data cleaning
+              (80/10/10 split)                         QM/QM1 ML training
+                    │                                            │
+              mc1-mc5 (evaluation)                Q-CHAT-10 predictions
+                    │                                            │
+              STAGE_2 (K-Fold)                          [combine/] (future)
+              ML1.ipynb (5 folds)                               │
+              fold_4_best.h5 ← production         Ensemble/meta-model
+                    │                                   for clinical use
+              eval1.ipynb
+              Blind test: Fold 4 → 76.02% acc, 79.5% ASD recall @0.10
+                    │
+              BestModelEval (Grad-CAM)
+              predictInfants (production inference, threshold=0.10)
+                    │
+              STAGE_3: FeatureExtraction (256-D vectors — has known bug)
+                    │
+              STAGE_4 (Improved K-Fold + Mixed Precision)
+                    │
+              phase1_train_all_folds.ipynb (frozen backbone, all 5 folds)
+              → fold_{k}_p1_best.h5
+                    │  [kernel restart — VRAM fully reset]
+                    │
+              phase2_finetune_all_folds.ipynb (unfreeze last 2 layers)
+              → fold_{k}_best.h5
+              Best model: fold_5_best.h5 (F2=0.7446, ASD Recall=76.1%)
+                    │
+              stage4_final_model_evaluation.ipynb
+              → Blind test | ROC | Threshold | Grad-CAM | Feature extraction
+              → ImgFeatures_Stage4.csv (256-D, all 3,917 images — bug FIXED)
+              → ASD Recall @0.05 threshold: 97.4%
+
+================================================================================
+                       CONFIRMED PERFORMANCE METRICS
+================================================================================
+
+STAGE_1 - SIMPLE SPLIT MODELS (80/10/10, threshold=0.5):
+  Model 1:  Accuracy 82.29% | Precision 80.61% | Recall 84.04% | F1 82.29%
+  Model 2:  Accuracy 83.07%  ← Highest accuracy in Stage_1
+  Model 5:  Recall  85.64%   ← Highest recall/sensitivity in Stage_1
+
+STAGE_2 - K-FOLD CROSS-VALIDATION (val set, threshold=0.5):
+  Fold 1: 71.63%
+  Fold 2: 74.33%
+  Fold 3: 75.60%
+  Fold 4: 77.16%  ← Best fold → production model
+  Fold 5: 71.35%
+  Mean Cross-Val Accuracy: 74.01% ± 2.25%
+
+STAGE_2 - BLIND TEST SET (392 images, Fold 4 model, threshold=0.5):
+  Overall Accuracy: 76.02%
+  Non-Autistic: Precision 70%, Recall 93%, F1 80%
+  Autistic:     Precision 89%, Recall 59%, F1 71%
+
+STAGE_2 - THRESHOLD OPTIMISATION (clinical, F2-score maximised):
+  Recommended threshold: 0.10
+  At threshold=0.10: ASD Recall ~79.5%, Precision ~76.4%
+
+STAGE_4 - K-FOLD CROSS-VALIDATION (val set, threshold=0.5):
+  Fold 1: Acc=71.35%  Recall=64.49%  Precision=74.67%  F2=66.30%
+  Fold 2: Acc=73.33%  Recall=70.17%  Precision=74.85%  F2=71.06%
+  Fold 3: Acc=73.76%  Recall=70.09%  Precision=75.46%  F2=71.10%
+  Fold 4: Acc=73.48%  Recall=73.22%  Precision=73.43%  F2=73.26%
+  Fold 5: Acc=70.78%  Recall=76.07%  Precision=68.64%  F2=74.46%  ← BEST F2
+  Mean Accuracy : 72.54% ± 1.37%
+  Mean ASD Recall: 70.81% ± 4.31%
+  Mean F2-Score : 71.23% ± 3.12%
+
+STAGE_4 - BLIND TEST SET (392 images, Fold 5 model):
+  Threshold=0.50: Accuracy 67.1% | ASD Recall 53.8% | Specificity 80.2%
+                  Confusion: TP=105, TN=158, FP=39, FN=90
+  Threshold=0.05: ASD Recall 97.4%  ← Clinical screening optimum
+  Mean AUC (all folds): 0.7389 ± 0.0156
+  Best AUC (Fold 5):    0.7626
+
+STAGE_4 - ADVANCED EVALUATION (stage4_advanced_evaluation.ipynb, Fold 5 best model):
+
+  Bootstrap 95% CI (n=392, B=2000):
+    AUC-ROC              : 0.7626  [0.7178, 0.8044]
+    Accuracy   (t=0.50)  : 0.6709  [0.6249, 0.7143]
+    Precision  (t=0.50)  : 0.7292  [0.6571, 0.7968]
+    Recall     (t=0.50)  : 0.5385  [0.4660, 0.6033]
+    F1         (t=0.50)  : 0.6195  [0.5556, 0.6743]
+    Recall     (t=0.06)  : 0.9744  [0.9519, 0.9948]
+
+  Calibration (Fold 5):
+    Brier Score : 0.2111  (acceptable, < 0.25)
+    ECE         : 0.0982  (good, < 0.10)
+
+  Ensemble (5-fold avg) vs Single Best (Fold 5) at t=0.50:
+    Single:   AUC=0.7626  Recall=0.5385  Spec=0.8020
+    Ensemble: AUC=0.7641  Recall=0.5077  Spec=0.8274  (+0.0015 AUC)
+    Ensemble AUC 95% CI: [0.7194, 0.8059]
+
+  Embedding Quality (256-D, all 3,917 images):
+    Euclidean centroid distance  : 5.5607
+    Cosine centroid distance     : 0.0645
+    Fisher-like ratio            : 0.2880  (< 1.0, significant intra-class spread)
+    LogReg on 256-D (5-fold CV)  : AUC=0.8593  Acc=77.69%  Prec=77.81%  Recall=77.25%
+
+STAGE_4 - t-SNE EMBEDDING VISUALIZATION (tsne_embedding_visualization.ipynb):
+  Silhouette Score (256-D, n=2000) : 0.0173  (weak, < 0.25 threshold)
+  Silhouette Score (2-D t-SNE)     : 0.1271
+  t-SNE KL Divergence              : 2.2687  (perplexity=40, max_iter=1000)
+  Perplexity sensitivity           : Consistent at p=10, 30, 50 — structure is real
+  Key insight: Discriminative structure is spread across many 256-D dimensions
+               (confirmed by LogReg AUC=0.86); does not compress to 2-D well.
+  Plots: tsne_by_class.png, tsne_by_probability.png, tsne_perplexity_sensitivity.png
+
+STAGE_4 vs STAGE_2 KEY COMPARISON:
+  ASD Recall @threshold=0.5:  Stage 2=59.0%  →  Stage 4=53.8%  (lower)
+  ASD Recall @optimal thresh: Stage 2=79.5%  →  Stage 4=97.4%  (much higher)
+  The trade-off: Stage 4 achieves near-complete screening sensitivity at
+  a low threshold, making it superior for clinical use where missing an
+  ASD case is far more costly than a false alarm.
+
+================================================================================
+                    TECHNOLOGY STACK & DEPENDENCIES
+================================================================================
+
+DEEP LEARNING:
+  TensorFlow 2.10.0 / Keras  - model training and inference
+  VGG-Face (via DeepFace 0.0.96) - pre-trained facial recognition backbone
+  DeepFace - face processing utilities
+  MTCNN - face detection in preprocessing
+  Mixed Precision (mixed_float16) - Stage_4 only, requires compute capability ≥7.0
+
+MACHINE LEARNING:
+  Scikit-Learn  - metrics, cross-validation, Logistic Regression, SVM
+  XGBoost       - gradient boosting for Q-CHAT-10 pipeline
+  Random Forest - ensemble method for Q-CHAT-10
+
+DATA PROCESSING:
+  NumPy, Pandas    - arrays and dataframes
+  OpenCV, Pillow   - image loading and augmentation
+  tqdm             - progress bars in feature extraction
+
+VISUALIZATION & EXPLAINABILITY:
+  Matplotlib, Seaborn  - plots and confusion matrices
+  Grad-CAM             - attention heatmaps (target layer: conv2d_14)
+  t-SNE (sklearn)      - 256-D feature space visualisation
+
+ENVIRONMENT:
+  Python 3.10.19 (Anaconda)
+  GPU: NVIDIA GeForce RTX 3050 6GB Laptop GPU (compute capability 8.6)
+  CUDA-enabled; set_memory_growth=True required to avoid VRAM pre-allocation
+
+================================================================================
+                         KNOWN ISSUES & BUGS
+================================================================================
+
+1. FeatureExtraction.ipynb (Stage_3):
+   ISSUE: extract_features_to_dataframe() does not return the DataFrame
+   (missing return statement), causing AttributeError on .to_csv().
+   STATUS: FIXED in stage4_final_model_evaluation.ipynb (Section 6).
+   Stage_4 version produces ImgFeatures_Stage4.csv correctly.
+
+2. eval1.ipynb (Stage_2):
+   ISSUE: Later cells fail with NameError: val_paths_fold not defined.
+   These cells require ML1.ipynb variables to be in the same kernel session.
+   The core fold accuracy and blind test evaluation ARE complete and recorded.
+
+3. Stage_1 preprocessing mismatch:
+   Stage_1 (model1-5) uses simple pixel normalisation (÷ 255).
+   Stage_2 and Stage_4 use proper VGG-Face preprocessing (BGR + mean subtraction).
+   VGG-Face was trained on BGR mean-subtracted images, so Stage_2/4 are
+   methodologically more correct. Stage_1 results may be slightly affected.
+
+4. Stage 4 comparison chart (stage4_final_model_evaluation.ipynb, Section 7):
+   The 'Fine-tune layers' field in the comparison table is hardcoded as
+   'Last 16' (copied from Stage 2). Correct value is 'Last 2'.
+
+================================================================================
+                      FUTURE DEVELOPMENT PRIORITIES
+================================================================================
+
+1. IMPLEMENT combine/ FOLDER (HIGH)
+   → Ensemble facial predictions (Stage_4) + Q-CHAT-10 predictions
+   → Multi-modal fusion should significantly improve robustness.
+   → Can leverage ImgFeatures_Stage4.csv for feature concatenation.
+
+2. MOBILE APP INTEGRATION (HIGH)
+   → Deploy Stage_4 Fold 5 model with threshold=0.05 for clinical screening
+   → Real-time camera-based inference via REST API.
+
+3. FIX COMPARISON TABLE BUG (LOW)
+   → stage4_final_model_evaluation.ipynb Section 7: change 'Fine-tune layers'
+     from 'Last 16' to 'Last 2' for accurate Stage 4 representation.
+
+4. REAL-WORLD VALIDATION (LONG-TERM)
+   → Test on diverse ethnicities, lighting conditions, image qualities
+   → Validate Grad-CAM explanations with clinical experts.
+
+5. DATASET EXPANSION (LONG-TERM)
+   → More diverse autism samples for better generalisation
+   → Longitudinal data for developmental tracking.
+
+================================================================================
+                           CONCLUSION
+================================================================================
+
+The autisumDetect system is a multi-stage ASD detection framework using:
+  ✓ MTCNN face detection → MD5 deduplication → 6-technique augmentation
+  ✓ VGG-Face transfer learning with improved head (512→256→1 + BatchNorm)
+  ✓ Two-phase training (frozen backbone → partial fine-tuning, last 2 layers)
+  ✓ Mixed precision (float16) + memory growth for stable 6GB VRAM training
+  ✓ 5-fold stratified cross-validation with permanent blind test set
+  ✓ Threshold optimisation for clinical sensitivity (0.05 recommended Stage_4)
+  ✓ Grad-CAM model explainability (attending correctly to periorbital region)
+  ✓ 256-D feature extraction (ImgFeatures_Stage4.csv, bug fixed)
+  ✓ Advanced statistical evaluation (bootstrap CI, calibration, ensemble analysis)
+  ✓ t-SNE embedding visualization with perplexity sensitivity check
+  ✓ Logistic regression probe confirming embedding discriminability (AUC=0.86)
+  ✓ Parallel Q-CHAT-10 questionnaire pipeline
+  ✗ Multi-modal integration (combine/) NOT YET IMPLEMENTED
+
+Best Stage_4 model (Fold 5): F2=0.7446 (CV), AUC=0.7626 [0.7178, 0.8044] (blind test)
+  → ASD Recall @0.06 threshold: 97.44% [0.9519, 0.9948]  ← primary clinical metric
+  → Brier Score: 0.2111 | ECE: 0.0982 (well-calibrated)
+  → Ensemble AUC: 0.7641 (marginal gain over single best)
+Best Stage_2 model (Fold 4): 76.02% blind test accuracy, 79.5% ASD recall @0.10
+
+Current status:
+  Facial pipeline (Stage_4):    Complete and evaluated
+  Questionnaire pipeline:       Complete — production model at Stage_2
+                                (parent-only, XGBoost: 96.20% acc, 98.02% ASD recall)
+  Integration layer:            Pending (combine/ not implemented)
+
+================================================================================
+                       END OF SUMMARY DOCUMENT
+================================================================================

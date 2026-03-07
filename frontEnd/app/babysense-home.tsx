@@ -131,6 +131,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xxl,
   },
+  
   appTitle: {
     fontSize: Typography.sizes.heading,
     fontWeight: Typography.weights.bold,

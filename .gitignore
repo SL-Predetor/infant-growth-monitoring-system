@@ -73,3 +73,13 @@ temp/
 *.tmp
 *.bak
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Large ML model weights (too large for git)
+*.h5
+
+# Accidental Windows device file
+nul

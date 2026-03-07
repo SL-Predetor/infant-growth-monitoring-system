@@ -14,8 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
 // --- CONFIGURATION ---
 const BASE_URL = 'http://localhost:8000';
@@ -33,9 +32,6 @@ interface RecordingState {
 
 export default function CryTranslatorScreen() {
   const [mode, setMode] = useState<'audio' | 'face'>('audio');
-  const colorScheme = useColorScheme() ?? 'light';
-  const themeColors = Colors[colorScheme];
-
   const [state, setState] = useState<RecordingState>({
     recording: null,
     audioUri: null,
@@ -44,6 +40,13 @@ export default function CryTranslatorScreen() {
     result: null,
     loading: false,
   });
+
+  const borderColor = useThemeColor(
+    { light: 'rgba(0,0,0,0.05)', dark: 'rgba(255,255,255,0.1)' },
+    'background'
+  );
+  const activeTabColor = '#4ECDC4';
+  const inactiveTabColor = '#ccc';
 
   // ==============================
   // 🎵 AUDIO LOGIC
@@ -214,13 +217,13 @@ export default function CryTranslatorScreen() {
           <Pressable
             style={[
               styles.modeButton,
-              mode === 'audio' && { backgroundColor: themeColors.primary },
+              mode === 'audio' && styles.modeButtonActive,
             ]}
             onPress={() => setMode('audio')}
           >
             <ThemedText
               style={{
-                color: mode === 'audio' ? '#fff' : themeColors.secondaryText,
+                color: mode === 'audio' ? '#fff' : '#999',
                 fontWeight: '600',
               }}
             >
@@ -230,13 +233,13 @@ export default function CryTranslatorScreen() {
           <Pressable
             style={[
               styles.modeButton,
-              mode === 'face' && { backgroundColor: themeColors.primary },
+              mode === 'face' && styles.modeButtonActive,
             ]}
             onPress={() => setMode('face')}
           >
             <ThemedText
               style={{
-                color: mode === 'face' ? '#fff' : themeColors.secondaryText,
+                color: mode === 'face' ? '#fff' : '#999',
                 fontWeight: '600',
               }}
             >
@@ -255,7 +258,7 @@ export default function CryTranslatorScreen() {
             <Pressable
               style={[
                 styles.button,
-                { backgroundColor: state.recording ? themeColors.error : themeColors.primary },
+                { backgroundColor: state.recording ? '#ff4444' : '#4ECDC4' },
               ]}
               onPress={state.recording ? stopRecording : startRecording}
             >
@@ -268,7 +271,7 @@ export default function CryTranslatorScreen() {
 
             {state.audioUri && (
               <Pressable
-                style={[styles.button, { backgroundColor: themeColors.warning }]}
+                style={[styles.button, { backgroundColor: '#FFE66D' }]}
                 onPress={playRecording}
               >
                 <ThemedText style={styles.buttonText}>▶ Play Audio</ThemedText>
@@ -279,7 +282,7 @@ export default function CryTranslatorScreen() {
               style={[
                 styles.button,
                 {
-                  backgroundColor: state.audioUri ? themeColors.secondary : '#ccc',
+                  backgroundColor: state.audioUri ? '#007AFF' : '#ccc',
                   opacity: state.audioUri ? 1 : 0.5,
                 },
               ]}
@@ -312,7 +315,7 @@ export default function CryTranslatorScreen() {
             )}
 
             <Pressable
-              style={[styles.button, { backgroundColor: themeColors.primary }]}
+              style={[styles.button, { backgroundColor: '#4ECDC4' }]}
               onPress={() => pickImage(true)}
             >
               <ThemedText style={styles.buttonText}>
@@ -321,7 +324,7 @@ export default function CryTranslatorScreen() {
             </Pressable>
 
             <Pressable
-              style={[styles.button, { backgroundColor: themeColors.warning }]}
+              style={[styles.button, { backgroundColor: '#FFE66D' }]}
               onPress={() => pickImage(false)}
             >
               <ThemedText style={styles.buttonText}>
@@ -333,7 +336,7 @@ export default function CryTranslatorScreen() {
               style={[
                 styles.button,
                 {
-                  backgroundColor: state.faceUri ? themeColors.secondary : '#ccc',
+                  backgroundColor: state.faceUri ? '#007AFF' : '#ccc',
                   opacity: state.faceUri ? 1 : 0.5,
                 },
               ]}
@@ -365,7 +368,7 @@ export default function CryTranslatorScreen() {
 
         {state.loading && mode === 'audio' && !state.result && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={themeColors.primary} />
+            <ActivityIndicator size="large" color="#4ECDC4" />
             <ThemedText style={styles.loadingText}>
               Analyzing audio...
             </ThemedText>
@@ -400,6 +403,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     alignItems: 'center',
   },
+  modeButtonActive: {
+    backgroundColor: '#4ECDC4',
+  },
   section: {
     marginBottom: 24,
   },
@@ -432,6 +438,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
+    borderColor: '#4ECDC4',
   },
   resultText: {
     fontSize: 12,

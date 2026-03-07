@@ -4,6 +4,7 @@ import cv2
 import io
 import os
 import joblib
+from pathlib import Path
 
 # MediaPipe for facial landmark detection
 try:
@@ -18,14 +19,14 @@ except ImportError as e:
 router = APIRouter()
 
 # --- 1. SETUP PATHS ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(current_dir, '..', '..', 'mlModels', 'CryTranslater', 'saved_models', 'img_rf_pain_classifier3.pkl')
-LANDMARKER_PATH = os.path.join(current_dir, '..', '..', 'mlModels', 'CryTranslater', 'Notebooks', 'face_landmarker.task')
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / 'mlModels' / 'Cry' / 'img_rf_pain_classifier3.pkl'
+LANDMARKER_PATH = BASE_DIR / 'mlModels' / 'Cry' / 'face_landmarker.task'
 
-print(f"🔍 [FaceRouter] Looking for model at: {os.path.abspath(MODEL_PATH)}")
-print(f"🔍 [FaceRouter] Looking for landmarker at: {os.path.abspath(LANDMARKER_PATH)}")
+print(f"[FaceRouter] Looking for model at: {MODEL_PATH}")
+print(f"[FaceRouter] Looking for landmarker at: {LANDMARKER_PATH}")
 
-# --- 2. LOAD RANDOM FOREST MODEL ---
+# --- 2. LAZY LOAD MODELS ---
 face_model = None
 face_detector = None
 
@@ -39,44 +40,56 @@ RIGHT_BROW_INNER = 285
 RIGHT_EYE_INNER = 362
 
 def load_face_model():
+    """Lazy load face model and detector only when needed"""
     global face_model, face_detector
+    
+    if face_model is not None and face_detector is not None:
+        return  # Already loaded
+    
     try:
         # Load Random Forest model
-        if not os.path.exists(MODEL_PATH):
-            print(f"⚠️ [FaceRouter] Model file NOT found at: {MODEL_PATH}")
-            return
+        if not MODEL_PATH.exists():
+            print(f"❌ [FaceRouter] Model file NOT found at: {MODEL_PATH}")
+            raise FileNotFoundError(f"Model not found at {MODEL_PATH}")
 
         face_model = joblib.load(MODEL_PATH)
         print("✅ [FaceRouter] Random Forest model loaded successfully!")
         
         # Initialize MediaPipe Face Landmarker
-        if MEDIAPIPE_AVAILABLE:
-            if not os.path.exists(LANDMARKER_PATH):
-                print(f"⚠️ [FaceRouter] Downloading face_landmarker.task...")
-                import urllib.request
-                url = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
-                os.makedirs(os.path.dirname(LANDMARKER_PATH), exist_ok=True)
-                urllib.request.urlretrieve(url, LANDMARKER_PATH)
-                print("✅ [FaceRouter] Landmarker downloaded!")
+        if not MEDIAPIPE_AVAILABLE:
+            print("❌ [FaceRouter] MediaPipe is not available")
+            raise ImportError("MediaPipe not installed")
             
-            base_options = python.BaseOptions(model_asset_path=LANDMARKER_PATH)
-            options = vision.FaceLandmarkerOptions(
-                base_options=base_options,
-                output_face_blendshapes=False,
-                output_facial_transformation_matrixes=False,
-                num_faces=1,
-                min_face_detection_confidence=0.5
-            )
-            face_detector = vision.FaceLandmarker.create_from_options(options)
-            print("✅ [FaceRouter] MediaPipe Face Detector initialized!")
+        if not LANDMARKER_PATH.exists():
+            print(f"⚠️ [FaceRouter] Landmarker task not found at: {LANDMARKER_PATH}")
+            print(f"🔄 [FaceRouter] Downloading face_landmarker.task...")
+            import urllib.request
+            url = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+            try:
+                LANDMARKER_PATH.parent.mkdir(parents=True, exist_ok=True)
+                urllib.request.urlretrieve(url, str(LANDMARKER_PATH))
+                print("✅ [FaceRouter] Landmarker downloaded!")
+            except Exception as download_err:
+                print(f"❌ [FaceRouter] Failed to download landmarker: {download_err}")
+                raise
+        
+        base_options = python.BaseOptions(model_asset_path=str(LANDMARKER_PATH))
+        options = vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            output_face_blendshapes=False,
+            output_facial_transformation_matrixes=False,
+            num_faces=1,
+            min_face_detection_confidence=0.5
+        )
+        face_detector = vision.FaceLandmarker.create_from_options(options)
+        print("✅ [FaceRouter] MediaPipe Face Detector initialized!")
         
     except Exception as e:
-        print(f"❌ [FaceRouter] Error loading model: {e}")
+        print(f"❌ [FaceRouter] Error loading model: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         face_model = None
         face_detector = None
-
-# Load immediately on startup
-load_face_model()
 
 # --- 3. FEATURE EXTRACTION FUNCTIONS ---
 def calculate_ratio(landmarks, indices):
