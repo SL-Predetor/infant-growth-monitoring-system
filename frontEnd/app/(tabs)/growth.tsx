@@ -279,6 +279,9 @@ export default function GrowthScreen() {
             <Text style={[Typography.callout, { color: C.primary, fontWeight: '700' }]}>⚖️ Update Weight</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity style={{ marginTop: 20 }} onPress={() => router.push('/(tabs)/growth-insights')}>
+          <Text style={[Typography.callout, { color: C.primary, textAlign: 'center', fontWeight: '700' }]}>✨ View Detailed AI Insights →</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={{ marginTop: 16 }} onPress={() => router.push('/(tabs)/growth-history')}>
           <Text style={[Typography.callout, { color: C.primary, textAlign: 'center' }]}>📜 View Full History →</Text>
         </TouchableOpacity>
