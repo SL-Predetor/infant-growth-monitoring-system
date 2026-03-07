@@ -26,6 +26,7 @@ except ImportError:
 POSTPARTUM_MONGODB_URI = os.getenv("POSTPARTUM_MONGODB_URI") or os.getenv("MONGODB_URI")
 POSTPARTUM_DB_NAME = os.getenv("POSTPARTUM_DB_NAME", "TinySteps_db")
 POSTPARTUM_COLLECTION_NAME = os.getenv("POSTPARTUM_COLLECTION_NAME", "postpartum")
+FEEDBACK_COLLECTION_NAME = os.getenv("FEEDBACK_COLLECTION_NAME", "Discomfort")
 
 # Debug: Print loaded configuration
 print("\n" + "="*60)
@@ -60,7 +61,7 @@ def get_postpartum_collection() -> Optional[Collection]:
         
         _last_connection_attempt = now
         try:
-            _client = MongoClient(POSTPARTUM_MONGODB_URI, serverSelectionTimeoutMS=3000, connectTimeoutMS=3000)
+            _client = MongoClient(POSTPARTUM_MONGODB_URI, serverSelectionTimeoutMS=10000, connectTimeoutMS=10000)
             # Try to connect immediately to catch errors early
             _client.admin.command('ping')
             print("✅ MongoDB connected")
@@ -83,3 +84,20 @@ def is_postpartum_db_connected() -> bool:
     except Exception as e:
         print(f"[WARNING] MongoDB ping failed: {e}")
         return False
+
+
+def get_feedback_collection() -> Optional[Collection]:
+    """Return the Discomfort (feedback) collection, reusing the shared client."""
+    global _client, _last_connection_attempt
+
+    if not POSTPARTUM_MONGODB_URI:
+        return None
+
+    if _client is None:
+        # Let get_postpartum_collection initialise the shared client
+        get_postpartum_collection()
+
+    if _client is None:
+        return None
+
+    return _client[POSTPARTUM_DB_NAME][FEEDBACK_COLLECTION_NAME]

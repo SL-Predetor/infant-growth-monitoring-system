@@ -32,6 +32,7 @@ from routers import cry_router_audio  # Your Audio Logic
 from routers import cry_router_img    # Your New Face Logic
 from routers import cry_router_fusion # Fusion Analysis Logic
 from routers.growth_router import router as growth_router
+from routers.feedback_router import router as feedback_router
 from postpartum import router as postpartum_router
 
 
@@ -62,6 +63,7 @@ app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])
 app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])
 app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")
 app.include_router(growth_router, prefix="/api", tags=["Growth"])
+app.include_router(feedback_router, tags=["Feedback"])
 app.include_router(postpartum_router)
 
 

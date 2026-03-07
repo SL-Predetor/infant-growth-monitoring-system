@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
+import FeedbackModal from '@/components/FeedbackModal';
 
 // --- CONFIGURATION ---
 const normalizeBaseUrl = (value?: string) => {
@@ -47,8 +48,8 @@ type FusionContext = {
   room_temperature_celsius: number;
 };
 
-type AudioApiResult = { label: string; confidence: number; message?: string };
-type FaceApiResult = { label: string; confidence: number; message?: string };
+type AudioApiResult = { label: string; confidence: number; message?: string; debug_info?: Record<string, any> };
+type FaceApiResult = { label: string; confidence: number; message?: string; features?: Record<string, any> };
 type FusionApiResult = {
   predicted_cry_reason: string;
   confidence: number;
@@ -91,7 +92,12 @@ export default function SmartAnalysisScreen() {
     audioConfidence?: number;
     imagePrediction?: string;
     imageConfidence?: number;
+    audioModelInputs?: Record<string, any>;
+    imageModelInputs?: Record<string, any>;
   } | null>(null);
+
+  // Feedback modal
+  const [showFeedback, setShowFeedback] = useState(false);
 
   // Native recording
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -620,6 +626,8 @@ export default function SmartAnalysisScreen() {
         audioConfidence,
         imagePrediction,
         imageConfidence,
+        audioModelInputs: audioRes?.debug_info || {},
+        imageModelInputs: faceRes?.features || {},
       });
       setCurrentStep('result');
 
@@ -1112,7 +1120,7 @@ export default function SmartAnalysisScreen() {
 
               <Pressable
                 style={[styles.doneButton, { backgroundColor: Colors.light.primary, shadowColor, shadowOpacity: 0.1, shadowRadius: 8 }]}
-                onPress={() => router.push('/')}
+                onPress={() => setShowFeedback(true)}
               >
                 <ThemedText style={styles.doneButtonText}>✓ Done</ThemedText>
               </Pressable>
@@ -1120,6 +1128,45 @@ export default function SmartAnalysisScreen() {
           </View>
         )}
       </View>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        visible={showFeedback}
+        onClose={() => {
+          setShowFeedback(false);
+          router.push('/');
+        }}
+        onSubmit={async (rating, comment) => {
+          const FEEDBACK_API = `${BASE_URL}/feedback`;
+          const body = {
+            predictionResult: analysisResult?.predicted_cry_reason || 'Unknown',
+            audioModelScore: analysisResult?.audioConfidence ?? 0,
+            imageModelScore: analysisResult?.imageConfidence ?? 0,
+            fusionModelScore: analysisResult?.confidence ?? 0,
+            audioModelInputs: analysisResult?.audioModelInputs || {},
+            imageModelInputs: analysisResult?.imageModelInputs || {},
+            allClassProbabilities: analysisResult?.all_class_probabilities || {},
+            contextInputs: {
+              baby_age_months: parseFloat(babyAge) || 0,
+              time_since_feed_hours: parseFloat(feedingTime) || 0,
+              time_since_sleep_hours: parseFloat(sleepTime) || 0,
+              diaper_status: diaperStatus,
+              room_temperature_celsius: parseFloat(roomTemperature) || 0,
+            },
+            userRating: rating,
+            userComment: comment,
+          };
+          const res = await fetch(FEEDBACK_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => null);
+            throw new Error(err?.detail || 'Failed to submit feedback');
+          }
+        }}
+      />
     </ScrollView>
   );
 }
