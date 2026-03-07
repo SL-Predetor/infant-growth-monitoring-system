@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Pressable, Dimensions, ScrollView } from 'react-native';
+import { StyleSheet, View, Pressable, Dimensions, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
@@ -147,6 +147,15 @@ export default function HomeScreen() {
     <ScrollView style={[styles.container, { backgroundColor }]} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.headerSection}>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={() => router.push('/(tabs)/Profile')} style={styles.avatarBtn}>
+            <Image
+              source={{ uri: 'https://i.pravatar.cc/300' }}
+              style={styles.avatarImg}
+            />
+          </Pressable>
+        </View>
         <ThemedText style={[styles.mainTitle, { color: textColor }]}>
           Infant Care Assistant
         </ThemedText>
@@ -186,6 +195,25 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
     paddingHorizontal: HORIZONTAL_PADDING,
     alignItems: 'center',
+  },
+  headerRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  avatarBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
   },
 
   mainTitle: {
