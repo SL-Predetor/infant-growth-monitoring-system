@@ -23,8 +23,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BASE_DIR / 'mlModels' / 'Cry' / 'img_rf_pain_classifier3.pkl'
 LANDMARKER_PATH = BASE_DIR / 'mlModels' / 'Cry' / 'face_landmarker.task'
 
-print(f"🔍 [FaceRouter] Looking for model at: {MODEL_PATH}")
-print(f"🔍 [FaceRouter] Looking for landmarker at: {LANDMARKER_PATH}")
+print(f"[FaceRouter] Looking for model at: {MODEL_PATH}")
+print(f"[FaceRouter] Looking for landmarker at: {LANDMARKER_PATH}")
 
 # --- 2. LAZY LOAD MODELS ---
 face_model = None

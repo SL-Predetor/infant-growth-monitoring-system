@@ -61,6 +61,13 @@ export default function RootLayout() {
             options={{ headerShown: false }}
           />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+
+          {/* ── ASD Detection screens (Kularathne) ── */}
+          <Stack.Screen name="asd-home"         options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="asd-qchat"        options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="asd-qchat-result" options={{ headerShown: false }} />
+          <Stack.Screen name="asd-research"     options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="asd-result"       options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
