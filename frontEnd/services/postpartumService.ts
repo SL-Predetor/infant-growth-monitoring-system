@@ -14,9 +14,7 @@ const normalizeBaseUrl = (value?: string): string | null => {
 };
 
 const getConfiguredBaseUrl = (): string | null => {
-  return normalizeBaseUrl(
-    process.env.EXPO_PUBLIC_API_BASE_URL || process.env.REACT_APP_API_BASE_URL
-  );
+  return normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 };
 
 const getCandidateBaseUrls = (): string[] => {

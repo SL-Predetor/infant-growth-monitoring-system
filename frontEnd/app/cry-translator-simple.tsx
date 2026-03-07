@@ -18,7 +18,15 @@ import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
 // --- CONFIGURATION ---
-const BASE_URL = "http://localhost:8000";
+const normalizeBaseUrl = (value?: string) => {
+  const trimmed = (value || '').trim().replace(/\/+$/, '');
+  if (!trimmed) {
+    return 'http://localhost:8000';
+  }
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+};
+
+const BASE_URL = normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;

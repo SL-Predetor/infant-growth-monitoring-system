@@ -27,9 +27,7 @@ const normalizeBaseUrl = (value?: string) => {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
 };
 
-const BASE_URL = normalizeBaseUrl(
-  process.env.EXPO_PUBLIC_API_BASE_URL || process.env.REACT_APP_API_BASE_URL
-);
+const BASE_URL = normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 

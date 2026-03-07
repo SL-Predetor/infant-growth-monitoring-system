@@ -28,12 +28,12 @@ const normalizeBaseUrl = (value?: string) => {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
 };
 
-const BASE_URL = normalizeBaseUrl(
-  process.env.EXPO_PUBLIC_API_BASE_URL || process.env.REACT_APP_API_BASE_URL
-);
+const BASE_URL = normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;
+
+console.log('🔗 API Base URL:', BASE_URL);
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -474,12 +474,17 @@ export default function SmartAnalysisScreen() {
         form.append('file', { uri: audioUri, name: 'recording.m4a', type: 'audio/m4a' } as any);
       }
 
-      console.log('📤 Uploading audio...');
+      console.log(`📤 Uploading audio to ${AUDIO_API} ...`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       const res = await fetch(AUDIO_API, {
         method: 'POST',
         body: form,
         headers: { Accept: 'application/json' },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const ct = res.headers.get('content-type') || '';
       const json = ct.includes('application/json') ? await res.json() : null;
@@ -489,6 +494,19 @@ export default function SmartAnalysisScreen() {
       console.log('✅ Audio upload successful:', json);
       return json;
     } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        throw new Error(
+          `Request timed out. Make sure your backend is running at ${BASE_URL} and reachable from this device.`
+        );
+      }
+      if (error?.message === 'Network request failed') {
+        throw new Error(
+          `Cannot reach server at ${BASE_URL}. Ensure:\n` +
+          `1. The backend is running\n` +
+          `2. Your device is on the same Wi-Fi network\n` +
+          `3. EXPO_PUBLIC_API_BASE_URL in .env is set to your computer's local IP (not localhost)`
+        );
+      }
       console.error('❌ Audio upload error:', error);
       throw error;
     }
