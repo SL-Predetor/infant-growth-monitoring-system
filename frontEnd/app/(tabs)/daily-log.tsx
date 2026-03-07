@@ -75,11 +75,16 @@ export default function DailyLogScreen() {
                 return;
             }
             try {
-                const { data: infantData } = await supabase
+                const { data: infantData, error: infantError } = await supabase
                     .from('infants')
                     .select('*')
                     .eq('parent_id', user.id)
+                    .limit(1)
                     .maybeSingle();
+
+                if (infantError) {
+                    throw infantError;
+                }
 
                 if (!infantData) {
                     setPageLoading(false);

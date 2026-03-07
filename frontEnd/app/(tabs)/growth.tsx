@@ -41,7 +41,13 @@ export default function GrowthScreen() {
     const fetchDashboard = async () => {
       if (!user) { setPageLoading(false); return; }
       try {
-        const { data: infantData } = await supabase.from('infants').select('*').eq('parent_id', user.id).maybeSingle();
+        const { data: infantData, error: infantError } = await supabase
+          .from('infants')
+          .select('*')
+          .eq('parent_id', user.id)
+          .limit(1)
+          .maybeSingle();
+        if (infantError) throw infantError;
         if (!infantData) { setPageLoading(false); return; }
         setInfant(infantData);
 
