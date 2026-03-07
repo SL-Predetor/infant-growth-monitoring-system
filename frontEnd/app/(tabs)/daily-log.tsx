@@ -42,7 +42,7 @@ export default function DailyLogScreen() {
     const [isUpdate, setIsUpdate] = useState(false);
     const [existingLogId, setExistingLogId] = useState<string | null>(null);
     const [logCount, setLogCount] = useState(0);
-    const [logDate, setLogDate] = useState(
+    const [selectedDate, setSelectedDate] = useState(
         new Date().toISOString().split('T')[0],
     );
 
@@ -69,33 +69,31 @@ export default function DailyLogScreen() {
 
     // ── On mount ───────────────────────────────────────
     useEffect(() => {
-        const init = async () => {
-            if (!user) {
-                setPageLoading(false);
-                return;
-            }
+        const fetchInfant = async () => {
+            if (!user) { setPageLoading(false); return; }
             try {
-                const { data: infantData } = await supabase
-                    .from('infants')
-                    .select('*')
-                    .eq('parent_id', user.id)
-                    .maybeSingle();
+                const { data } = await supabase.from('infants').select('*').eq('parent_id', user.id).maybeSingle();
+                setInfant(data);
 
-                if (!infantData) {
-                    setPageLoading(false);
-                    return;
+                if (data) {
+                    const { count } = await supabase.from('daily_logs').select('*', { count: 'exact', head: true }).eq('infant_id', data.id);
+                    setLogCount(count || 0);
                 }
-                setInfant(infantData);
+            } catch (err) { console.error('Infant fetch error:', err); }
+            finally { setPageLoading(false); }
+        };
+        fetchInfant();
+    }, [user]);
 
-                // Check if today's log already exists
-                const today = new Date().toISOString().split('T')[0];
-                setLogDate(today);
-
+    useEffect(() => {
+        const fetchExistingLog = async () => {
+            if (!infant || !selectedDate) return;
+            try {
                 const { data: existing } = await supabase
                     .from('daily_logs')
                     .select('*')
-                    .eq('infant_id', infantData.id)
-                    .eq('log_date', today)
+                    .eq('infant_id', infant.id)
+                    .eq('log_date', selectedDate)
                     .maybeSingle();
 
                 if (existing) {
@@ -108,22 +106,21 @@ export default function DailyLogScreen() {
                     setSnacks(existing.f_nutritious_snacks || 0);
                     setIsSick(existing.has_illness || false);
                     setIllnessType(existing.illness_type || null);
+                } else {
+                    setIsUpdate(false);
+                    setExistingLogId(null);
+                    setSleepHours(12);
+                    setFeedType('breastfed');
+                    setMilkFeeds(6);
+                    setSolidMeals(0);
+                    setSnacks(0);
+                    setIsSick(false);
+                    setIllnessType(null);
                 }
-
-                // Total log count for AI readiness
-                const { count } = await supabase
-                    .from('daily_logs')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('infant_id', infantData.id);
-                setLogCount(count || 0);
-            } catch (err) {
-                console.error('Init error:', err);
-            } finally {
-                setPageLoading(false);
-            }
+            } catch (err) { console.error('Log fetch error:', err); }
         };
-        init();
-    }, [user]);
+        fetchExistingLog();
+    }, [infant, selectedDate]);
 
     // ── Save ───────────────────────────────────────────
     const handleSave = async () => {
@@ -138,10 +135,10 @@ export default function DailyLogScreen() {
 
         setSaving(true);
         try {
-            const today = logDate;
+            const today = selectedDate;
 
             // Auto-calculate recovery_day from yesterday's log
-            const yesterday = new Date(logDate);
+            const yesterday = new Date(selectedDate);
             yesterday.setDate(yesterday.getDate() - 1);
             const yDate = yesterday.toISOString().split('T')[0];
             const { data: yLog } = await supabase
@@ -245,9 +242,11 @@ export default function DailyLogScreen() {
                         <Text style={{ color: '#FFF', fontSize: 28, lineHeight: 32 }}>←</Text>
                     </TouchableOpacity>
                     <View style={styles.headerCenter}>
-                        <Text style={[Typography.headline, { color: '#FFF', fontWeight: '700' }]}>Today's Log</Text>
+                        <Text style={[Typography.headline, { color: '#FFF', fontWeight: '700' }]}>
+                            {selectedDate === new Date().toISOString().split('T')[0] ? "Today's Log" : "Past Log"}
+                        </Text>
                         <Text style={[Typography.caption1, { color: 'rgba(255,255,255,0.75)' }]}>
-                            {infant?.name || 'Baby'} · {todayStr}
+                            {infant?.name || 'Baby'} · {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}
                         </Text>
                     </View>
                     <View style={styles.headerBtn} />
@@ -267,7 +266,7 @@ export default function DailyLogScreen() {
                     marginBottom: 12
                 }]}>
                     {logCount < 7 ? (
-                        <>
+                        <React.Fragment>
                             <Text style={{ fontSize: 16 }}>🤖</Text>
                             <Text style={[Typography.subheadline, { color: C.primary, flex: 1, marginHorizontal: 8 }]}>
                                 Day {Math.min(logCount + (isUpdate ? 0 : 1), 7)}/7
@@ -285,12 +284,56 @@ export default function DailyLogScreen() {
                                     />
                                 ))}
                             </View>
-                        </>
+                        </React.Fragment>
                     ) : (
                         <Text style={[Typography.subheadline, { color: C.success, textAlign: 'center', flex: 1 }]}>
                             🤖 AI Active · Growth predictions running
                         </Text>
                     )}
+                </View>
+
+                {/* ── DATE SELECTOR ────────────────────────── */}
+                <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 14, elevation: 2 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10 }}>📅 Log Date</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                const d = new Date(selectedDate);
+                                d.setDate(d.getDate() - 1);
+                                setSelectedDate(d.toISOString().split('T')[0]);
+                            }}
+                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <Text style={{ fontSize: 20, color: '#5E5CE6' }}>‹</Text>
+                        </TouchableOpacity>
+
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: '#1A1A1A', textAlign: 'center' }}>
+                                {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}
+                            </Text>
+                            {selectedDate === new Date().toISOString().split('T')[0] && (
+                                <View style={{ backgroundColor: '#EEF2FF', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'center', marginTop: 4 }}>
+                                    <Text style={{ fontSize: 11, color: '#5E5CE6', fontWeight: '600' }}>Today</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={() => {
+                                const d = new Date(selectedDate);
+                                d.setDate(d.getDate() + 1);
+                                setSelectedDate(d.toISOString().split('T')[0]);
+                            }}
+                            disabled={selectedDate >= new Date().toISOString().split('T')[0]}
+                            style={{
+                                width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6',
+                                alignItems: 'center', justifyContent: 'center',
+                                opacity: selectedDate >= new Date().toISOString().split('T')[0] ? 0.3 : 1.0
+                            }}
+                        >
+                            <Text style={{ fontSize: 20, color: '#5E5CE6' }}>›</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* ── SLEEP CARD ────────────────────────── */}
