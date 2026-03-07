@@ -86,7 +86,6 @@ export default function TabLayout() {
       <Tabs.Screen name="daily-log" options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="update-measurements" options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="growth-history" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="growth-alert" options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="explore" options={{ href: null, headerShown: false }} />
     </Tabs>
   );
