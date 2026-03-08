@@ -75,9 +75,9 @@ temp/
 
 
 # Environment variables
-#.env
-#.env.local
-#.env.*.local
+.env
+.env.local
+.env.*.local
 
 # Large ML model weights (too large for git)
 *.h5

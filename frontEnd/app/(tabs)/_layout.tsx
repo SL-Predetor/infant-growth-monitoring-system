@@ -4,7 +4,6 @@ import { Platform } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
@@ -14,37 +13,61 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: C.primary,
-        tabBarInactiveTintColor: C.labelTertiary,
-        tabBarStyle: {
-          backgroundColor: C.tabBar,
-          borderTopColor: C.tabBarBorder,
-          borderTopWidth: 0.5,
-          height: Platform.OS === 'ios' ? 83 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
-          paddingTop: 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -1 },
-          shadowOpacity: colorScheme === 'dark' ? 0.3 : 0.06,
-          shadowRadius: 8,
-          elevation: 8,
-        },
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#C7C7CC',
+        headerShown: false,
+        tabBarButton: HapticTab,
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '500',
-          letterSpacing: 0.1,
-          fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
         },
-        headerShown: false,
-        tabBarButton: HapticTab,
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 0,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -6 }, // shorter shadow
+          shadowOpacity: 0.08,
+          shadowRadius: 12, // softer, less extended
+          elevation: 8,
+           height: Platform.OS === 'ios' ? 84 : 68,
+           paddingBottom: Platform.OS === 'ios' ? 26 : 10,
+          paddingTop: 6,
+          ...(Platform.OS === 'ios' ? { position: 'absolute' as const } : {}),
+        },
       }}
     >
       {/* ── VISIBLE TABS (5) ─────────────────────────────────── */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="house.fill" color={color} />,
+          title: 'BabySense AI',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              size={focused ? 32 : 28}
+              name="house.fill"
+              color={color}
+              style={{
+                filter: focused ? 'drop-shadow(0px 2px 4px rgba(0,0,0,0.12))' : 'drop-shadow(0px 1px 2px rgba(0,0,0,0.08))',
+              }}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="growth"
+        options={{
+          title: 'Cry Translator',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              size={focused ? 32 : 28}
+              name="waveform"
+              color={color}
+              style={{
+                filter: focused ? 'drop-shadow(0px 2px 4px rgba(0,0,0,0.12))' : 'drop-shadow(0px 1px 2px rgba(0,0,0,0.08))',
+              }}
+            />
+          ),
         }}
       />
 
@@ -52,41 +75,66 @@ export default function TabLayout() {
         name="growth"
         options={{
           title: 'Growth',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="chart.line.uptrend.xyaxis" color={color} />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="behavior"
-        options={{
-          title: 'Baby',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="figure.and.child.holdinghands" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              size={focused ? 32 : 28}
+              name="chart.line.uptrend.xyaxis"
+              color={color}
+              style={{
+                filter: focused ? 'drop-shadow(0px 2px 4px rgba(0,0,0,0.12))' : 'drop-shadow(0px 1px 2px rgba(0,0,0,0.08))',
+              }}
+            />
+          ),
         }}
       />
 
       <Tabs.Screen
         name="recovery"
         options={{
-          title: 'Maternal',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="heart.text.square.fill" color={color} />,
+          title: 'Recovery',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              size={focused ? 32 : 28}
+              name="heart.fill"
+              color={color}
+              style={{
+                filter: focused ? 'drop-shadow(0px 2px 4px rgba(0,0,0,0.12))' : 'drop-shadow(0px 1px 2px rgba(0,0,0,0.08))',
+              }}
+            />
+          ),
         }}
       />
 
       <Tabs.Screen
-        name="Profile"
+        name="behavior"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={focused ? 26 : 24} name="person.fill" color={color} />,
+          title: 'Behavior',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              size={focused ? 32 : 28}
+              name="brain.head.profile"
+              color={color}
+              style={{
+                filter: focused ? 'drop-shadow(0px 2px 4px rgba(0,0,0,0.12))' : 'drop-shadow(0px 1px 2px rgba(0,0,0,0.08))',
+              }}
+            />
+          ),
         }}
       />
 
-      {/* ── HIDDEN TABS ──────────────────────────────────────── */}
-      <Tabs.Screen name="cry-translator" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="edit-profile" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="daily-log" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="update-measurements" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="growth-history" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="explore" options={{ href: null, headerShown: false }} />
+      {/* Hidden from tab bar – accessed via profile avatar */}
+      <Tabs.Screen
+        name="Profile"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="edit-profile"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="explore"
+        options={{ href: null }}
+      />
     </Tabs>
   );
 }
