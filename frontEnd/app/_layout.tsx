@@ -44,7 +44,16 @@ function RootLayoutNav() {
       <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="mom-prediction-result" options={{ headerShown: false }} />
+        <Stack.Screen name="postpartum-dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="postpartum-history" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="asd-home" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="asd-qchat" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="asd-qchat-result" options={{ headerShown: false }} />
+        <Stack.Screen name="asd-research" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="asd-result" options={{ headerShown: false }} />
+        <Stack.Screen name="smart-cry-analysis" options={{ headerShown: false }} />
       </Stack>
       {loading && (
         <View
@@ -95,33 +104,7 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="mom-prediction-result"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="postpartum-dashboard"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="postpartum-history"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-
-          {/* ── ASD Detection screens (Kularathne) ── */}
-          <Stack.Screen name="asd-home"         options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="asd-qchat"        options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="asd-qchat-result" options={{ headerShown: false }} />
-          <Stack.Screen name="asd-research"     options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="asd-result"       options={{ headerShown: false }} />
-          <Stack.Screen name="smart-cry-analysis" options={{ headerShown: false }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <RootLayoutNav />
     </AuthProvider>
   );
 }
