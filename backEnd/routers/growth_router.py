@@ -32,6 +32,8 @@ LSTM_PATH   = os.path.join(MODEL_DIR, "lstm_weight_variantB.pth")
 SCALER_PATH = os.path.join(MODEL_DIR, "scaler_variantB.pkl")
 RISK_PATH   = os.path.join(MODEL_DIR, "rf_risk_2b.pkl")
 XGB_PATH    = os.path.join(MODEL_DIR, "xgb_risk_2a.pkl")
+RF_ANOMALY_PATH  = os.path.join(MODEL_DIR, "rf_anomaly_2a.pkl")
+XGB_ANOMALY_PATH = os.path.join(MODEL_DIR, "xgb_anomaly_2a.pkl")
 
 # ── LSTM Architecture (must match training exactly) ───────────────────────────
 class LSTMForecaster(nn.Module):
@@ -77,6 +79,8 @@ lstm_model = None
 scaler      = None
 risk_model  = None
 xgb_model   = None
+rf_anomaly_model  = None
+xgb_anomaly_model = None
 
 def load_models():
     global lstm_model, scaler, risk_model
@@ -124,6 +128,21 @@ def load_models():
         print("✅ [Growth] XGBoost 2A loaded")
     except Exception as e:
         print(f"⚠️  [Growth] XGBoost 2A not loaded: {e}")
+
+    global rf_anomaly_model, xgb_anomaly_model
+    try:
+        rf_anomaly_model = joblib.load(RF_ANOMALY_PATH)
+        print("✅ [Growth] RF Anomaly 2A loaded")
+    except Exception as e:
+        rf_anomaly_model = None
+        print(f"⚠️  [Growth] RF Anomaly 2A not loaded: {e}")
+
+    try:
+        xgb_anomaly_model = joblib.load(XGB_ANOMALY_PATH)
+        print("✅ [Growth] XGB Anomaly 2A loaded")
+    except Exception as e:
+        xgb_anomaly_model = None
+        print(f"⚠️  [Growth] XGB Anomaly 2A not loaded: {e}")
 
 load_models()
 
@@ -599,3 +618,107 @@ def get_history(infant_id: str, days: int = 30):
         }
     except Exception as e:
         raise HTTPException(500, str(e))
+
+# ── Anomaly scoring (40-feature models) ──────────────────────────────────────
+from pydantic import BaseModel
+
+class AnomalyScoreRequest(BaseModel):
+    age_in_days: int = 0
+    weight_g: float = 3500.0
+    height_cm: float = 50.0
+    bmi: Optional[float] = None
+    waz_score: float = 0.0
+    illness_day: int = 0
+    recovery_day: int = 0
+    has_illness_episode: int = 0
+    weight_velocity: float = 0.0
+    weight_trend_3day: float = 0.0
+    height_velocity: float = 0.0
+    height_trend_3day: float = 0.0
+    sleep_hours: float = 16.0
+    feeding_frequency: int = 8
+    feeding_compliance: float = 1.0
+    daily_calorie_intake: float = 0.0
+    calories_burned: float = 0.0
+    appetite_factor: float = 1.0
+    gestational_diabetes: int = 0
+    maternal_bmi: float = 22.0
+    maternal_nutrition_score: float = 3.0
+    ses_level: int = 2
+    daily_feeding_deviation: float = 0.0
+    cumulative_feeding_deviation: float = 0.0
+    f_solid_meal: float = 0.0
+    f_nutritious_snacks: float = 0.0
+    f_iron_rich: float = 0.0
+    f_animal_protein: float = 0.0
+    f_plant_based: float = 0.0
+    f_junk_food: float = 0.0
+    feeding_source_diversity: float = 0.0
+    solids_onset_day: int = 0
+    recalled_calorie_intake: float = 0.0
+    metabolic_efficiency: float = 1.0
+    underweight_flag: int = 0
+    severe_underweight_flag: int = 0
+    unexplained_growth_residual: float = 0.0
+
+
+@router.post("/growth/anomaly-score")
+def anomaly_score(req: AnomalyScoreRequest):
+    if rf_anomaly_model is None:
+        raise HTTPException(503, "Anomaly model not available")
+
+    bmi = req.bmi if req.bmi else req.weight_g / ((req.height_cm / 100) ** 2)
+    net_energy = req.daily_calorie_intake - req.calories_burned
+
+    features = np.array([[
+        req.f_solid_meal, req.f_nutritious_snacks, req.f_iron_rich,
+        req.f_animal_protein, req.f_plant_based, req.f_junk_food,
+        req.feeding_frequency, req.feeding_source_diversity, req.feeding_compliance,
+        req.weight_g, req.height_cm,
+        req.weight_g, req.height_cm,          # Weight_Clean_g, Height_Clean_cm
+        bmi,
+        req.daily_calorie_intake, req.recalled_calorie_intake,
+        req.sleep_hours, req.calories_burned, net_energy,
+        req.solids_onset_day, req.appetite_factor, req.metabolic_efficiency,
+        req.ses_level, req.maternal_bmi, req.gestational_diabetes,
+        req.maternal_nutrition_score,
+        req.waz_score, req.underweight_flag, req.severe_underweight_flag,
+        req.illness_day, req.recovery_day, req.has_illness_episode,
+        req.unexplained_growth_residual,
+        req.weight_velocity, req.height_velocity,
+        req.weight_trend_3day, req.height_trend_3day,
+        req.daily_feeding_deviation, req.cumulative_feeding_deviation,
+        req.age_in_days
+    ]], dtype=float)
+
+    features = np.nan_to_num(features, nan=0.0)
+
+    rf_score = float(rf_anomaly_model.predict_proba(features)[0][1])
+
+    if xgb_anomaly_model is not None:
+        xgb_score = float(xgb_anomaly_model.predict_proba(features)[0][1])
+    else:
+        xgb_score = rf_score
+
+    ensemble = (rf_score + xgb_score) / 2
+    confidence = "high" if abs(rf_score - xgb_score) < 0.15 else "low"
+
+    if ensemble < 0.35:
+        label, message = "normal", "All clear"
+    elif ensemble < 0.50:
+        label, message = "monitoring", "Monitoring — borderline signal"
+    elif ensemble < 0.65:
+        label, message = "anomaly", "Acute episode detected"
+    else:
+        label, message = "critical", "Critical — consult a doctor immediately"
+
+    return {
+        "rf_anomaly_score":       round(rf_score, 4),
+        "xgb_anomaly_score":      round(xgb_score, 4),
+        "ensemble_anomaly_score": round(ensemble, 4),
+        "confidence":             confidence,
+        "anomaly_label":          label,
+        "recovery_signal":        req.recovery_day > 0 and ensemble < 0.35,
+        "gdm_sensitive":          req.gestational_diabetes == 1,
+        "alert_message":          message
+    }

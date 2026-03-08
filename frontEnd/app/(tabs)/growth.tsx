@@ -34,7 +34,7 @@ export default function GrowthScreen() {
   const [pageLoading, setPageLoading] = useState(true);
   const [prediction, setPrediction] = useState<any>(null);
   const [riskScore, setRiskScore] = useState<number | null>(null);
-  const [riskLevel, setRiskLevel] = useState<string>('Low');
+  const [riskLevel, setRiskLevel] = useState<string | null>(null);
   const [alertData, setAlertData] = useState<any>(null);
 
   useEffect(() => {
@@ -69,8 +69,12 @@ export default function GrowthScreen() {
         setWazScore(data.current_waz ?? null);
         setPrediction(data.prediction ?? null);
         setRiskScore(data.risk_score ?? null);
-        setRiskLevel(data.risk_level ?? 'Low');
+        setRiskLevel(data.risk_level ?? null);
         setAlertData(data.alert ?? null);
+
+        console.log('[RISK DEBUG] risk_score from API:', data.risk_score);
+        console.log('[RISK DEBUG] risk_level from API:', data.risk_level);
+        console.log('[RISK DEBUG] full response:', JSON.stringify(data, null, 2));
 
         const { data: todayLog } = await supabase.from('daily_logs').select('id').eq('infant_id', infantData.id).eq('log_date', new Date().toISOString().split('T')[0]).maybeSingle();
         setHasLoggedToday(!!todayLog);
@@ -86,9 +90,31 @@ export default function GrowthScreen() {
     return { label: 'At Risk', color: C.danger, icon: '🚨' };
   }, [wazScore, C]);
 
-  const riskColor = riskLevel === 'High' ? C.danger : riskLevel === 'Medium' ? C.warning : C.success;
-  const riskSoft = riskLevel === 'High' ? C.dangerSoft : riskLevel === 'Medium' ? C.warningSoft : C.successSoft;
-  const riskPct = riskScore != null ? Math.round(riskScore * 100) : 15;
+  const displayRiskLevel = riskLevel ?? 'Unknown';
+  const riskColor =
+    riskLevel === 'Low' ? '#22C55E' :
+      riskLevel === 'Medium' ? '#F59E0B' :
+        riskLevel === 'High' ? '#EF4444' :
+          '#9CA3AF';
+
+  const riskSoft =
+    riskLevel === 'Low' ? '#DCFCE7' :
+      riskLevel === 'Medium' ? '#FEF3C7' :
+        riskLevel === 'High' ? '#FEE2E2' :
+          '#F3F4F6';
+
+  const riskEmoji =
+    riskLevel === 'Low' ? '🛡️' :
+      riskLevel === 'Medium' ? '⚠️' :
+        riskLevel === 'High' ? '🚨' :
+          '⏳';
+
+  const riskLabel =
+    riskLevel !== null
+      ? riskEmoji + ' ' + riskLevel + ' Risk'
+      : '⏳ No data yet';
+
+  const riskPct = riskScore != null ? Math.round(riskScore * 100) : null;
   const latestMeas = measurements.length > 0 ? measurements[measurements.length - 1] : null;
 
   if (pageLoading) return <View style={styles.centeredPage}><ActivityIndicator size="large" color={C.primary} /></View>;
@@ -129,6 +155,11 @@ export default function GrowthScreen() {
                 {latestMeas ? `${(latestMeas.weight_g / 1000).toFixed(2)}kg` : '--'}
               </Text>
               <Text style={styles.statLabel}>Weight</Text>
+              {measurements.length > 0 && (
+                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', marginTop: 2, textAlign: 'center' }}>
+                  Measured {new Date(measurements[measurements.length - 1].measured_date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                </Text>
+              )}
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
@@ -162,25 +193,6 @@ export default function GrowthScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── AI PHASES CARD ────────────────────────────── */}
-        <Text style={[Typography.subheadline, styles.sectionTitle, { color: C.label }]}>AI Pipeline</Text>
-        <View style={[styles.phasesCard, { backgroundColor: C.card }]}>
-          {[
-            { e: '🧠', p: 'PHASE 1', l: 'LSTM', s: 'Forecast', c: C.primary },
-            { e: '🌲', p: 'PHASE 2', l: 'Risk Forest', s: 'Assessment', c: C.warning },
-            { e: '⚙️', p: 'PHASE 3', l: 'Rules', s: 'Alert Logic', c: C.success },
-          ].map((ph, idx) => (
-            <React.Fragment key={idx}>
-              <View style={styles.phaseItem}>
-                <Text style={{ fontSize: 22 }}>{ph.e}</Text>
-                <Text style={[Typography.caption2, { color: ph.c, fontWeight: '700' }]}>{ph.p}</Text>
-                <Text style={[Typography.footnote, { color: C.label, fontWeight: '700' }]}>{ph.l}</Text>
-                <Text style={[Typography.caption2, { color: C.labelTertiary, textAlign: 'center' }]}>{ph.s}</Text>
-              </View>
-              {idx < 2 && <View style={[styles.phaseSep, { backgroundColor: C.border }]} />}
-            </React.Fragment>
-          ))}
-        </View>
 
         {/* ── FORECAST CARDS ROW ────────────────────────── */}
         <Text style={[Typography.subheadline, styles.sectionTitle, { color: C.label }]}>7-Day Forecast</Text>
@@ -210,18 +222,28 @@ export default function GrowthScreen() {
         {/* ── RISK ASSESSMENT CARD ─────────────────────── */}
         <Text style={[Typography.subheadline, styles.sectionTitle, { color: C.label }]}>Risk Assessment</Text>
         <View style={[styles.riskCard, { backgroundColor: C.card, borderLeftColor: riskColor }]}>
-          <View style={styles.riskHeader}>
-            <Text style={[Typography.headline, { color: riskColor }]}>
-              {riskLevel === 'High' ? '🚨 High Risk' : riskLevel === 'Medium' ? '⚠️ Medium Risk' : '🛡️ Low Risk'}
-            </Text>
-            <Text style={[Typography.title2, { color: riskColor }]}>{riskPct}%</Text>
-          </View>
-          <View style={[styles.riskProgressBg, { backgroundColor: riskSoft }]}>
-            <View style={[styles.riskProgressFill, { backgroundColor: riskColor, width: `${riskPct}%` }]} />
-          </View>
-          <Text style={[Typography.caption1, { color: C.labelTertiary, marginTop: 8 }]}>
-            Based on LSTM + Random Forest models
-          </Text>
+          {riskScore !== null ? (
+            <>
+              <View style={styles.riskHeader}>
+                <Text style={[Typography.headline, { color: riskColor }]}>
+                  {riskLabel}
+                </Text>
+                <Text style={[Typography.title2, { color: riskColor }]}>{riskPct}%</Text>
+              </View>
+              <View style={[styles.riskProgressBg, { backgroundColor: riskSoft }]}>
+                <View style={[styles.riskProgressFill, { backgroundColor: riskColor, width: riskPct !== null ? `${riskPct}%` : '0%' }]} />
+              </View>
+              <Text style={[Typography.caption1, { color: C.labelTertiary, marginTop: 8 }]}>
+                Based on LSTM + Random Forest models
+              </Text>
+            </>
+          ) : (
+            <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center' }}>
+                {infant ? '⏳ Risk assessment available after first daily log' : 'Register a baby to see risk data'}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* ── ALERT BANNER ──────────────────────────────── */}
@@ -240,16 +262,10 @@ export default function GrowthScreen() {
           </View>
         )}
 
-        {/* ── BAR CHART ──────────────────────────────────── */}
+        {/* ── WEIGHT HISTORY CHART ───────────────────────── */}
         <Text style={[Typography.subheadline, styles.sectionTitle, { color: C.label }]}>Weight History</Text>
         <View style={[styles.chartCard, { backgroundColor: C.card }]}>
-          {measurements.length >= 2 ? (
-            <WeightBarChart measurements={measurements} color={C.primary} labelColor={C.labelTertiary} />
-          ) : (
-            <Text style={[Typography.caption1, { color: C.labelTertiary, textAlign: 'center', paddingVertical: 16 }]}>
-              Add more measurements to see your chart
-            </Text>
-          )}
+          <WeightHistoryLineChart measurements={measurements} primaryColor={C.primary} />
         </View>
 
         {/* ── AI TRAINING PROGRESS ─────────────────────── */}
@@ -276,6 +292,9 @@ export default function GrowthScreen() {
             <Text style={[Typography.callout, { color: C.primary, fontWeight: '700' }]}>⚖️ Update Weight</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity style={{ marginTop: 20 }} onPress={() => router.push('/(tabs)/growth-insights')}>
+          <Text style={[Typography.callout, { color: C.primary, textAlign: 'center', fontWeight: '700' }]}>✨ View Detailed AI Insights →</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={{ marginTop: 16 }} onPress={() => router.push('/(tabs)/growth-history')}>
           <Text style={[Typography.callout, { color: C.primary, textAlign: 'center' }]}>📜 View Full History →</Text>
         </TouchableOpacity>
@@ -285,42 +304,156 @@ export default function GrowthScreen() {
   );
 }
 
-function WeightBarChart({ measurements, color, labelColor }: any) {
-  const data = measurements.slice(-7);
-  const weights = data.map((d: any) => parseFloat(d.weight_g));
+function WeightHistoryLineChart({ measurements, primaryColor }: { measurements: any[], primaryColor: string }) {
+  const chartData = useMemo(() => measurements.slice(-7), [measurements]);
+
+  if (chartData.length < 2) {
+    return (
+      <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+        <Text style={{ fontSize: 36, marginBottom: 8 }}>📈</Text>
+        <Text style={{ fontSize: 13, color: '#9CA3AF', textAlign: 'center' }}>
+          Add at least 2 measurements to see chart
+        </Text>
+      </View>
+    );
+  }
+
+  const weights = chartData.map(m => m.weight_g);
   const minW = Math.min(...weights);
   const maxW = Math.max(...weights);
   const range = maxW - minW || 1;
+  const chartHeight = 120;
+
+  const points = chartData.map((m, i) => {
+    const x = (i / (chartData.length - 1)) * 100;
+    const y = chartHeight - ((m.weight_g - minW) / range) * chartHeight;
+    return { x, y, weight: m.weight_g, date: m.measured_date };
+  });
+
+  const firstW = chartData[0].weight_g;
+  const lastW = chartData[chartData.length - 1].weight_g;
+  const diff = lastW - firstW;
 
   return (
-    <View>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 6 }}>
-        {data.map((item: any, i: number) => {
-          const barH = ((parseFloat(item.weight_g) - minW) / range) * 80 + 20;
-          const isLast = i === data.length - 1;
+    <View style={{ width: '100%' }}>
+      <View style={{ width: '100%', height: 160, paddingTop: 10, paddingBottom: 30, paddingHorizontal: 8, position: 'relative' }}>
+        {/* Draw lines */}
+        <LineRenderer points={points} height={chartHeight} color={primaryColor} />
+
+        {/* Draw dots and labels */}
+        {points.map((p, i) => {
+          const isLast = i === points.length - 1;
           return (
-            <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
-              <View
-                style={{
-                  width: '100%',
-                  height: barH,
-                  backgroundColor: color,
-                  borderRadius: 6,
-                  opacity: isLast ? 1.0 : 0.55,
-                }}
-              />
-            </View>
+            <React.Fragment key={i}>
+              <View style={{
+                position: 'absolute',
+                left: `${p.x}%`,
+                top: p.y,
+                marginLeft: isLast ? -15 : -13, // Adjust for horizontal padding/container width
+                marginTop: isLast ? -7 : -5,
+                width: isLast ? 14 : 10,
+                height: isLast ? 14 : 10,
+                borderRadius: isLast ? 7 : 5,
+                backgroundColor: primaryColor,
+                borderWidth: isLast ? 3 : 2,
+                borderColor: 'white',
+                zIndex: 10,
+                shadowColor: isLast ? primaryColor : 'transparent',
+                shadowOpacity: 0.4,
+                shadowRadius: 4,
+                elevation: isLast ? 4 : 0,
+              }} />
+
+              <Text style={{
+                position: 'absolute',
+                left: `${p.x}%`,
+                marginLeft: -28, // Center text
+                top: chartHeight + 8,
+                width: 40,
+                textAlign: 'center',
+                fontSize: 9,
+                color: '#9CA3AF',
+              }}>
+                {new Date(p.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+              </Text>
+
+              {isLast && (
+                <Text style={{
+                  position: 'absolute',
+                  left: `${p.x}%`,
+                  marginLeft: 5,
+                  top: p.y - 18,
+                  fontSize: 11,
+                  fontWeight: '700',
+                  color: primaryColor,
+                }}>
+                  {(p.weight / 1000).toFixed(2)}kg
+                </Text>
+              )}
+            </React.Fragment>
           );
         })}
       </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-        <Text style={{ fontSize: 10, color: labelColor }}>
-          {new Date(data[0].measured_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-        </Text>
-        <Text style={{ fontSize: 10, color: labelColor }}>
-          {new Date(data[data.length - 1].measured_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-        </Text>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+        <Text style={{ fontSize: 10, color: '#9CA3AF' }}>{(minW / 1000).toFixed(2)}kg</Text>
+        <Text style={{ fontSize: 10, color: '#9CA3AF' }}>{(maxW / 1000).toFixed(2)}kg</Text>
       </View>
+
+      <Text style={{
+        fontSize: 12,
+        fontWeight: '600',
+        textAlign: 'center',
+        marginTop: 6,
+        color: diff >= 0 ? '#22C55E' : '#EF4444'
+      }}>
+        {diff >= 0 ? `↑ +${diff.toFixed(0)}g gained` : `↓ ${Math.abs(diff).toFixed(0)}g lost`}
+      </Text>
+    </View>
+  );
+}
+
+function LineRenderer({ points, height, color }: any) {
+  const [layoutWidth, setLayoutWidth] = useState(0);
+
+  return (
+    <View
+      style={{ position: 'absolute', left: 0, right: 0, top: 0, height }}
+      onLayout={(e) => setLayoutWidth(e.nativeEvent.layout.width)}
+    >
+      {layoutWidth > 0 && points.map((p1: any, i: number) => {
+        if (i === points.length - 1) return null;
+        const p2 = points[i + 1];
+
+        const x1 = (p1.x / 100) * layoutWidth;
+        const y1 = p1.y;
+        const x2 = (p2.x / 100) * layoutWidth;
+        const y2 = p2.y;
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+
+        return (
+          <View
+            key={i}
+            style={{
+              position: 'absolute',
+              left: midX - length / 2,
+              top: midY - 1,
+              width: length,
+              height: 2,
+              backgroundColor: color,
+              opacity: 0.7,
+              transform: [{ rotate: angle + 'deg' }],
+            }}
+          />
+        );
+      })}
     </View>
   );
 }
