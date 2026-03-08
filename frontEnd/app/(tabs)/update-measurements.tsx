@@ -138,26 +138,59 @@ export default function UpdateMeasurementsScreen() {
 
         setSaving(true);
         try {
-            const { error } = await supabase
+            const payload = {
+                infant_id: infant.id,
+                measured_date: measDate,
+                weight_g: weightG ? parseFloat(weightG) : null,
+                height_cm: heightCm ? parseFloat(heightCm) : null,
+                notes: notes || null,
+            };
+            console.log('📝 Saving measurement:', JSON.stringify(payload));
+
+            // Check if a measurement for this date already exists
+            const { data: existing, error: selectErr } = await supabase
                 .from('measurements')
-                .upsert(
-                    {
-                        infant_id: infant.id,
-                        measured_date: measDate,
-                        weight_g: weightG ? parseFloat(weightG) : null,
-                        height_cm: heightCm ? parseFloat(heightCm) : null,
-                        notes: notes || null,
-                    },
-                    { onConflict: 'infant_id,measured_date' },
-                );
+                .select('id')
+                .eq('infant_id', infant.id)
+                .eq('measured_date', measDate)
+                .maybeSingle();
 
-            if (error) throw error;
+            if (selectErr) {
+                console.error('❌ Select error:', selectErr);
+                throw selectErr;
+            }
 
+            let saveError;
+            if (existing) {
+                console.log('🔄 Updating existing measurement:', existing.id);
+                ({ error: saveError } = await supabase
+                    .from('measurements')
+                    .update({
+                        weight_g: payload.weight_g,
+                        height_cm: payload.height_cm,
+                        notes: payload.notes,
+                    })
+                    .eq('id', existing.id));
+            } else {
+                console.log('➕ Inserting new measurement');
+                ({ error: saveError } = await supabase
+                    .from('measurements')
+                    .insert(payload));
+            }
+
+            if (saveError) {
+                console.error('❌ Save error:', saveError);
+                throw saveError;
+            }
+
+            console.log('✅ Measurement saved successfully');
             Alert.alert('✅ Saved', 'Measurement recorded successfully.', [
                 { text: 'OK', onPress: () => router.back() },
             ]);
         } catch (err: any) {
-            Alert.alert('Save Failed', err.message);
+            console.error('❌ handleSave error:', err);
+            const msg = err?.message || err?.details || 'Please try again.';
+            Alert.alert('Save Failed', msg);
         } finally {
             setSaving(false);
         }

@@ -6,12 +6,12 @@ import os
 from dotenv import load_dotenv
 
 # --- 0. LOAD ENVIRONMENT VARIABLES ---
-# Load .env file from current directory
-load_dotenv()
-print("[INFO] Environment variables loaded from .env file")
-
-# Load environment variables from .env file
-load_dotenv()
+# Load .env file from the same directory as app.py
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(_env_path)
+print(f"[INFO] Environment variables loaded from {_env_path}")
+print(f"[INFO] SUPABASE_URL={'SET' if os.getenv('SUPABASE_URL') else 'NOT SET'}")
+print(f"[INFO] SUPABASE_SERVICE_ROLE_KEY={'SET' if os.getenv('SUPABASE_SERVICE_ROLE_KEY') else 'NOT SET'}")
 
 # --- 1. SETUP FFMPEG (Crucial for Windows) ---
 # Adds the current folder to the system path so Python can find ffmpeg.exe
