@@ -8,7 +8,6 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const C = Colors[colorScheme ?? 'light'];
 
   return (
     <Tabs
@@ -55,7 +54,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="growth"
+        name="cry-translator"
         options={{
           title: 'Cry Translator',
           tabBarIcon: ({ color, focused }) => (
@@ -133,6 +132,18 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="explore"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="daily-log"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="growth-history"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="update-measurements"
         options={{ href: null }}
       />
     </Tabs>

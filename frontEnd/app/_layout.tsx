@@ -68,6 +68,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
   // Fonts loading - using try-catch to handle missing fonts gracefully
   let fontsLoaded = true;
   try {
@@ -117,6 +118,7 @@ export default function RootLayout() {
           <Stack.Screen name="asd-qchat-result" options={{ headerShown: false }} />
           <Stack.Screen name="asd-research"     options={{ headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="asd-result"       options={{ headerShown: false }} />
+          <Stack.Screen name="smart-cry-analysis" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

@@ -196,7 +196,7 @@ export default function DailyLogScreen() {
                     .eq('id', existingLogId);
                 if (error) throw error;
             } else {
-                const { error } = await supabase.from('daily_logs').insert(payload);
+                const { error } = await supabase.from('daily_logs').upsert(payload, { onConflict: 'infant_id,log_date' });
                 if (error) throw error;
             }
 

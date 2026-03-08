@@ -52,7 +52,14 @@ export default function GrowthScreen() {
         setInfant(infantData);
 
         const response = await fetch(`${API_URL}/growth/dashboard/${infantData.id}`);
-        if (!response.ok) throw new Error('Backend error');
+        if (!response.ok) {
+          if (response.status === 503) {
+            console.warn('Growth service unavailable (Supabase not configured on backend)');
+            setPageLoading(false);
+            return;
+          }
+          throw new Error(`Backend error (${response.status})`);
+        }
         const data = await response.json();
 
         setAgeDays(data.age_days ?? 0);

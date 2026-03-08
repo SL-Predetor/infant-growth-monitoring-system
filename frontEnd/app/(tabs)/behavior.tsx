@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -158,5 +158,22 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  headerImage: {
+    height: 178,
+    width: 290,
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6E6E73',
+    marginBottom: 12,
+  },
+  content: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#444',
   },
 });

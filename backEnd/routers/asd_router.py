@@ -57,40 +57,55 @@ QCHAT_THRESHOLD    = 0.35
 FUSION_THRESHOLD   = 0.35
 
 # ──────────────────────────────────────────────
-# 3.  MODEL LOADING — AT MODULE LEVEL
+# 3.  MODEL LOADING — AT MODULE LEVEL (graceful)
 # ──────────────────────────────────────────────
 print("[ASD] Loading models...")
 
 # --- Facial stream ---
-for path in (H5_PATH, SCALER_PATH, LOGREG_PATH):
-    if not path.exists():
-        raise RuntimeError(f"[ASD] Model file not found: {path}")
+vgg_model = None
+logreg_scaler = None
+logreg_model = None
+intermediate_model = None
+_facial_ready = False
 
-vgg_model     = tf.keras.models.load_model(str(H5_PATH), compile=False)
-logreg_scaler = joblib.load(SCALER_PATH)
-logreg_model  = joblib.load(LOGREG_PATH)
-
-# Build the 256-D embedding sub-model once at startup (not per request)
-intermediate_model = tf.keras.Model(
-    inputs=vgg_model.input,
-    outputs=vgg_model.get_layer("asd_feature_vector_256").output,
-)
+_missing_facial = [p for p in (H5_PATH, SCALER_PATH, LOGREG_PATH) if not p.exists()]
+if _missing_facial:
+    for p in _missing_facial:
+        print(f"[ASD] WARNING — facial model file missing: {p}")
+    print("[ASD] Facial stream DISABLED (missing files above).")
+else:
+    vgg_model     = tf.keras.models.load_model(str(H5_PATH), compile=False)
+    logreg_scaler = joblib.load(SCALER_PATH)
+    logreg_model  = joblib.load(LOGREG_PATH)
+    intermediate_model = tf.keras.Model(
+        inputs=vgg_model.input,
+        outputs=vgg_model.get_layer("asd_feature_vector_256").output,
+    )
+    _facial_ready = True
+    print("[ASD] Facial stream loaded.")
 
 # --- Q-CHAT stream ---
-for path in (XGBOOST_PATH, FEATURES_PATH):
-    if not path.exists():
-        raise RuntimeError(f"[ASD] Model file not found: {path}")
+xgboost_model = None
+feature_columns = None
+_qchat_ready = False
 
-xgboost_model   = joblib.load(XGBOOST_PATH)
-feature_columns = joblib.load(FEATURES_PATH)
-
-print(f"[ASD] All models loaded. Q-CHAT features: {feature_columns}")
+_missing_qchat = [p for p in (XGBOOST_PATH, FEATURES_PATH) if not p.exists()]
+if _missing_qchat:
+    for p in _missing_qchat:
+        print(f"[ASD] WARNING — Q-CHAT model file missing: {p}")
+    print("[ASD] Q-CHAT stream DISABLED (missing files above).")
+else:
+    xgboost_model   = joblib.load(XGBOOST_PATH)
+    feature_columns = joblib.load(FEATURES_PATH)
+    _qchat_ready = True
+    print(f"[ASD] Q-CHAT stream loaded. Features: {feature_columns}")
 
 # --- MTCNN face detector ---
-mtcnn_detector = MTCNN()
-print("[ASD] MTCNN detector ready.")
+mtcnn_detector = MTCNN() if _facial_ready else None
+if mtcnn_detector:
+    print("[ASD] MTCNN detector ready.")
 
-print("[ASD] Ready.")
+print("[ASD] Ready (facial=%s, qchat=%s)." % (_facial_ready, _qchat_ready))
 
 # ──────────────────────────────────────────────
 # 4.  SUPABASE — lazy import to avoid startup crash if DB is down
@@ -160,11 +175,11 @@ def _infer_frame(bgr_frame: np.ndarray) -> tuple[float, Optional[np.ndarray]]:
 @router.get("/status")
 def asd_status():
     return {
-        "status": "ok",
+        "status": "ok" if (_facial_ready and _qchat_ready) else "degraded",
         "models": {
-            "vgg_face":      vgg_model is not None,
-            "logreg_probe":  logreg_model is not None,
-            "xgboost_qchat": xgboost_model is not None,
+            "vgg_face":      _facial_ready,
+            "logreg_probe":  _facial_ready,
+            "xgboost_qchat": _qchat_ready,
         },
         "fusion_alpha":     ALPHA,
         "fusion_threshold": FUSION_THRESHOLD,
@@ -180,6 +195,8 @@ async def predict_asd_face(file: UploadFile = File(...)):
     Pipeline: decode (BGR) → resize 224x224 → mean-subtract → CNN → 256-D embedding
               → StandardScaler → LogReg probe → P(ASD).
     """
+    if not _facial_ready:
+        raise HTTPException(status_code=503, detail="Facial ASD model not available. Model file (fold_5_best.h5) is missing.")
     try:
         contents = await file.read()
         nparr    = np.frombuffer(contents, np.uint8)
@@ -221,6 +238,8 @@ async def predict_asd_video(file: UploadFile = File(...)):
     Extracts 1 frame every 3 seconds, runs each through VGG-Face CNN → LogReg probe,
     then soft-averages the ASD probabilities.
     """
+    if not _facial_ready:
+        raise HTTPException(status_code=503, detail="Facial ASD model not available. Model file (fold_5_best.h5) is missing.")
     suffix   = ".mp4"
     if file.filename:
         ext = Path(file.filename).suffix.lower()
@@ -352,6 +371,8 @@ async def predict_asd_qchat(data: QChatInput):
     Pipeline: XGBoost (parent-only training subset, AUC=0.9769).
     Returns P(ASD), risk label, raw Q-CHAT score, and confidence.
     """
+    if not _qchat_ready:
+        raise HTTPException(status_code=503, detail="Q-CHAT ASD model not available. Model files are missing.")
     try:
         row = {col: 0 for col in feature_columns}
         row["A1"]  = data.A1

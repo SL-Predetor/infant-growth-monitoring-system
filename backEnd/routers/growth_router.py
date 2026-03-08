@@ -439,6 +439,8 @@ def growth_status():
 
 @router.get("/growth/dashboard/{infant_id}")
 def get_dashboard(infant_id: str):
+    if supabase is None:
+        raise HTTPException(503, "Growth service unavailable – Supabase not configured")
     try:
         # 1. Infant profile
         r = supabase.table('infants').select('*').eq('id', infant_id).single().execute()
@@ -583,6 +585,8 @@ def get_dashboard(infant_id: str):
 
 @router.get("/growth/history/{infant_id}")
 def get_history(infant_id: str, days: int = 30):
+    if supabase is None:
+        raise HTTPException(503, "Growth service unavailable – Supabase not configured")
     try:
         since = (date.today() - timedelta(days=days)).isoformat()
         r = supabase.table('daily_logs').select('*')\
