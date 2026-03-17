@@ -80,3 +80,17 @@ mlModels/
 *.pt
 *.joblib
 temp_*
+
+
+# Python virtual environment
+venv/
+venv312/
+.env
+*.env
+
+# Node
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
