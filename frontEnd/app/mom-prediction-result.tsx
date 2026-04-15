@@ -1,249 +1,239 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView,
+  Pressable, Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-const { width } = Dimensions.get('window');
+import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft } from 'lucide-react-native';
+import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+
+const C = Colors.light;
+
+const PAIN_CONFIG: Record<string, { label: string; emoji: string; color: string; soft: string }> = {
+  perineal: {
+    label: 'Perineal Discomfort',
+    emoji: '🌸',
+    color: '#E88D72',
+    soft: '#FAE8E4',
+  },
+  csection: {
+    label: 'C-Section Recovery',
+    emoji: '🩹',
+    color: C.primary,
+    soft: C.primarySoft,
+  },
+  back_pelvic: {
+    label: 'Back & Pelvic Support',
+    emoji: '🌿',
+    color: C.success,
+    soft: C.successSoft,
+  },
+};
 
 export default function MomPredictionResultsScreen() {
-    const params = useLocalSearchParams();
-    const router = useRouter();
-    const result = params.result ? JSON.parse(params.result as string) : null;
+  const params = useLocalSearchParams();
+  const router = useRouter();
+  const result = params.result ? JSON.parse(params.result as string) : null;
 
-    const painConfig: any = {
-        perineal: {
-            label: 'Perineal Pain',
-            icon: '🩸', // Updated to a softer icon
-            color: '#FF6B6B',
-        },
-        csection: {
-            label: 'C-Section Recovery',
-            icon: '🩹',
-            color: '#4D96FF',
-        },
-        back_pelvic: {
-            label: 'Pelvic-Back Support',
-            icon: '🦴',
-            color: '#6BCB77',
-        },
-    };
+  const activePains = Object.entries(result?.predictions || {})
+    .map(([type, value]: any) => ({ type, value }))
+    .filter(({ value }) => value && value.score !== 0);
 
-    return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <View style={styles.headerContainer}>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color="#49289e" />
-                </TouchableOpacity>
-                <Text style={styles.header}>Recovery Insights</Text>
-                <Text style={styles.subHeader}>Based on your recent assessment data</Text>
-            </View>
+  return (
+    <View style={s.container}>
+      {/* ── Teal Hero Header ── */}
+      <LinearGradient
+        colors={[C.primary, '#4A8F98']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={[s.hero, { paddingTop: Platform.OS === 'ios' ? 56 : 40 }]}
+      >
+        <SafeAreaView edges={[]} style={s.heroInner}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <ChevronLeft size={20} color="rgba(255,255,255,0.9)" strokeWidth={2} />
+            <Text style={s.backText}>Back</Text>
+          </Pressable>
+          <Text style={s.heroTitle}>Recovery Insights</Text>
+          <Text style={s.heroSub}>Based on your assessment</Text>
+        </SafeAreaView>
+      </LinearGradient>
 
-            <View style={styles.sectionContainer}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+      >
 
-                {Object.entries(result?.predictions || {}).map(([type, value]: any) => {
-                    if (!value || value.score === 0) return null;
+        {/* ── Pain Cards ── */}
+        {activePains.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>Areas to focus on</Text>
+            {activePains.map(({ type, value }) => {
+              const cfg = PAIN_CONFIG[type] ?? { label: type, emoji: '📋', color: C.labelSecondary, soft: C.cardSecondary };
+              const isHigh = value.risk === 'HIGH';
+              const score = Math.round(Number(value.score));
+              const barPct = Math.min(100, (score / 10) * 100);
 
-                    const config = painConfig[type] || { label: type, icon: '📋', color: '#666' };
-                    const isHighRisk = value.risk === 'HIGH';
-
-                    return (
-                        <View key={type} style={styles.card}>
-                            <View style={styles.cardRow}>
-                                <View style={[styles.iconBox, { backgroundColor: config.color + '20' }]}>
-                                    <Text style={styles.iconText}>{config.icon}</Text>
-                                </View>
-                                <View style={styles.textContainer}>
-                                    <Text style={styles.title}>{config.label}</Text>
-                                    <Text style={styles.scoreText}>Score: {Math.round(Number(value.score))}/10</Text>
-                                    <View style={[styles.badge, isHighRisk ? styles.highBadge : styles.modBadge]}>
-                                        <Text style={[styles.badgeText, isHighRisk ? styles.highText : styles.modText]}>
-                                            {isHighRisk ? '• HIGH RISK' : '• MODERATE RISK'}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-                    );
-                })}
-                <Text style={styles.sectionTitle}>Daily Care Routine</Text>
-            </View>
-
-            <View style={styles.guidanceCard}>
-
-                <Text style={styles.guidanceTitle}>Recovery Actions</Text>
-
-                <View style={styles.divider} />
-                {result?.guidance?.model_based?.map((tip: string, index: number) => (
-                    <View key={index} style={styles.tipRow}>
-                        <View style={styles.bullet} />
-                        <Text style={styles.tipText}>{tip}</Text>
+              return (
+                <View key={type} style={[s.painCard, Shadows.sm]}>
+                  <View style={s.painCardTop}>
+                    <View style={[s.painIcon, { backgroundColor: cfg.soft }]}>
+                      <Text style={{ fontSize: 22 }}>{cfg.emoji}</Text>
                     </View>
-                ))}
-
-                <View style={styles.disclaimerBox}>
-                    <Text style={styles.disclaimer}>
-                        ⚠️ This guidance supports recovery and does not replace professional medical advice.
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.painLabel}>{cfg.label}</Text>
+                      <View style={[s.riskBadge, {
+                        backgroundColor: isHigh ? '#FEE2E2' : '#FEF3C7',
+                      }]}>
+                        <Text style={[s.riskBadgeText, {
+                          color: isHigh ? '#D63031' : '#B07D05',
+                        }]}>
+                          {isHigh ? '● Needs attention' : '● Manageable'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[s.scoreNum, { color: cfg.color }]}>{score}<Text style={s.scoreOf}>/10</Text></Text>
+                  </View>
+                  <View style={s.barTrack}>
+                    <View style={[s.barFill, { width: `${barPct}%` as any, backgroundColor: cfg.color }]} />
+                  </View>
                 </View>
+              );
+            })}
+          </>
+        )}
+
+        {activePains.length === 0 && (
+          <View style={s.allGoodCard}>
+            <Text style={{ fontSize: 40, marginBottom: 8 }}>🌸</Text>
+            <Text style={s.allGoodTitle}>No active discomfort detected</Text>
+            <Text style={s.allGoodSub}>Keep taking care of yourself — you're doing great!</Text>
+          </View>
+        )}
+
+        {/* ── Recovery Actions ── */}
+        {result?.guidance?.model_based?.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>What to do now</Text>
+            <View style={s.guidanceCard}>
+              {result.guidance.model_based.map((tip: string, i: number) => (
+                <View key={i} style={s.tipRow}>
+                  <View style={s.tipDot} />
+                  <Text style={s.tipText}>{tip}</Text>
+                </View>
+              ))}
             </View>
-        </ScrollView>
-    );
+          </>
+        )}
+
+        {/* ── Disclaimer ── */}
+        <View style={s.disclaimerBox}>
+          <Text style={s.disclaimerText}>
+            ⚠️ This guidance supports recovery and does not replace professional medical advice. Always consult your doctor if you have concerns.
+          </Text>
+        </View>
+
+        {/* ── Actions ── */}
+        <View style={s.actionsRow}>
+          <Pressable
+            style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.85 }]}
+            onPress={() => router.push('/postpartum-dashboard' as any)}
+          >
+            <Text style={s.primaryBtnText}>View Dashboard</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [s.outlineBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => router.back()}
+          >
+            <Text style={s.outlineBtnText}>New Check-in</Text>
+          </Pressable>
+        </View>
+
+        <View style={{ height: 48 }} />
+      </ScrollView>
+    </View>
+  );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F8F9FE', // Cleaner, lighter background
-    },
-    headerContainer: {
-        paddingTop: 50,
-        paddingHorizontal: 24,
-        paddingBottom: 20,
-        backgroundColor: '#bfeea9',
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-    },
-    backButton: {
-        marginBottom: 12,
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    header: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#1A1A1A',
-        letterSpacing: -0.5,
-    },
-    subHeader: {
-        fontSize: 14,
-        color: '#7C7C7C',
-        marginTop: 4,
-    },
-    sectionContainer: {
-        padding: 24,
-    },
-    sectionTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#333',
-        marginBottom: 5,
-    },
-    card: {
-        backgroundColor: '#FFF',
-        padding: 16,
-        borderRadius: 20,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#F0F0F0',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-    },
-    cardRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    iconBox: {
-        width: 50,
-        height: 50,
-        borderRadius: 15,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 16,
-    },
-    iconText: {
-        fontSize: 24,
-    },
-    textContainer: {
-        flex: 1,
-    },
-    title: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#2D2D2D',
-        marginBottom: 4,
-    },
-    scoreText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#555',
-        marginBottom: 6,
-    },
-    badge: {
-        alignSelf: 'flex-start',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    highBadge: { backgroundColor: '#FFE5E5' },
-    modBadge: { backgroundColor: '#FFF4E5' },
-    badgeText: {
-        fontSize: 11,
-        fontWeight: '800',
-    },
-    highText: { color: '#D63031' },
-    modText: { color: '#B07D05' },
-    guidanceCard: {
-        marginHorizontal: 24,
-        marginBottom: 40,
-        backgroundColor: '#a1baee', // Primary theme color
-        borderRadius: 24,
-        padding: 24,
-        elevation: 8,
-        shadowColor: '#6C63FF',
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-    },
-    guidanceTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#FFF',
-        marginBottom: 12,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        marginBottom: 20,
-    },
-    tipRow: {
-        flexDirection: 'row',
-        marginBottom: 14,
-        alignItems: 'flex-start',
-    },
-    bullet: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#FFF',
-        marginTop: 8,
-        marginRight: 10,
-        opacity: 0.8,
-    },
-    tipText: {
-        flex: 1,
-        color: '#FFF',
-        fontSize: 15,
-        lineHeight: 22,
-        opacity: 0.9,
-    },
-    disclaimerBox: {
-        marginTop: 10,
-        paddingTop: 15,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.1)',
-    },
-    disclaimer: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.7)',
-        fontStyle: 'italic',
-        textAlign: 'center',
-    },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
+
+  /* Hero */
+  hero: {
+    paddingHorizontal: Spacing.screenPadding, paddingBottom: 24,
+    borderBottomLeftRadius: 32, borderBottomRightRadius: 32,
+  },
+  heroInner: { gap: 4 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 6, marginBottom: 8 },
+  backText: { fontSize: 15, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
+  heroTitle: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
+  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.75)' },
+
+  /* Scroll */
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: Spacing.screenPadding, paddingTop: Spacing.xl },
+
+  /* Section title */
+  sectionTitle: {
+    fontSize: 16, fontWeight: '700', color: C.label,
+    letterSpacing: -0.2, marginBottom: Spacing.md,
+  },
+
+  /* Pain cards */
+  painCard: {
+    backgroundColor: C.card, borderRadius: Radius.xl,
+    padding: Spacing.lg, marginBottom: Spacing.md,
+  },
+  painCardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: Spacing.md },
+  painIcon: { width: 50, height: 50, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center' },
+  painLabel: { fontSize: 15, fontWeight: '700', color: C.label, marginBottom: 5 },
+  riskBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full },
+  riskBadgeText: { fontSize: 11, fontWeight: '700' },
+  scoreNum: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  scoreOf: { fontSize: 13, fontWeight: '500', color: C.labelTertiary },
+  barTrack: { height: 6, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 3 },
+
+  /* All good */
+  allGoodCard: {
+    backgroundColor: C.successSoft, borderRadius: Radius.xl,
+    padding: Spacing.xl, alignItems: 'center', marginBottom: Spacing.xl,
+  },
+  allGoodTitle: { fontSize: 17, fontWeight: '700', color: C.success, marginBottom: 4 },
+  allGoodSub: { fontSize: 13, color: C.success, textAlign: 'center' },
+
+  /* Guidance */
+  guidanceCard: {
+    backgroundColor: C.primarySoft, borderRadius: Radius.xl,
+    padding: Spacing.lg, marginBottom: Spacing.xl,
+  },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
+  tipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary, marginTop: 7 },
+  tipText: { flex: 1, fontSize: 14, color: C.label, lineHeight: 21 },
+
+  /* Disclaimer */
+  disclaimerBox: {
+    backgroundColor: C.warningSoft, borderRadius: Radius.lg,
+    padding: Spacing.md, marginBottom: Spacing.xl,
+  },
+  disclaimerText: { fontSize: 12, color: C.warning, lineHeight: 18, textAlign: 'center' },
+
+  /* Actions */
+  actionsRow: { flexDirection: 'row', gap: 12 },
+  primaryBtn: {
+    flex: 1, height: 50, borderRadius: Radius.full,
+    backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center',
+    ...Shadows.sm,
+  },
+  primaryBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  outlineBtn: {
+    flex: 1, height: 50, borderRadius: Radius.full,
+    borderWidth: 1.5, borderColor: C.primary, justifyContent: 'center', alignItems: 'center',
+  },
+  outlineBtnText: { fontSize: 14, fontWeight: '700', color: C.primary },
 });

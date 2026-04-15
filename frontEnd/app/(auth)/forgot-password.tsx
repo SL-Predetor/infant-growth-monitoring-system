@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
+  Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
@@ -10,9 +11,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
+import { ChevronLeft, MailCheck } from 'lucide-react-native';
+import { Colors, Spacing, Radius, Shadows, Typography } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+
+const C = Colors.light;
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -24,15 +27,12 @@ export default function ForgotPasswordScreen() {
 
   const handleResetPassword = async () => {
     setError(null);
-
     if (!email.trim()) {
       setError('Please enter your email address');
       return;
     }
-
     setLoading(true);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
-
     if (resetError) {
       setError(resetError.message);
     } else {
@@ -40,7 +40,6 @@ export default function ForgotPasswordScreen() {
     }
     setLoading(false);
   };
-
 
   return (
     <KeyboardAvoidingView
@@ -50,73 +49,84 @@ export default function ForgotPasswordScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Back Button */}
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
           disabled={loading}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <ThemedText style={styles.backButtonText}>← Back</ThemedText>
+          <ChevronLeft size={20} color={C.primary} strokeWidth={2} />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
         {sent ? (
-          <View style={styles.successContainer}>
-            <ThemedText type="title" style={styles.successTitle}>
-              Check Your Email
-            </ThemedText>
-            <ThemedText style={styles.successMessage}>
-              We've sent a password reset link to {email}. Click the link in the email to reset your password.
-            </ThemedText>
-
+          /* ── Success State ── */
+          <View style={styles.successCard}>
+            <View style={styles.successIcon}>
+              <MailCheck size={36} color={C.success} strokeWidth={1.5} />
+            </View>
+            <Text style={styles.successTitle}>Check Your Email</Text>
+            <Text style={styles.successMessage}>
+              We've sent a password reset link to{' '}
+              <Text style={styles.emailHighlight}>{email}</Text>.
+              {'\n\n'}Click the link in the email to reset your password.
+            </Text>
             <TouchableOpacity
-              style={styles.backToSignInButton}
+              style={styles.primaryButton}
               onPress={() => router.replace('/(auth)/sign-in')}
+              activeOpacity={0.85}
             >
-              <ThemedText style={styles.backToSignInText}>Back to Sign In</ThemedText>
+              <Text style={styles.primaryButtonText}>Back to Sign In</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.formContainer}>
-            <ThemedText type="title" style={styles.title}>
-              Reset Password
-            </ThemedText>
-            <ThemedText style={styles.description}>
-              Enter your email address and we'll send you a link to reset your password.
-            </ThemedText>
-
-            {error && (
-              <View style={styles.errorContainer}>
-                <ThemedText style={styles.errorText}>{error}</ThemedText>
-              </View>
-            )}
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={styles.label}>Email Address</ThemedText>
-              <TextInput
-                style={[styles.input, { backgroundColor: '#0f1729' }]}
-                placeholder="your@example.com"
-                placeholderTextColor="#4a5568"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-                value={email}
-                onChangeText={setEmail}
-              />
+          /* ── Form State ── */
+          <>
+            <View style={styles.header}>
+              <Text style={styles.title}>Reset Password</Text>
+              <Text style={styles.subtitle}>
+                Enter your email and we'll send you a link to reset your password.
+              </Text>
             </View>
 
-            <TouchableOpacity
-              style={[styles.resetButton, loading && styles.disabledButton]}
-              onPress={handleResetPassword}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <ThemedText style={styles.resetButtonText}>Send Reset Email</ThemedText>
+            <View style={styles.formCard}>
+              {error && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
               )}
-            </TouchableOpacity>
-          </View>
+
+              <View style={styles.fieldContainer}>
+                <Text style={styles.label}>Email Address</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="your@example.com"
+                  placeholderTextColor={C.labelTertiary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!loading}
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, loading && styles.disabledButton]}
+                onPress={handleResetPassword}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading
+                  ? <ActivityIndicator color="#FFFFFF" />
+                  : <Text style={styles.primaryButtonText}>Send Reset Email</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -126,113 +136,133 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: C.background,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: 56,
+    paddingBottom: 40,
   },
+
+  // Back Button
   backButton: {
-    paddingVertical: 12,
-    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
   },
-  backButtonText: {
-    color: '#6C63FF',
-    fontSize: 16,
-    fontWeight: '600',
+  backText: {
+    color: C.primary,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '500',
+    marginLeft: 2,
   },
-  formContainer: {
-    flex: 1,
+
+  // Header
+  header: {
+    marginBottom: 28,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontSize: Typography.h1.fontSize,
+    fontWeight: Typography.h1.fontWeight,
+    color: C.label,
+    marginBottom: 6,
+    letterSpacing: Typography.h1.letterSpacing,
   },
-  description: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 24,
+  subtitle: {
+    fontSize: Typography.bodySmall.fontSize,
+    color: C.labelTertiary,
     lineHeight: 20,
   },
-  fieldContainer: {
-    marginBottom: 24,
+
+  // Form Card
+  formCard: {
+    backgroundColor: C.card,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    ...Shadows.md,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#a8b2c1',
-  },
-  input: {
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#2a2d4e',
-    color: '#FFFFFF',
-  },
-  errorContainer: {
-    backgroundColor: 'rgba(255, 82, 82, 0.15)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF5252',
+  errorBanner: {
+    backgroundColor: Colors.light.dangerSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: C.danger,
+    borderRadius: Radius.sm,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
   },
   errorText: {
-    color: '#FF5252',
-    fontSize: 13,
+    color: C.danger,
+    fontSize: Typography.bodySmall.fontSize,
   },
-  resetButton: {
-    backgroundColor: '#6C63FF',
+  fieldContainer: {
+    marginBottom: Spacing.lg,
+  },
+  label: {
+    fontSize: Typography.bodySmall.fontSize,
+    fontWeight: '600',
+    color: C.label,
+    marginBottom: Spacing.sm,
+  },
+  input: {
+    backgroundColor: C.cardSecondary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 14,
-    borderRadius: 12,
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    fontSize: Typography.body.fontSize,
+    color: C.label,
+  },
+
+  // Primary Button
+  primaryButton: {
+    backgroundColor: C.primary,
+    borderRadius: Radius.full,
+    paddingVertical: 16,
     alignItems: 'center',
+    ...Shadows.sm,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: Typography.button.fontSize,
+    fontWeight: Typography.button.fontWeight,
   },
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
-  resetButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  successContainer: {
-    flex: 1,
-    justifyContent: 'center',
+
+  // Success State
+  successCard: {
+    backgroundColor: C.card,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
     alignItems: 'center',
-    paddingVertical: 40,
+    marginTop: 40,
+    ...Shadows.md,
+  },
+  successIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.full,
+    backgroundColor: C.successSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xl,
   },
   successTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 16,
+    fontSize: Typography.h2.fontSize,
+    fontWeight: Typography.h2.fontWeight,
+    color: C.label,
+    marginBottom: Spacing.md,
     textAlign: 'center',
   },
   successMessage: {
-    fontSize: 14,
+    fontSize: Typography.bodySmall.fontSize,
+    color: C.labelTertiary,
     textAlign: 'center',
-    marginBottom: 32,
-    opacity: 0.7,
-    lineHeight: 20,
+    lineHeight: 22,
+    marginBottom: Spacing.xxxl,
   },
-  backToSignInButton: {
-    backgroundColor: '#6C63FF',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-  },
-  backToSignInText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  emailHighlight: {
+    color: C.label,
     fontWeight: '600',
   },
 });

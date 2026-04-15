@@ -10,7 +10,7 @@ router = APIRouter()
 # ==============================
 # LOAD TRAINED MODEL & ENCODER
 # ==============================
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "mlModels", "Cry")
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "mlModels", "Cry")
 MODEL_PATH = os.path.join(MODEL_DIR, "fusion_model_calibrated.pkl")
 ENCODER_PATH = os.path.join(MODEL_DIR, "fusion_label_encoder.pkl")
 

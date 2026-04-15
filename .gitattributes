@@ -1,13 +1,12 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Large binaries via LFS
 *.h5 filter=lfs diff=lfs merge=lfs -text
 *.keras filter=lfs diff=lfs merge=lfs -text
-*.pkl filter=lfs diff=lfs merge=lfs -text
-*.joblib filter=lfs diff=lfs merge=lfs -text
 *.exe filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
 *.task filter=lfs diff=lfs merge=lfs -text
-*.zip !text !filter !merge !diff
-*.pkl !text !filter !merge !diff
-*.h5 !text !filter !merge !diff
-*.pt !text !filter !merge !diff
+*.joblib filter=lfs diff=lfs merge=lfs -text
+
+# Small binaries — track normally (pkl files in this repo are <500 KB)

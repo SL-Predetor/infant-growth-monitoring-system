@@ -1,653 +1,467 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView,
+  ActivityIndicator, Pressable, Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-
+import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronLeft, Plus } from 'lucide-react-native';
 import { getPostpartumHistory, PostpartumHistoryItem } from '@/services/postpartumService';
+import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+
+const C = Colors.light;
 
 type PainKey = 'perineal' | 'csection' | 'back_pelvic';
 
-const PAIN_META: Record<PainKey, { label: string; icon: string; color: string }> = {
-    perineal: { label: 'Perineal Discomfort', icon: '🌸', color: '#F06292' },
-    csection: { label: 'C-Section Recovery', icon: '💕', color: '#9575CD' },
-    back_pelvic: { label: 'Back & Pelvic Support', icon: '🌿', color: '#64B5F6' },
+const PAIN_META: Record<PainKey, { label: string; emoji: string; color: string; soft: string }> = {
+  perineal:   { label: 'Perineal Discomfort',   emoji: '🌸', color: '#E88D72', soft: '#FAE8E4' },
+  csection:   { label: 'C-Section Recovery',    emoji: '🩹', color: C.primary, soft: C.primarySoft },
+  back_pelvic:{ label: 'Back & Pelvic Support', emoji: '🌿', color: C.success, soft: C.successSoft },
 };
 
 export default function PostpartumDashboard() {
-    const [history, setHistory] = useState<PostpartumHistoryItem[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+  const [history, setHistory]   = useState<PostpartumHistoryItem[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
 
-    const loadDashboard = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await getPostpartumHistory(100);
-            const sorted = [...response].sort((a, b) => {
-                const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-                const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-                return aTime - bTime;
-            });
-            setHistory(sorted);
-        } catch (e) {
-            setError('Unable to load dashboard. Check backend and API URL.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        loadDashboard();
-    }, []);
-
-    const latest = useMemo(() => history[history.length - 1], [history]);
-
-    const activePains = useMemo(() => {
-        if (!latest?.predictions) return [] as Array<{ key: PainKey; score: number; risk: string }>;
-
-        const keys: PainKey[] = ['perineal', 'csection', 'back_pelvic'];
-        return keys
-            .map((key) => {
-                const entry = latest.predictions?.[key];
-                const score = Number(entry?.score ?? 0);
-                const risk = String(entry?.risk ?? 'LOW');
-                return { key, score, risk };
-            })
-            .filter((item) => item.score > 0);
-    }, [latest]);
-
-    const overallPainTrend = useMemo(() => {
-        const points = history
-            .map((entry) => ({
-                date: formatDate(entry.created_at),
-                score: getOverallPainScore(entry),
-            }))
-            .filter((point) => point.score >= 0);
-
-        if (points.length < 2) {
-            return { points, status: 'Stable', delta: 0 };
-        }
-
-        const first = points[0].score;
-        const last = points[points.length - 1].score;
-        const delta = first === 0 ? 0 : ((last - first) / first) * 100;
-
-        let status = 'Stable';
-        if (delta <= -8) status = 'Improving';
-        if (delta >= 8) status = 'Needs Attention';
-
-        return { points, status, delta };
-    }, [history]);
-
-    const sleepFatiguePoints = useMemo(() => {
-        return history
-            .map((entry) => {
-                const sleep = parseSleepHours(entry.input?.sleep_hours);
-                const fatigue = Number(entry.input?.daytime_fatigue_score ?? 0);
-                return {
-                    date: formatDate(entry.created_at),
-                    sleep,
-                    fatigue,
-                    backPelvicPain: Number(entry.predictions?.back_pelvic?.score ?? 0),
-                };
-            })
-            .filter((point) => point.sleep !== null);
-    }, [history]);
-
-    const sleepInsight = useMemo(() => {
-        if (sleepFatiguePoints.length < 3) {
-            return 'Add a few more assessments to unlock personalized sleep-fatigue insight.';
-        }
-
-        const lowSleep = sleepFatiguePoints.filter((point) => (point.sleep ?? 0) < 5);
-        const okSleep = sleepFatiguePoints.filter((point) => (point.sleep ?? 0) >= 5);
-
-        if (lowSleep.length >= 2 && okSleep.length >= 2) {
-            const lowAvgFatigue = average(lowSleep.map((point) => point.fatigue));
-            const okAvgFatigue = average(okSleep.map((point) => point.fatigue));
-            const fatigueRise = okAvgFatigue === 0 ? 0 : ((lowAvgFatigue - okAvgFatigue) / okAvgFatigue) * 100;
-
-            return `On lower-sleep days (<5h), fatigue is ${Math.max(0, fatigueRise).toFixed(0)}% higher.`;
-        }
-
-        return 'Sleep and fatigue are being tracked. Keep logging to reveal stronger patterns.';
-    }, [sleepFatiguePoints]);
-
-    const recoverySupportScore = useMemo(() => {
-        if (!latest?.input) return 0;
-        return calculateRecoverySupportScore(latest.input);
-    }, [latest]);
-
-    const nutritionInsight = useMemo(() => {
-        const points = history.map((entry) => ({
-            adequateProtein: (entry.input?.protein_intake || '').toLowerCase() === 'daily',
-            pain: getOverallPainScore(entry),
-        }));
-
-        const adequate = points.filter((p) => p.adequateProtein && p.pain >= 0).map((p) => p.pain);
-        const low = points.filter((p) => !p.adequateProtein && p.pain >= 0).map((p) => p.pain);
-
-        if (adequate.length >= 2 && low.length >= 2) {
-            return {
-                enoughData: true,
-                adequateAvg: average(adequate),
-                lowAvg: average(low),
-            };
-        }
-
-        return { enoughData: false, adequateAvg: 0, lowAvg: 0 };
-    }, [history]);
-
-    const encouragement = useMemo(() => {
-        if (!latest) return '🌸 Start your first assessment to view your personalized recovery dashboard.';
-
-        const hasHighRisk = activePains.some((pain) => pain.risk.toUpperCase() === 'HIGH');
-        const avgSleep = average(sleepFatiguePoints.map((point) => point.sleep ?? 0));
-
-        if (hasHighRisk) {
-            return '❤️ Your body needs extra care right now. Consider consulting your doctor if pain persists.';
-        }
-        if (avgSleep > 0 && avgSleep < 5) {
-            return '😴 Improving sleep could significantly reduce fatigue and support pain recovery.';
-        }
-        if (overallPainTrend.status === 'Improving') {
-            return '🌸 Your recovery is progressing well. Keep going, one day at a time.';
-        }
-
-        return '💜 You are doing important recovery work. Continue tracking to unlock stronger insights.';
-    }, [latest, activePains, sleepFatiguePoints, overallPainTrend.status]);
-
-    if (loading) {
-        return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#2B6CB0" />
-                <Text style={styles.infoText}>Loading your recovery dashboard...</Text>
-            </View>
-        );
+  const loadDashboard = async () => {
+    try {
+      setLoading(true); setError(null);
+      const response = await getPostpartumHistory(100);
+      const sorted = [...response].sort((a, b) => {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return at - bt;
+      });
+      setHistory(sorted);
+    } catch {
+      setError('Unable to load dashboard. Check backend and API URL.');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    if (error) {
-        return (
-            <View style={styles.centered}>
-                <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={loadDashboard}>
-                    <Text style={styles.retryText}>Retry</Text>
-                </TouchableOpacity>
-            </View>
-        );
+  useEffect(() => { loadDashboard(); }, []);
+
+  const latest = useMemo(() => history[history.length - 1], [history]);
+
+  const activePains = useMemo(() => {
+    if (!latest?.predictions) return [] as Array<{ key: PainKey; score: number; risk: string }>;
+    const keys: PainKey[] = ['perineal', 'csection', 'back_pelvic'];
+    return keys
+      .map(key => {
+        const entry = latest.predictions?.[key];
+        return { key, score: Number(entry?.score ?? 0), risk: String(entry?.risk ?? 'LOW') };
+      })
+      .filter(item => item.score > 0);
+  }, [latest]);
+
+  const overallPainTrend = useMemo(() => {
+    const points = history
+      .map(entry => ({ date: formatDate(entry.created_at), score: getOverallPainScore(entry) }))
+      .filter(p => p.score >= 0);
+    if (points.length < 2) return { points, status: 'Stable', delta: 0 };
+    const first = points[0].score, last = points[points.length - 1].score;
+    const delta = first === 0 ? 0 : ((last - first) / first) * 100;
+    let status = 'Stable';
+    if (delta <= -8) status = 'Improving';
+    if (delta >= 8)  status = 'Needs Attention';
+    return { points, status, delta };
+  }, [history]);
+
+  const sleepFatiguePoints = useMemo(() =>
+    history
+      .map(entry => ({
+        date: formatDate(entry.created_at),
+        sleep: parseSleepHours(entry.input?.sleep_hours),
+        fatigue: Number(entry.input?.daytime_fatigue_score ?? 0),
+      }))
+      .filter(p => p.sleep !== null),
+    [history]
+  );
+
+  const sleepInsight = useMemo(() => {
+    if (sleepFatiguePoints.length < 3)
+      return 'Add a few more check-ins to unlock personalized sleep insights.';
+    const low = sleepFatiguePoints.filter(p => (p.sleep ?? 0) < 5);
+    const ok  = sleepFatiguePoints.filter(p => (p.sleep ?? 0) >= 5);
+    if (low.length >= 2 && ok.length >= 2) {
+      const rise = ok.length === 0 ? 0 :
+        ((average(low.map(p => p.fatigue)) - average(ok.map(p => p.fatigue))) / average(ok.map(p => p.fatigue))) * 100;
+      return `On lower-sleep days (<5h), fatigue is ${Math.max(0, rise).toFixed(0)}% higher.`;
     }
+    return 'Sleep and fatigue are being tracked. Keep logging to reveal stronger patterns.';
+  }, [sleepFatiguePoints]);
 
-    if (!latest) {
-        return (
-            <View style={styles.centered}>
-                <Text style={styles.infoText}>No assessments yet. Complete one postpartum assessment to begin.</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={loadDashboard}>
-                    <Text style={styles.retryText}>Refresh</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
+  const recoverySupportScore = useMemo(() =>
+    latest?.input ? calculateRecoverySupportScore(latest.input) : 0,
+    [latest]
+  );
 
+  const encouragement = useMemo(() => {
+    if (!latest) return '🌸 Complete your first check-in to see your personalized recovery dashboard.';
+    const hasHighRisk = activePains.some(p => p.risk.toUpperCase() === 'HIGH');
+    const avgSleep = average(sleepFatiguePoints.map(p => p.sleep ?? 0));
+    if (hasHighRisk) return '❤️ Your body needs extra care right now. Consider consulting your doctor if pain persists.';
+    if (avgSleep > 0 && avgSleep < 5) return '😴 Better sleep could significantly reduce fatigue and support healing.';
+    if (overallPainTrend.status === 'Improving') return '🌸 Your recovery is progressing well. Keep going, one day at a time.';
+    return '💜 You are doing important recovery work. Keep tracking to unlock stronger insights.';
+  }, [latest, activePains, sleepFatiguePoints, overallPainTrend.status]);
+
+  if (loading) {
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                <Ionicons name="arrow-back" size={24} color="#49289e" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Your Recovery Journey 🌷</Text>
-            <Text style={styles.subtitle}>{history.length} {history.length === 1 ? 'assessment' : 'assessments'} on record</Text>
+      <View style={s.centered}>
+        <ActivityIndicator size="large" color={C.primary} />
+        <Text style={s.centeredHint}>Loading your dashboard…</Text>
+      </View>
+    );
+  }
 
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>💜 Recovery Overview</Text>
-                <Text style={styles.summaryText}>You're {latest.input?.weeks_since_delivery ?? '-'} weeks into your healing journey</Text>
-                <Text style={styles.sectionLabel}>Areas We're Monitoring</Text>
-                {activePains.length === 0 ? (
-                    <Text style={styles.infoText}>✨ Great news! No active discomfort right now. Keep caring for yourself.</Text>
-                ) : (
-                    activePains.map((pain) => (
-                        <Text key={pain.key} style={styles.listText}>
-                            {PAIN_META[pain.key].icon} {PAIN_META[pain.key].label} — {pain.risk === 'HIGH' ? 'Needs attention' : pain.risk === 'MODERATE' ? 'Manageable' : 'Mild'}
-                        </Text>
-                    ))
-                )}
-                <View style={styles.trendBadge}>
-                    <Text style={styles.trendSummary}>
-                        {overallPainTrend.status === 'Improving' ? '📈 Recovery is progressing' : overallPainTrend.status === 'Needs Attention' ? '💗 Extra care needed' : '✨ Staying steady'}
+  if (error) {
+    return (
+      <View style={s.centered}>
+        <Text style={s.errorText}>{error}</Text>
+        <Pressable
+          style={({ pressed }) => [s.retryBtn, pressed && { opacity: 0.7 }]}
+          onPress={loadDashboard}
+        >
+          <Text style={s.retryBtnText}>Try Again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!latest) {
+    return (
+      <View style={s.centered}>
+        <Text style={{ fontSize: 48, marginBottom: 12 }}>🌷</Text>
+        <Text style={s.centeredTitle}>No check-ins yet</Text>
+        <Text style={s.centeredHint}>Complete your first assessment to begin tracking your recovery.</Text>
+        <Pressable
+          style={({ pressed }) => [s.retryBtn, pressed && { opacity: 0.85 }]}
+          onPress={() => router.back()}
+        >
+          <Text style={s.retryBtnText}>Start Check-in</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const trendStatus = overallPainTrend.status;
+  const trendBg  = trendStatus === 'Improving' ? C.successSoft : trendStatus === 'Needs Attention' ? C.warningSoft : C.primarySoft;
+  const trendFg  = trendStatus === 'Improving' ? C.success     : trendStatus === 'Needs Attention' ? C.warning     : C.primary;
+  const trendTxt = trendStatus === 'Improving' ? '📈 Recovery is progressing'
+                 : trendStatus === 'Needs Attention' ? '💗 Extra care may be needed'
+                 : '✨ Staying steady';
+
+  return (
+    <View style={s.container}>
+      {/* ── Header ── */}
+      <LinearGradient
+        colors={[C.primary, '#4A8F98']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={[s.hero, { paddingTop: Platform.OS === 'ios' ? 56 : 36 }]}
+      >
+        <SafeAreaView edges={[]} style={s.heroInner}>
+          <View style={s.heroTop}>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <ChevronLeft size={20} color="rgba(255,255,255,0.9)" strokeWidth={2} />
+              <Text style={s.backText}>Back</Text>
+            </Pressable>
+            <Text style={s.heroTitle}>Recovery Journey</Text>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Plus size={18} color="rgba(255,255,255,0.9)" strokeWidth={2} />
+            </Pressable>
+          </View>
+          <Text style={s.heroSub}>
+            {history.length} {history.length === 1 ? 'assessment' : 'assessments'} on record ·{' '}
+            Week {latest.input?.weeks_since_delivery ?? '?'} postpartum
+          </Text>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* ── Encouragement ── */}
+        <View style={s.encourageCard}>
+          <Text style={s.encourageText}>{encouragement}</Text>
+        </View>
+
+        {/* ── Recovery Overview ── */}
+        <Text style={s.sectionTitle}>Current Comfort</Text>
+        {activePains.length === 0 ? (
+          <View style={[s.card, { alignItems: 'center', paddingVertical: 24 }]}>
+            <Text style={{ fontSize: 36, marginBottom: 8 }}>🌸</Text>
+            <Text style={s.cardGoodText}>No active discomfort detected. Keep caring for yourself.</Text>
+          </View>
+        ) : (
+          activePains.map(pain => {
+            const cfg = PAIN_META[pain.key];
+            const barPct = Math.min(100, (pain.score / 10) * 100);
+            return (
+              <View key={pain.key} style={[s.card, Shadows.sm]}>
+                <View style={s.painRow}>
+                  <View style={[s.painIcon, { backgroundColor: cfg.soft }]}>
+                    <Text style={{ fontSize: 20 }}>{cfg.emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.painLabel}>{cfg.label}</Text>
+                    <Text style={[s.painRisk, { color: pain.risk === 'HIGH' ? C.danger : C.warning }]}>
+                      {pain.risk === 'HIGH' ? 'Needs attention' : pain.risk === 'MODERATE' ? 'Manageable' : 'Mild'}
                     </Text>
+                  </View>
+                  <Text style={[s.painScore, { color: cfg.color }]}>{pain.score.toFixed(1)}</Text>
                 </View>
-            </View>
-
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>📊 Current Comfort Levels</Text>
-                {activePains.length === 0 ? (
-                    <Text style={styles.infoText}>🌸 You're feeling well today—wonderful progress!</Text>
-                ) : (
-                    activePains.map((pain) => (
-                        <ScoreRow
-                            key={pain.key}
-                            label={`${PAIN_META[pain.key].icon} ${PAIN_META[pain.key].label}`}
-                            value={pain.score}
-                            color={PAIN_META[pain.key].color}
-                        />
-                    ))
-                )}
-            </View>
-
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>📈 Your Progress Timeline</Text>
-                {activePains.length > 0 ? (
-                    activePains.map((pain) => {
-                        const firstScore = getPainScore(history[0], pain.key);
-                        const latestScore = getPainScore(latest, pain.key);
-                        const reduction = firstScore > 0 ? ((firstScore - latestScore) / firstScore) * 100 : 0;
-                        const improvedText = reduction > 0 ? `improved by ${reduction.toFixed(0)}% 💪` : 'being tracked carefully';
-                        return (
-                            <Text key={`trend-${pain.key}`} style={styles.progressText}>
-                                {PAIN_META[pain.key].icon} {PAIN_META[pain.key].label} has {improvedText}
-                            </Text>
-                        );
-                    })
-                ) : (
-                    <Text style={styles.infoText}>Keep logging assessments to see your healing trends.</Text>
-                )}
-
-                {overallPainTrend.points.slice(-8).map((point, index) => (
-                    <TrendRow
-                        key={`${point.date}-${index}`}
-                        date={point.date}
-                        value={point.score}
-                        label="Overall"
-                        color="#9575CD"
-                    />
-                ))}
-            </View>
-
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>😴 Sleep & Energy Insights</Text>
-                {sleepFatiguePoints.slice(-8).map((point, index) => (
-                    <View key={`${point.date}-sf-${index}`} style={styles.sleepRow}>
-                        <Text style={styles.trendDate}>{point.date}</Text>
-                        <Text style={styles.sleepText}>💤 {point.sleep?.toFixed(1)}h</Text>
-                        <Text style={styles.fatigueText}>⚡ {point.fatigue.toFixed(0)}/10</Text>
-                    </View>
-                ))}
-                <View style={styles.insightBox}>
-                    <Text style={styles.insightText}>{sleepInsight}</Text>
+                <View style={s.barTrack}>
+                  <View style={[s.barFill, { width: `${barPct}%` as any, backgroundColor: cfg.color }]} />
                 </View>
-            </View>
+              </View>
+            );
+          })
+        )}
 
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>🌿 Lifestyle Support Score</Text>
-                <Text style={styles.bigNumber}>{recoverySupportScore}</Text>
-                <Text style={styles.scoreLabel}>out of 100</Text>
-                <Text style={styles.infoText}>
-                    {(recoverySupportScore >= 75
-                        ? '💚 Excellent! You are giving your body what it needs to heal.'
-                        : recoverySupportScore >= 50
-                            ? '💛 Good foundation. Small improvements in nutrition and rest can boost recovery.'
-                            : '💙 Your body needs more support. Focus on sleep, hydration, and nourishing meals.')}
-                </Text>
-            </View>
-
-            <View style={[styles.card, styles.encouragementCard]}>
-                <Text style={styles.encouragementTitle}>💬 A Message for You</Text>
-                <Text style={styles.encouragement}>{encouragement}</Text>
-            </View>
-        </ScrollView>
-    );
-}
-
-function ScoreRow({ label, value, color }: { label: string; value: number; color: string }) {
-    const width = Math.max(4, Math.min(100, (value / 10) * 100));
-    return (
-        <View style={styles.rowBlock}>
-            <View style={styles.rowHeader}>
-                <Text style={styles.rowLabel}>{label}</Text>
-                <Text style={styles.rowValue}>{value.toFixed(2)}</Text>
-            </View>
-            <View style={styles.track}>
-                <View style={[styles.fill, { width: `${width}%`, backgroundColor: color }]} />
-            </View>
+        {/* ── Trend badge ── */}
+        <View style={[s.trendBadge, { backgroundColor: trendBg }]}>
+          <Text style={[s.trendText, { color: trendFg }]}>{trendTxt}</Text>
         </View>
-    );
-}
 
-function TrendRow({
-    date,
-    value,
-    label,
-    color,
-}: {
-    date: string;
-    value: number;
-    label: string;
-    color: string;
-}) {
-    const width = Math.max(4, Math.min(100, (value / 10) * 100));
-    return (
-        <View style={styles.trendGroup}>
-            <View style={styles.rowHeader}>
-                <Text style={styles.trendDate}>{date}</Text>
-                <Text style={styles.rowValue}>{label}: {value.toFixed(2)}</Text>
+        {/* ── Progress Timeline ── */}
+        {overallPainTrend.points.length > 1 && (
+          <>
+            <Text style={s.sectionTitle}>Progress Over Time</Text>
+            <View style={[s.card, Shadows.sm]}>
+              {overallPainTrend.points.slice(-6).map((point, i) => (
+                <TrendRow
+                  key={`${point.date}-${i}`}
+                  date={point.date}
+                  value={point.score}
+                  color={C.primary}
+                />
+              ))}
             </View>
-            <View style={styles.track}>
-                <View style={[styles.fill, { width: `${width}%`, backgroundColor: color }]} />
+          </>
+        )}
+
+        {/* ── Sleep & Fatigue ── */}
+        {sleepFatiguePoints.length > 0 && (
+          <>
+            <Text style={s.sectionTitle}>Sleep & Energy</Text>
+            <View style={[s.card, Shadows.sm]}>
+              {sleepFatiguePoints.slice(-6).map((p, i) => (
+                <View key={`sf-${i}`} style={s.sleepRow}>
+                  <Text style={s.sleepDate}>{p.date}</Text>
+                  <Text style={s.sleepHrs}>💤 {p.sleep?.toFixed(1)}h</Text>
+                  <Text style={s.fatigueScore}>⚡ {p.fatigue}/10</Text>
+                </View>
+              ))}
+              <View style={s.insightBox}>
+                <Text style={s.insightText}>{sleepInsight}</Text>
+              </View>
             </View>
+          </>
+        )}
+
+        {/* ── Lifestyle Support Score ── */}
+        <Text style={s.sectionTitle}>Lifestyle Support Score</Text>
+        <View style={[s.card, Shadows.sm, { alignItems: 'center' }]}>
+          <Text style={s.bigScore}>{recoverySupportScore}</Text>
+          <Text style={s.bigScoreOf}>out of 100</Text>
+          <Text style={s.bigScoreHint}>
+            {recoverySupportScore >= 75
+              ? '💚 Excellent! You are giving your body what it needs.'
+              : recoverySupportScore >= 50
+              ? '💛 Good foundation. Small improvements in nutrition and rest can help.'
+              : '💙 Your body needs more support. Focus on sleep, hydration, and nourishing meals.'}
+          </Text>
         </View>
-    );
+
+        {/* ── New check-in CTA ── */}
+        <Pressable
+          style={({ pressed }) => [s.ctaBtn, pressed && { opacity: 0.85 }]}
+          onPress={() => router.back()}
+        >
+          <Text style={s.ctaBtnText}>Start a New Check-in</Text>
+        </Pressable>
+
+        <View style={{ height: 48 }} />
+      </ScrollView>
+    </View>
+  );
 }
 
-function getPainScore(entry: PostpartumHistoryItem, key: PainKey): number {
-    return Number(entry.predictions?.[key]?.score ?? 0);
+/* ── Sub-components ── */
+function TrendRow({ date, value, color }: { date: string; value: number; color: string }) {
+  const pct = Math.max(4, Math.min(100, (value / 10) * 100));
+  return (
+    <View style={s2.trendItem}>
+      <View style={s2.trendHeader}>
+        <Text style={s2.trendDate}>{date}</Text>
+        <Text style={[s2.trendValue, { color }]}>{value.toFixed(2)}</Text>
+      </View>
+      <View style={s.barTrack}>
+        <View style={[s.barFill, { width: `${pct}%` as any, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
 }
 
+/* ── Pure functions ── */
 function getOverallPainScore(entry: PostpartumHistoryItem): number {
-    const values = [
-        Number(entry.predictions?.perineal?.score ?? 0),
-        Number(entry.predictions?.csection?.score ?? 0),
-        Number(entry.predictions?.back_pelvic?.score ?? 0),
-    ];
-    return Number((values.reduce((sum, v) => sum + v, 0) / 3).toFixed(2));
+  const vals = [
+    Number(entry.predictions?.perineal?.score ?? 0),
+    Number(entry.predictions?.csection?.score ?? 0),
+    Number(entry.predictions?.back_pelvic?.score ?? 0),
+  ];
+  return Number((vals.reduce((s, v) => s + v, 0) / 3).toFixed(2));
 }
 
 function parseSleepHours(value?: string): number | null {
-    if (!value) return null;
-    const normalized = value.toLowerCase().trim();
-
-    if (normalized.includes('<3')) return 2.5;
-    if (normalized.includes('3-5')) return 4;
-    if (normalized.includes('6-8')) return 7;
-    if (normalized.includes('>8')) return 9;
-    if (normalized.includes('1-2')) return 1.5;
-
-    const numbers = normalized.match(/\d+/g);
-    if (!numbers || numbers.length === 0) return null;
-    if (numbers.length === 1) return Number(numbers[0]);
-
-    return (Number(numbers[0]) + Number(numbers[1])) / 2;
+  if (!value) return null;
+  const n = value.toLowerCase().trim();
+  if (n.includes('<3'))  return 2.5;
+  if (n.includes('3-5')) return 4;
+  if (n.includes('6-8') || n.includes('6-7')) return 7;
+  if (n.includes('>8') || n.includes('>7'))   return 9;
+  const nums = n.match(/\d+/g);
+  if (!nums) return null;
+  return nums.length === 1 ? Number(nums[0]) : (Number(nums[0]) + Number(nums[1])) / 2;
 }
 
 function average(values: number[]): number {
-    if (values.length === 0) return 0;
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  return values.length === 0 ? 0 : values.reduce((s, v) => s + v, 0) / values.length;
 }
 
 function formatDate(value?: string): string {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '-';
-
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  if (!value) return '-';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '-';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function calculateRecoverySupportScore(input?: PostpartumHistoryItem['input']): number {
-    if (!input) return 0;
-
-    const proteinMap: Record<string, number> = { daily: 25, sometimes: 15, rare: 5 };
-    const ironMap: Record<string, number> = { daily: 25, occasionally: 15, never: 5 };
-    const fluidMap: Record<string, number> = { '2-3l': 25, '1-2l': 15, '<1l': 5 };
-    const activityMap: Record<string, number> = { '>30mins': 25, '15-30mins': 18, '<15mins': 10, none: 4 };
-
-    const protein = proteinMap[(input.protein_intake || '').toLowerCase()] ?? 10;
-    const iron = ironMap[(input.iron_intake || '').toLowerCase()] ?? 10;
-    const fluid = fluidMap[(input.fluid_intake || '').toLowerCase()] ?? 10;
-    const activity = activityMap[(input.physical_activity || '').toLowerCase()] ?? 10;
-
-    return Math.max(0, Math.min(100, protein + iron + fluid + activity));
+  if (!input) return 0;
+  const protein  = ({ daily: 25, sometimes: 15, rare: 5  } as any)[(input.protein_intake  || '').toLowerCase()] ?? 10;
+  const iron     = ({ daily: 25, occasionally: 15, never: 5 } as any)[(input.iron_intake   || '').toLowerCase()] ?? 10;
+  const fluid    = ({ '2-3l': 25, '1-2l': 15, '<1l': 5  } as any)[(input.fluid_intake    || '').toLowerCase()] ?? 10;
+  const activity = ({ '>30mins': 25, '15-30mins': 18, '<15mins': 10, none: 4 } as any)[(input.physical_activity || '').toLowerCase()] ?? 10;
+  return Math.max(0, Math.min(100, protein + iron + fluid + activity));
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F8F5FF',
-    },
-    content: {
-        padding: 18,
-        paddingBottom: 32,
-    },
-    backButton: {
-        marginBottom: 12,
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '800',
-        marginBottom: 6,
-        color: '#5E35B1',
-        letterSpacing: 0.3,
-    },
-    subtitle: {
-        color: '#7E57C2',
-        fontSize: 14,
-        marginBottom: 18,
-        fontWeight: '500',
-    },
-    summaryText: {
-        color: '#512DA8',
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 14,
-        lineHeight: 22,
-    },
-    sectionLabel: {
-        color: '#7E57C2',
-        fontWeight: '700',
-        marginBottom: 10,
-        fontSize: 13,
-        textTransform: 'uppercase',
-        letterSpacing: 0.8,
-    },
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 18,
-        padding: 18,
-        marginBottom: 16,
-        shadowColor: '#5E35B1',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    cardTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#512DA8',
-        marginBottom: 14,
-        letterSpacing: 0.2,
-    },
-    bigNumber: {
-        fontSize: 48,
-        fontWeight: '900',
-        color: '#7E57C2',
-        textAlign: 'center',
-        marginVertical: 8,
-    },
-    scoreLabel: {
-        fontSize: 14,
-        color: '#9575CD',
-        textAlign: 'center',
-        marginBottom: 12,
-        fontWeight: '600',
-    },
-    rowBlock: {
-        marginBottom: 14,
-    },
-    trendGroup: {
-        marginBottom: 10,
-    },
-    rowHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    rowLabel: {
-        color: '#512DA8',
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    rowValue: {
-        color: '#7E57C2',
-        fontWeight: '700',
-        fontSize: 14,
-    },
-    listText: {
-        color: '#512DA8',
-        marginBottom: 10,
-        fontWeight: '500',
-        fontSize: 15,
-        lineHeight: 22,
-    },
-    progressText: {
-        color: '#512DA8',
-        marginBottom: 10,
-        fontWeight: '600',
-        fontSize: 15,
-        lineHeight: 22,
-    },
-    trendBadge: {
-        backgroundColor: '#F3E5F5',
-        borderRadius: 12,
-        padding: 12,
-        marginTop: 10,
-    },
-    trendSummary: {
-        color: '#7E57C2',
-        fontWeight: '700',
-        fontSize: 15,
-        textAlign: 'center',
-    },
-    track: {
-        width: '100%',
-        height: 12,
-        borderRadius: 8,
-        backgroundColor: '#F3E5F5',
-        overflow: 'hidden',
-    },
-    fill: {
-        height: '100%',
-        borderRadius: 8,
-    },
-    trendRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F3E5F5',
-    },
-    trendDate: {
-        color: '#512DA8',
-        fontSize: 13,
-        fontWeight: '500',
-    },
-    sleepRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F3E5F5',
-        paddingVertical: 10,
-    },
-    sleepText: {
-        color: '#64B5F6',
-        fontWeight: '700',
-        fontSize: 14,
-    },
-    fatigueText: {
-        color: '#F06292',
-        fontWeight: '700',
-        fontSize: 14,
-    },
-    insightBox: {
-        backgroundColor: '#E8EAF6',
-        borderRadius: 12,
-        padding: 14,
-        marginTop: 12,
-    },
-    insightText: {
-        color: '#512DA8',
-        fontWeight: '600',
-        fontSize: 14,
-        lineHeight: 20,
-    },
-    nutritionBox: {
-        backgroundColor: '#F1F8E9',
-        borderRadius: 12,
-        padding: 14,
-    },
-    nutritionText: {
-        color: '#558B2F',
-        marginBottom: 8,
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    nutritionInsight: {
-        color: '#689F38',
-        fontWeight: '500',
-        fontSize: 13,
-        marginTop: 6,
-        fontStyle: 'italic',
-    },
-    encouragementCard: {
-        backgroundColor: '#FFF3E0',
-        borderColor: '#FFB74D',
-        borderWidth: 2,
-    },
-    encouragementTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#E65100',
-        marginBottom: 10,
-    },
-    encouragement: {
-        color: '#E65100',
-        fontSize: 16,
-        fontWeight: '600',
-        lineHeight: 24,
-    },
-    trendCount: {
-        fontWeight: '700',
-        color: '#7E57C2',
-    },
-    centered: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#F8F5FF',
-        padding: 20,
-    },
-    infoText: {
-        color: '#7E57C2',
-        fontSize: 14,
-        lineHeight: 20,
-        fontWeight: '500',
-    },
-    errorText: {
-        color: '#D32F2F',
-        textAlign: 'center',
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    retryButton: {
-        marginTop: 16,
-        backgroundColor: '#7E57C2',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 24,
-        shadowColor: '#5E35B1',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    retryText: {
-        color: '#FFFFFF',
-        fontWeight: '700',
-        fontSize: 15,
-    },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.background, padding: 32, gap: 12 },
+  centeredTitle: { fontSize: 20, fontWeight: '700', color: C.label, textAlign: 'center' },
+  centeredHint: { fontSize: 13, color: C.labelTertiary, textAlign: 'center' },
+  errorText: { fontSize: 14, color: C.danger, textAlign: 'center' },
+  retryBtn: {
+    marginTop: 8, backgroundColor: C.primary,
+    borderRadius: Radius.full, paddingHorizontal: 28, paddingVertical: 12,
+  },
+  retryBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+
+  /* Hero */
+  hero: {
+    paddingHorizontal: Spacing.screenPadding, paddingBottom: 20,
+    borderBottomLeftRadius: 32, borderBottomRightRadius: 32,
+  },
+  heroInner: { gap: 4 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 6 },
+  backText: { fontSize: 15, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
+  heroTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.3 },
+  addBtn: {
+    width: 36, height: 36, borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  heroSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
+
+  /* Scroll */
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: Spacing.screenPadding, paddingTop: Spacing.xl },
+
+  /* Encouragement */
+  encourageCard: {
+    backgroundColor: C.accentSoft, borderRadius: Radius.xl,
+    padding: Spacing.lg, marginBottom: Spacing.xl,
+    borderLeftWidth: 3, borderLeftColor: C.accent,
+  },
+  encourageText: { fontSize: 14, fontWeight: '500', color: C.label, lineHeight: 21 },
+
+  sectionTitle: {
+    fontSize: 16, fontWeight: '700', color: C.label,
+    letterSpacing: -0.2, marginBottom: Spacing.md,
+  },
+
+  /* Cards */
+  card: {
+    backgroundColor: C.card, borderRadius: Radius.xl,
+    padding: Spacing.lg, marginBottom: Spacing.xl,
+  },
+  cardGoodText: { fontSize: 14, color: C.success, fontWeight: '500', textAlign: 'center' },
+
+  /* Pain row */
+  painRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: Spacing.md },
+  painIcon: { width: 46, height: 46, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center' },
+  painLabel: { fontSize: 14, fontWeight: '700', color: C.label, marginBottom: 2 },
+  painRisk: { fontSize: 12, fontWeight: '600' },
+  painScore: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+
+  /* Trend badge */
+  trendBadge: {
+    borderRadius: Radius.xl, padding: Spacing.md,
+    alignItems: 'center', marginBottom: Spacing.xl,
+  },
+  trendText: { fontSize: 14, fontWeight: '700' },
+
+  /* Bars */
+  barTrack: { height: 6, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 3 },
+
+  /* Sleep rows */
+  sleepRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
+  },
+  sleepDate: { fontSize: 12, color: C.labelTertiary, flex: 1 },
+  sleepHrs: { fontSize: 13, fontWeight: '700', color: C.primary },
+  fatigueScore: { fontSize: 13, fontWeight: '700', color: C.danger, marginLeft: 12 },
+  insightBox: {
+    backgroundColor: C.primarySoft, borderRadius: Radius.md,
+    padding: Spacing.md, marginTop: Spacing.md,
+  },
+  insightText: { fontSize: 13, color: C.primary, fontWeight: '500', lineHeight: 19 },
+
+  /* Big score */
+  bigScore: { fontSize: 52, fontWeight: '900', color: C.primary, letterSpacing: -2 },
+  bigScoreOf: { fontSize: 14, color: C.labelTertiary, fontWeight: '600', marginBottom: 8 },
+  bigScoreHint: { fontSize: 13, color: C.labelSecondary, textAlign: 'center', lineHeight: 19 },
+
+  /* CTA */
+  ctaBtn: {
+    height: 54, borderRadius: Radius.full,
+    backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center',
+    ...Shadows.sm,
+  },
+  ctaBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+});
+
+const s2 = StyleSheet.create({
+  trendItem: { marginBottom: 12 },
+  trendHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  trendDate: { fontSize: 12, color: C.labelTertiary },
+  trendValue: { fontSize: 13, fontWeight: '700' },
 });

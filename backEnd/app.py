@@ -12,14 +12,15 @@ load_dotenv()
 os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.abspath(__file__))
 
 # --- 2. IMPORT ROUTERS ---
-# We import the routers from the 'routers' folder
-# Make sure the filenames in your 'routers' folder match these exactly!
-from routers import cry_router_audio  # Your Audio Logic
-from routers import cry_router_img    # Your New Face Logic
-from routers import cry_router_fusion # Fusion Analysis Logic
+# ASD router (required — Yasindu's component)
+from routers.asd_router import router as asd_router
+
+# Teammates' routers
+from routers import cry_router_audio
+from routers import cry_router_img
+from routers import cry_router_fusion
 from routers.growth_router import router as growth_router
 from postpartum import router as postpartum_router
-from routers.asd_router import router as asd_router
 from routers.feedback_router import router as feedback_router
 
 
@@ -42,13 +43,13 @@ app.add_middleware(
 )
 
 # --- 4. INCLUDE THE ROUTERS ---
-# Connect both "Shops" (Audio and Face) to the main App Mall
+app.include_router(asd_router, prefix="/api/asd", tags=["ASD"])
+
 app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])
 app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])
 app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")
 app.include_router(growth_router, prefix="/api", tags=["Growth"])
 app.include_router(postpartum_router)
-app.include_router(asd_router, prefix="/api/asd", tags=["ASD"])
 app.include_router(feedback_router, tags=["Feedback"])
 
 

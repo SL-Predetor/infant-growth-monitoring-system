@@ -1,1 +1,0 @@
-passata passe karamuu

@@ -10,7 +10,7 @@ router = APIRouter()
 
 # --- 1. SETUP PATHS ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(current_dir, '..', 'mlModels', 'Cry')
+MODELS_DIR = os.path.join(current_dir, '..', '..', 'mlModels', 'Cry')
 
 # Model A: Pain vs No Pain
 MODEL_A_PATH = os.path.join(MODELS_DIR, 'model_a_pain.pkl')

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
+  Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
@@ -10,9 +11,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
+import { Eye, EyeOff, ChevronLeft } from 'lucide-react-native';
+import { Colors, Spacing, Radius, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
+
+const C = Colors.light;
 
 const validateEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,33 +45,26 @@ export default function SignUpScreen() {
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-
     if (fullName.trim().length < 2) {
       newErrors.fullName = 'Full name must be at least 2 characters';
     }
-
     if (!validateEmail(email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-
     if (password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
     }
-
     if (password !== confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSignUp = async () => {
     if (!validate()) return;
-
     setLoading(true);
     const { error } = await signUpWithEmail(email, password, fullName);
-
     if (error) {
       setErrors({ form: error.message || 'Failed to create account' });
     } else {
@@ -81,7 +77,6 @@ export default function SignUpScreen() {
     setErrors({});
     setLoading(true);
     const { error } = await signInWithGoogle();
-
     if (error) {
       setErrors({ form: error.message || 'Failed to sign up with Google' });
     } else {
@@ -93,10 +88,16 @@ export default function SignUpScreen() {
   const passwordStrength = getPasswordStrength(password);
 
   const strengthColor = {
-    weak: '#FF5252',
-    fair: '#FFC107',
-    strong: '#4CAF50',
+    weak: C.danger,
+    fair: C.warning,
+    strong: C.success,
   }[passwordStrength];
+
+  const strengthWidth = {
+    weak: '33%',
+    fair: '66%',
+    strong: '100%',
+  }[passwordStrength] as `${number}%`;
 
   return (
     <KeyboardAvoidingView
@@ -106,61 +107,59 @@ export default function SignUpScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Back Button */}
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
           disabled={loading}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <ThemedText style={styles.backButtonText}>← Back</ThemedText>
+          <ChevronLeft size={20} color={C.primary} strokeWidth={2} />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
-        <View style={styles.headerContainer}>
-          <ThemedText type="title" style={styles.title}>
-            Create Account
-          </ThemedText>
-          <ThemedText style={styles.subtitle}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>
             Join TinySteps to monitor your baby's health
-          </ThemedText>
+          </Text>
         </View>
 
-        <View style={styles.formSection}>
+        {/* Form Card */}
+        <View style={styles.formCard}>
           {errors.form && (
-            <View style={styles.errorContainer}>
-              <ThemedText style={styles.errorText}>{errors.form}</ThemedText>
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errors.form}</Text>
             </View>
           )}
 
+          {/* Full Name */}
           <View style={styles.fieldContainer}>
-            <ThemedText style={styles.label}>Full Name *</ThemedText>
+            <Text style={styles.label}>Full Name</Text>
             <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: '#0f1729' },
-                errors.fullName && styles.inputError,
-              ]}
+              style={[styles.input, errors.fullName && styles.inputError]}
               placeholder="Jane Doe"
-              placeholderTextColor="#4a5568"
+              placeholderTextColor={C.labelTertiary}
               autoCapitalize="words"
               editable={!loading}
               value={fullName}
               onChangeText={setFullName}
             />
             {errors.fullName && (
-              <ThemedText style={styles.fieldError}>{errors.fullName}</ThemedText>
+              <Text style={styles.fieldError}>{errors.fullName}</Text>
             )}
           </View>
 
+          {/* Email */}
           <View style={styles.fieldContainer}>
-            <ThemedText style={styles.label}>Email *</ThemedText>
+            <Text style={styles.label}>Email</Text>
             <TextInput
-              style={[
-                styles.input,
-                { backgroundColor: '#0f1729' },
-                errors.email && styles.inputError,
-              ]}
+              style={[styles.input, errors.email && styles.inputError]}
               placeholder="jane@example.com"
-              placeholderTextColor="#4a5568"
+              placeholderTextColor={C.labelTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -169,24 +168,25 @@ export default function SignUpScreen() {
               onChangeText={setEmail}
             />
             {errors.email && (
-              <ThemedText style={styles.fieldError}>{errors.email}</ThemedText>
+              <Text style={styles.fieldError}>{errors.email}</Text>
             )}
           </View>
 
+          {/* Password */}
           <View style={styles.fieldContainer}>
-            <View style={styles.passwordLabelRow}>
-              <ThemedText style={styles.label}>Password *</ThemedText>
-              {password && (
-                <ThemedText style={[styles.strengthLabel, { color: strengthColor }]}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Password</Text>
+              {password.length > 0 && (
+                <Text style={[styles.strengthLabel, { color: strengthColor }]}>
                   {passwordStrength.charAt(0).toUpperCase() + passwordStrength.slice(1)}
-                </ThemedText>
+                </Text>
               )}
             </View>
-            <View style={[styles.passwordContainer, { backgroundColor: '#0f1729' }]}>
+            <View style={[styles.passwordRow, errors.password && styles.inputError]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="••••••••"
-                placeholderTextColor="#4a5568"
+                placeholderTextColor={C.labelTertiary}
                 secureTextEntry={!showPassword}
                 editable={!loading}
                 value={password}
@@ -195,24 +195,36 @@ export default function SignUpScreen() {
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
                 disabled={loading}
+                style={styles.eyeButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <ThemedText style={styles.toggleText}>
-                  {showPassword ? 'Hide' : 'Show'}
-                </ThemedText>
+                {showPassword
+                  ? <EyeOff size={18} color={C.labelTertiary} strokeWidth={1.8} />
+                  : <Eye size={18} color={C.labelTertiary} strokeWidth={1.8} />
+                }
               </TouchableOpacity>
             </View>
+
+            {/* Strength Bar */}
+            {password.length > 0 && (
+              <View style={styles.strengthBar}>
+                <View style={[styles.strengthFill, { width: strengthWidth, backgroundColor: strengthColor }]} />
+              </View>
+            )}
+
             {errors.password && (
-              <ThemedText style={styles.fieldError}>{errors.password}</ThemedText>
+              <Text style={styles.fieldError}>{errors.password}</Text>
             )}
           </View>
 
+          {/* Confirm Password */}
           <View style={styles.fieldContainer}>
-            <ThemedText style={styles.label}>Confirm Password *</ThemedText>
-            <View style={[styles.passwordContainer, { backgroundColor: '#0f1729' }]}>
+            <Text style={styles.label}>Confirm Password</Text>
+            <View style={[styles.passwordRow, errors.confirmPassword && styles.inputError]}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="••••••••"
-                placeholderTextColor="#4a5568"
+                placeholderTextColor={C.labelTertiary}
                 secureTextEntry={!showConfirmPassword}
                 editable={!loading}
                 value={confirmPassword}
@@ -221,51 +233,56 @@ export default function SignUpScreen() {
               <TouchableOpacity
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 disabled={loading}
+                style={styles.eyeButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <ThemedText style={styles.toggleText}>
-                  {showConfirmPassword ? 'Hide' : 'Show'}
-                </ThemedText>
+                {showConfirmPassword
+                  ? <EyeOff size={18} color={C.labelTertiary} strokeWidth={1.8} />
+                  : <Eye size={18} color={C.labelTertiary} strokeWidth={1.8} />
+                }
               </TouchableOpacity>
             </View>
             {errors.confirmPassword && (
-              <ThemedText style={styles.fieldError}>{errors.confirmPassword}</ThemedText>
+              <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
             )}
           </View>
 
+          {/* Create Account Button */}
           <TouchableOpacity
-            style={[styles.signUpButton, loading && styles.disabledButton]}
+            style={[styles.primaryButton, loading && styles.disabledButton]}
             onPress={handleSignUp}
             disabled={loading}
+            activeOpacity={0.85}
           >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <ThemedText style={styles.signUpButtonText}>Create Account</ThemedText>
-            )}
+            {loading
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Text style={styles.primaryButtonText}>Create Account</Text>
+            }
           </TouchableOpacity>
         </View>
 
-        <View style={styles.dividerContainer}>
-          <View style={styles.divider} />
-          <ThemedText style={styles.dividerText}>or continue with</ThemedText>
-          <View style={styles.divider} />
+        {/* Divider */}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerLabel}>or continue with</Text>
+          <View style={styles.dividerLine} />
         </View>
 
+        {/* Google Button */}
         <TouchableOpacity
-          style={[styles.googleButton, loading && styles.disabledButton]}
+          style={[styles.ghostButton, loading && styles.disabledButton]}
           onPress={handleGoogleSignUp}
           disabled={true}
+          activeOpacity={0.8}
         >
-          <ThemedText style={styles.googleButtonText}>G  Available in mobile app</ThemedText>
+          <Text style={styles.ghostButtonText}>G  Available in mobile app</Text>
         </TouchableOpacity>
 
-        <View style={styles.signInContainer}>
-          <ThemedText>Already have an account? </ThemedText>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            disabled={loading}
-          >
-            <ThemedText style={styles.signInLink}>Sign In</ThemedText>
+        {/* Sign In Link */}
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>Already have an account? </Text>
+          <TouchableOpacity onPress={() => router.back()} disabled={loading}>
+            <Text style={styles.footerLink}>Sign In</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -276,159 +293,201 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: C.background,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: 56,
+    paddingBottom: 40,
   },
+
+  // Back Button
   backButton: {
-    paddingVertical: 12,
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
   },
-  backButtonText: {
-    color: '#6C63FF',
-    fontSize: 16,
-    fontWeight: '600',
+  backText: {
+    color: C.primary,
+    fontSize: Typography.body.fontSize,
+    fontWeight: '500',
+    marginLeft: 2,
   },
-  headerContainer: {
-    marginBottom: 24,
+
+  // Header
+  header: {
+    marginBottom: 28,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontSize: Typography.h1.fontSize,
+    fontWeight: Typography.h1.fontWeight,
+    color: C.label,
+    marginBottom: 6,
+    letterSpacing: Typography.h1.letterSpacing,
   },
   subtitle: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: Typography.bodySmall.fontSize,
+    color: C.labelTertiary,
+    lineHeight: 20,
   },
-  formSection: {
-    marginBottom: 24,
+
+  // Form Card
+  formCard: {
+    backgroundColor: C.card,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    ...Shadows.md,
   },
-  errorContainer: {
-    backgroundColor: 'rgba(255, 82, 82, 0.15)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF5252',
+  errorBanner: {
+    backgroundColor: Colors.light.dangerSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: C.danger,
+    borderRadius: Radius.sm,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
   },
   errorText: {
-    color: '#FF5252',
-    fontSize: 13,
+    color: C.danger,
+    fontSize: Typography.bodySmall.fontSize,
   },
+
+  // Fields
   fieldContainer: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#a8b2c1',
-  },
-  passwordLabelRow: {
+  labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
+  },
+  label: {
+    fontSize: Typography.bodySmall.fontSize,
+    fontWeight: '600',
+    color: C.label,
+    marginBottom: Spacing.sm,
   },
   strengthLabel: {
-    fontSize: 12,
+    fontSize: Typography.caption.fontSize,
     fontWeight: '600',
   },
   input: {
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#2a2d4e',
-    color: '#FFFFFF',
+    backgroundColor: C.cardSecondary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 14,
+    fontSize: Typography.body.fontSize,
+    color: C.label,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
   inputError: {
-    borderColor: '#FF5252',
+    borderColor: C.danger,
   },
-  passwordContainer: {
+  passwordRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#2a2d4e',
-    color: '#FFFFFF',
+    backgroundColor: C.cardSecondary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
   passwordInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingVertical: 14,
+    fontSize: Typography.body.fontSize,
+    color: C.label,
   },
-  toggleText: {
-    fontSize: 13,
-    color: '#6C63FF',
-    fontWeight: '600',
+  eyeButton: {
+    paddingLeft: Spacing.sm,
   },
   fieldError: {
-    color: '#FF5252',
-    fontSize: 12,
+    color: C.danger,
+    fontSize: Typography.caption.fontSize,
     marginTop: 4,
   },
-  signUpButton: {
-    backgroundColor: '#6C63FF',
-    paddingVertical: 14,
-    borderRadius: 12,
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+
+  // Strength Bar
+  strengthBar: {
+    height: 3,
+    backgroundColor: C.border,
+    borderRadius: Radius.full,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  strengthFill: {
+    height: '100%',
+    borderRadius: Radius.full,
+  },
+
+  // Primary Button
+  primaryButton: {
+    backgroundColor: C.primary,
+    borderRadius: Radius.full,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: Spacing.sm,
+    ...Shadows.sm,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: Typography.button.fontSize,
+    fontWeight: Typography.button.fontWeight,
+    letterSpacing: Typography.button.letterSpacing,
   },
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
-  signUpButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  dividerContainer: {
+
+  // Divider
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginBottom: Spacing.xl,
   },
-  divider: {
+  dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
+    backgroundColor: C.border,
   },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 13,
-    opacity: 0.6,
+  dividerLabel: {
+    marginHorizontal: Spacing.md,
+    fontSize: Typography.caption.fontSize,
+    color: C.labelTertiary,
   },
-  googleButton: {
-    flexDirection: 'row',
-    borderWidth: 2,
-    borderColor: '#2a2d4e',
-    paddingVertical: 12,
-    borderRadius: 8,
+
+  // Ghost Button
+  ghostButton: {
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.xl,
+    backgroundColor: C.card,
   },
-  googleButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  ghostButtonText: {
+    fontSize: Typography.body.fontSize,
+    fontWeight: '500',
+    color: C.labelTertiary,
   },
-  signInContainer: {
+
+  // Footer
+  footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
   },
-  signInLink: {
-    color: '#6C63FF',
+  footerText: {
+    fontSize: Typography.body.fontSize,
+    color: C.labelTertiary,
+  },
+  footerLink: {
+    fontSize: Typography.body.fontSize,
+    color: C.primary,
     fontWeight: '600',
   },
 });

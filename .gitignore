@@ -73,9 +73,8 @@ temp/
 *.tmp
 *.bak
 
-mlModels/
+/mlModels/
 *.zip
-*.pkl
 *.h5
 *.pt
 *.joblib

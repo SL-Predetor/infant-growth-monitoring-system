@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
+  Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
@@ -11,9 +12,11 @@ import {
   Image,
 } from 'react-native';
 import { useRouter, Link } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { Colors } from '@/constants/theme';
+import { Eye, EyeOff } from 'lucide-react-native';
+import { Colors, Spacing, Radius, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
+
+const C = Colors.light;
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
@@ -27,15 +30,12 @@ export default function SignInScreen() {
 
   const handleSignIn = async () => {
     setError(null);
-
     if (!email.trim() || !password.trim()) {
       setError('Email and password are required');
       return;
     }
-
     setLoading(true);
     const { error: signInError } = await signInWithEmail(email, password);
-
     if (signInError) {
       setError(signInError.message || 'Failed to sign in');
     } else {
@@ -48,7 +48,6 @@ export default function SignInScreen() {
     setError(null);
     setLoading(true);
     const { error: googleError } = await signInWithGoogle();
-
     if (googleError) {
       setError(googleError.message || 'Failed to sign in with Google');
     } else {
@@ -56,7 +55,6 @@ export default function SignInScreen() {
     }
     setLoading(false);
   };
-
 
   return (
     <KeyboardAvoidingView
@@ -66,33 +64,35 @@ export default function SignInScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Logo & Header */}
         <View style={styles.topSection}>
           <Image
             source={require('@/assets/images/icon.png')}
             style={styles.logo}
           />
-          <ThemedText type="title" style={styles.title}>
-            Welcome Back
-          </ThemedText>
-          <ThemedText style={styles.subtitle}>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>
             Sign in to access your baby's health insights
-          </ThemedText>
+          </Text>
         </View>
 
-        <View style={styles.formSection}>
+        {/* Form */}
+        <View style={styles.formCard}>
           {error && (
-            <View style={styles.errorContainer}>
-              <ThemedText style={styles.errorText}>{error}</ThemedText>
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
+          {/* Email */}
           <View style={styles.fieldContainer}>
-            <ThemedText style={styles.label}>Email</ThemedText>
+            <Text style={styles.label}>Email</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: '#0f1729' }]}
+              style={styles.input}
               placeholder="you@example.com"
-              placeholderTextColor="#4a5568"
+              placeholderTextColor={C.labelTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -102,13 +102,14 @@ export default function SignInScreen() {
             />
           </View>
 
+          {/* Password */}
           <View style={styles.fieldContainer}>
-            <ThemedText style={styles.label}>Password</ThemedText>
-            <View style={[styles.passwordContainer, { backgroundColor: '#0f1729' }]}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordRow}>
               <TextInput
                 style={styles.passwordInput}
                 placeholder="••••••••"
-                placeholderTextColor="#4a5568"
+                placeholderTextColor={C.labelTertiary}
                 secureTextEntry={!showPassword}
                 editable={!loading}
                 value={password}
@@ -117,52 +118,61 @@ export default function SignInScreen() {
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
                 disabled={loading}
+                style={styles.eyeButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <ThemedText style={styles.toggleText}>
-                  {showPassword ? 'Hide' : 'Show'}
-                </ThemedText>
+                {showPassword
+                  ? <EyeOff size={18} color={C.labelTertiary} strokeWidth={1.8} />
+                  : <Eye size={18} color={C.labelTertiary} strokeWidth={1.8} />
+                }
               </TouchableOpacity>
             </View>
           </View>
 
+          {/* Sign In Button */}
           <TouchableOpacity
-            style={[styles.signInButton, loading && styles.disabledButton]}
+            style={[styles.primaryButton, loading && styles.disabledButton]}
             onPress={handleSignIn}
             disabled={loading}
+            activeOpacity={0.85}
           >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <ThemedText style={styles.signInButtonText}>Sign In</ThemedText>
-            )}
+            {loading
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Text style={styles.primaryButtonText}>Sign In</Text>
+            }
           </TouchableOpacity>
 
+          {/* Forgot Password */}
           <Link href="/(auth)/forgot-password" asChild>
-            <TouchableOpacity>
-              <ThemedText style={styles.forgotPassword}>Forgot password?</ThemedText>
+            <TouchableOpacity style={styles.forgotContainer}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
           </Link>
         </View>
 
-        <View style={styles.dividerContainer}>
-          <View style={styles.divider} />
-          <ThemedText style={styles.dividerText}>or continue with</ThemedText>
-          <View style={styles.divider} />
+        {/* Divider */}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerLabel}>or continue with</Text>
+          <View style={styles.dividerLine} />
         </View>
 
+        {/* Google Button */}
         <TouchableOpacity
-          style={[styles.googleButton, loading && styles.disabledButton]}
+          style={[styles.ghostButton, loading && styles.disabledButton]}
           onPress={handleGoogleSignIn}
           disabled={true}
+          activeOpacity={0.8}
         >
-          <ThemedText style={styles.googleButtonText}>G  Available in mobile app</ThemedText>
+          <Text style={styles.ghostButtonText}>G  Available in mobile app</Text>
         </TouchableOpacity>
 
-        <View style={styles.signUpContainer}>
-          <ThemedText>Don't have an account? </ThemedText>
+        {/* Sign Up Link */}
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>Don't have an account? </Text>
           <Link href="/(auth)/sign-up" asChild>
             <TouchableOpacity>
-              <ThemedText style={styles.signUpLink}>Sign Up</ThemedText>
+              <Text style={styles.footerLink}>Sign Up</Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -174,146 +184,172 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: C.background,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
+
+  // Header
   topSection: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    marginBottom: 24,
-    borderRadius: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    opacity: 0.7,
-  },
-  formSection: {
     marginBottom: 32,
   },
-  errorContainer: {
-    backgroundColor: 'rgba(255, 82, 82, 0.15)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF5252',
+  logo: {
+    width: 76,
+    height: 76,
+    borderRadius: Radius.lg,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: Typography.h1.fontSize,
+    fontWeight: Typography.h1.fontWeight,
+    color: C.label,
+    marginBottom: 6,
+    letterSpacing: Typography.h1.letterSpacing,
+  },
+  subtitle: {
+    fontSize: Typography.bodySmall.fontSize,
+    color: C.labelTertiary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // Form Card
+  formCard: {
+    backgroundColor: C.card,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    ...Shadows.md,
+  },
+  errorBanner: {
+    backgroundColor: Colors.light.dangerSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: C.danger,
+    borderRadius: Radius.sm,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
   },
   errorText: {
-    color: '#FF5252',
-    fontSize: 13,
+    color: C.danger,
+    fontSize: Typography.bodySmall.fontSize,
   },
+
+  // Fields
   fieldContainer: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   label: {
-    fontSize: 14,
+    fontSize: Typography.bodySmall.fontSize,
     fontWeight: '600',
-    marginBottom: 8,
-    color: '#a8b2c1',
+    color: C.label,
+    marginBottom: Spacing.sm,
   },
   input: {
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#2a2d4e',
-    color: '#FFFFFF',
+    backgroundColor: C.cardSecondary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 14,
+    fontSize: Typography.body.fontSize,
+    color: C.label,
   },
-  passwordContainer: {
+  passwordRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#2a2d4e',
-    color: '#FFFFFF',
+    backgroundColor: C.cardSecondary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
   },
   passwordInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  toggleText: {
-    fontSize: 13,
-    color: '#6C63FF',
-    fontWeight: '600',
-  },
-  signInButton: {
-    backgroundColor: '#6C63FF',
     paddingVertical: 14,
-    borderRadius: 12,
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    fontSize: Typography.body.fontSize,
+    color: C.label,
+  },
+  eyeButton: {
+    paddingLeft: Spacing.sm,
+  },
+
+  // Primary Button — pill shape
+  primaryButton: {
+    backgroundColor: C.primary,
+    borderRadius: Radius.full,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: Spacing.sm,
+    ...Shadows.sm,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: Typography.button.fontSize,
+    fontWeight: Typography.button.fontWeight,
+    letterSpacing: Typography.button.letterSpacing,
   },
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
-  signInButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+
+  // Forgot Password
+  forgotContainer: {
+    alignItems: 'center',
+    marginTop: Spacing.lg,
   },
-  forgotPassword: {
-    color: '#6C63FF',
-    fontSize: 14,
-    marginTop: 12,
-    textAlign: 'center',
+  forgotText: {
+    color: C.primary,
+    fontSize: Typography.bodySmall.fontSize,
+    fontWeight: '500',
   },
-  dividerContainer: {
+
+  // Divider
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginBottom: Spacing.xl,
   },
-  divider: {
+  dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
+    backgroundColor: C.border,
   },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 13,
-    opacity: 0.6,
+  dividerLabel: {
+    marginHorizontal: Spacing.md,
+    fontSize: Typography.caption.fontSize,
+    color: C.labelTertiary,
   },
-  googleButton: {
-    flexDirection: 'row',
-    borderWidth: 2,
-    borderColor: '#2a2d4e',
-    paddingVertical: 12,
-    borderRadius: 8,
+
+  // Ghost Button
+  ghostButton: {
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.xl,
+    backgroundColor: C.card,
   },
-  googleButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  ghostButtonText: {
+    fontSize: Typography.body.fontSize,
+    fontWeight: '500',
+    color: C.labelTertiary,
   },
-  signUpContainer: {
+
+  // Footer
+  footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
   },
-  signUpLink: {
-    color: '#6C63FF',
+  footerText: {
+    fontSize: Typography.body.fontSize,
+    color: C.labelTertiary,
+  },
+  footerLink: {
+    fontSize: Typography.body.fontSize,
+    color: C.primary,
     fontWeight: '600',
   },
 });

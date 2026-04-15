@@ -27,7 +27,7 @@ except Exception as e:
     print("   → Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env")
 
 # ── Model paths ───────────────────────────────────────────────────────────────
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "mlModels", "Growth")
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "mlModels", "Growth")
 LSTM_PATH   = os.path.join(MODEL_DIR, "lstm_weight_variantB.pth")
 SCALER_PATH = os.path.join(MODEL_DIR, "scaler_variantB.pkl")
 RISK_PATH   = os.path.join(MODEL_DIR, "rf_risk_2b.pkl")

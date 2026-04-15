@@ -1,6 +1,7 @@
 /**
  * TinySteps Design Tokens
- * Inspired by Apple Health — light & dark mode
+ * Design Direction: "The Digital Nursery" — Calm & Trust
+ * Low cognitive load, optimized for sleep-deprived parents at 3AM
  */
 
 import { useColorScheme } from "react-native";
@@ -8,70 +9,91 @@ import { useColorScheme } from "react-native";
 /* ───────────────────────── COLORS ───────────────────────── */
 
 const light = {
-  background: "#F2F2F7",
-  card: "#FFFFFF",
-  cardSecondary: "#F2F2F7",
-  cardTertiary: "#E5E5EA",
-  label: "#000000",
-  labelSecondary: "#3C3C43",
-  labelTertiary: "#8E8E93",
-  labelPlaceholder: "#C7C7CC",
-  primary: "#5E5CE6",
-  primarySoft: "rgba(94,92,230,0.10)",
-  secondary: "#FF6B9D",
-  secondarySoft: "rgba(255,107,157,0.10)",
-  success: "#34C759",
-  successSoft: "rgba(52,199,89,0.12)",
-  warning: "#FF9F0A",
-  warningSoft: "rgba(255,159,10,0.12)",
-  danger: "#FF3B30",
-  dangerSoft: "rgba(255,59,48,0.12)",
-  separator: "#C6C6C8",
-  border: "#E5E5EA",
+  // Backgrounds
+  background: "#FCFBFA",       // Off-White — easy on eyes
+  card: "#FFFFFF",             // Pure White — cards, inputs, modals
+  cardSecondary: "#F4F1EA",    // Warm Sand — secondary surfaces
+  cardTertiary: "#EDE9DF",     // Warm Sand darker — tertiary surfaces
+
+  // Text
+  label: "#2D3132",            // Charcoal — headings and primary body text
+  labelSecondary: "#2D3132",   // Charcoal — high emphasis secondary
+  labelTertiary: "#707779",    // Slate Gray — captions, placeholders, disabled
+  labelPlaceholder: "#A0A4A6", // Muted — placeholder text
+
+  // Brand
+  primary: "#5DA7B1",          // Soft Teal — main CTAs, active states, branding
+  primarySoft: "rgba(93,167,177,0.12)",
+  secondary: "#F4F1EA",        // Warm Sand — secondary buttons, backgrounds
+  secondarySoft: "rgba(244,241,234,0.80)",
+  accent: "#E88D72",           // Muted Coral — milestones, highlights, playfulness
+  accentSoft: "rgba(232,141,114,0.12)",
+
+  // Semantic
+  success: "#82A788",          // Sage Green — healthy growth, completed logs
+  successSoft: "rgba(130,167,136,0.14)",
+  warning: "#E6A855",          // Amber Glow — reminders, missed logs
+  warningSoft: "rgba(230,168,85,0.14)",
+  danger: "#D67676",           // Soft Rose — alerts, high temperature
+  dangerSoft: "rgba(214,118,118,0.14)",
+
+  // Structure
+  separator: "#E8E4DA",
+  border: "#E8E4DA",
   tabBar: "#FFFFFF",
-  tabBarBorder: "#E5E5EA",
+  tabBarBorder: "#E8E4DA",
 
   // Backward compatibility
-  text: "#000000",
-  secondaryText: "#3C3C43",
+  text: "#2D3132",
+  secondaryText: "#707779",
   cardBackground: "#FFFFFF",
-  error: "#FF3B30",
-  accent: "#5E5CE6",
-  icon: "#8E8E93",
-  cardShadow: "#000000",
+  error: "#D67676",
+  icon: "#707779",
+  cardShadow: "#2D3132",
 } as const;
 
 const dark = {
-  background: "#000000",
-  card: "#1C1C1E",
-  cardSecondary: "#2C2C2E",
-  cardTertiary: "#3A3A3C",
-  label: "#FFFFFF",
-  labelSecondary: "#EBEBF5",
-  labelTertiary: "#8E8E93",
-  labelPlaceholder: "#48484A",
-  primary: "#5E5CE6",
-  primarySoft: "rgba(94,92,230,0.18)",
-  secondary: "#FF6B9D",
-  secondarySoft: "rgba(255,107,157,0.15)",
-  success: "#30D158",
-  successSoft: "rgba(48,209,88,0.15)",
-  warning: "#FF9F0A",
-  warningSoft: "rgba(255,159,10,0.15)",
-  danger: "#FF453A",
-  dangerSoft: "rgba(255,69,58,0.15)",
-  separator: "#38383A",
-  border: "#38383A",
-  tabBar: "#1C1C1E",
-  tabBarBorder: "#38383A",
+  // Backgrounds
+  background: "#1A1C1D",       // Deep Charcoal — easier than pure black
+  card: "#242728",             // Lifted surface
+  cardSecondary: "#2E3133",    // Secondary surface
+  cardTertiary: "#383C3E",     // Tertiary surface
+
+  // Text
+  label: "#F0EDEA",            // Warm White — softer than pure white at night
+  labelSecondary: "#C8C4C0",   // Muted warm white
+  labelTertiary: "#707779",    // Slate Gray — same as light
+  labelPlaceholder: "#4A4E50", // Dark placeholder
+
+  // Brand
+  primary: "#6BBDC8",          // Soft Teal brightened for dark bg
+  primarySoft: "rgba(107,189,200,0.16)",
+  secondary: "#3A3D3F",        // Dark secondary surface
+  secondarySoft: "rgba(58,61,63,0.80)",
+  accent: "#F0A088",           // Coral brightened for dark bg
+  accentSoft: "rgba(240,160,136,0.16)",
+
+  // Semantic
+  success: "#95BB9B",          // Sage Green lightened
+  successSoft: "rgba(149,187,155,0.16)",
+  warning: "#F0BA6A",          // Amber lightened
+  warningSoft: "rgba(240,186,106,0.16)",
+  danger: "#E08888",           // Rose lightened
+  dangerSoft: "rgba(224,136,136,0.16)",
+
+  // Structure
+  separator: "#383C3E",
+  border: "#383C3E",
+  tabBar: "#242728",
+  tabBarBorder: "#383C3E",
 
   // Backward compatibility
-  text: "#FFFFFF",
-  secondaryText: "#EBEBF5",
-  cardBackground: "#1C1C1E",
-  error: "#FF453A",
-  accent: "#5E5CE6",
-  icon: "#8E8E93",
+  text: "#F0EDEA",
+  secondaryText: "#C8C4C0",
+  cardBackground: "#242728",
+  error: "#E08888",
+  accent: "#F0A088",
+  icon: "#707779",
   cardShadow: "#000000",
 } as const;
 
@@ -83,14 +105,24 @@ export const Colors: { light: ColorScheme; dark: ColorScheme } = {
 };
 
 /* ──────────────────────── TYPOGRAPHY ─────────────────────── */
+// Font: System default — SF Pro on iOS, Roboto on Android, system-ui on Web
+// Do NOT set fontFamily — React Native uses the system font automatically
 
 export const Typography = {
+  // Named scale — Gemini design spec
+  h1: { fontSize: 28, fontWeight: "700" as const, letterSpacing: -0.3 },
+  h2: { fontSize: 20, fontWeight: "600" as const, letterSpacing: -0.2 },
+  body: { fontSize: 16, fontWeight: "400" as const, letterSpacing: 0 },
+  bodySmall: { fontSize: 14, fontWeight: "500" as const, letterSpacing: 0 },
+  caption: { fontSize: 12, fontWeight: "400" as const, letterSpacing: 0.1 },
+  button: { fontSize: 16, fontWeight: "600" as const, letterSpacing: 0.1 },
+
+  // Apple-style aliases (backward compatibility)
   largeTitle: { fontSize: 34, fontWeight: "700" as const, letterSpacing: 0.37 },
-  title1: { fontSize: 28, fontWeight: "700" as const, letterSpacing: 0.36 },
-  title2: { fontSize: 22, fontWeight: "700" as const, letterSpacing: 0.35 },
-  title3: { fontSize: 20, fontWeight: "600" as const, letterSpacing: 0.38 },
+  title1: { fontSize: 28, fontWeight: "700" as const, letterSpacing: -0.3 },
+  title2: { fontSize: 22, fontWeight: "700" as const, letterSpacing: -0.2 },
+  title3: { fontSize: 20, fontWeight: "600" as const, letterSpacing: -0.2 },
   headline: { fontSize: 17, fontWeight: "600" as const, letterSpacing: -0.41 },
-  body: { fontSize: 17, fontWeight: "400" as const, letterSpacing: -0.41 },
   callout: { fontSize: 16, fontWeight: "400" as const, letterSpacing: -0.32 },
   subheadline: { fontSize: 15, fontWeight: "400" as const, letterSpacing: -0.24 },
   footnote: { fontSize: 13, fontWeight: "400" as const, letterSpacing: -0.08 },
@@ -101,7 +133,6 @@ export const Typography = {
   display3: { fontSize: 36, fontWeight: "700" as const, letterSpacing: -1 },
   display4: { fontSize: 28, fontWeight: "700" as const, letterSpacing: -0.5 },
 
-  // Backward compatibility
   sizes: {
     xs: 12,
     sm: 14,
@@ -125,19 +156,20 @@ export const Typography = {
     display2: 52,
     display3: 36,
     display4: 28,
-    heading: 20, // alias
+    heading: 20,
   },
   weights: {
     regular: "400" as const,
     medium: "500" as const,
     semibold: "600" as const,
-    semiBold: "600" as const, // alias
+    semiBold: "600" as const,
     bold: "700" as const,
     heavy: "800" as const,
-  }
+  },
 } as const;
 
 /* ───────────────────────── SPACING ───────────────────────── */
+// 4px baseline grid — all multiples of 4
 
 export const Spacing = {
   xs: 4,
@@ -147,45 +179,47 @@ export const Spacing = {
   xl: 20,
   xxl: 24,
   xxxl: 32,
-  screenPadding: 16,
+  screenPadding: 20,   // Standard gutter for all screens
+  cardGap: 16,         // Gap between cards
 } as const;
 
 /* ───────────────────────── RADIUS ────────────────────────── */
 
 export const Radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 28,
-  full: 999,
+  sm: 8,               // Tags, badges
+  md: 12,              // Buttons, input fields
+  lg: 16,              // Small cards
+  xl: 20,              // Medium cards
+  xxl: 24,             // Main feature cards
+  full: 999,           // Pills, avatars
 } as const;
 
 // Backward compatibility
 export const BorderRadius = Radius;
 
 /* ───────────────────────── SHADOWS ───────────────────────── */
+// Subtle — shadow color #000 at very low opacity per Gemini spec
 
 export const Shadows = {
   sm: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     elevation: 2,
   },
   md: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowOpacity: 0.04,
+    shadowRadius: 15,
     elevation: 4,
   },
   lg: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
     elevation: 8,
   },
 } as const;
@@ -202,9 +236,9 @@ export function useTheme(): ColorScheme {
 
 /**
  * WAZ-score → semantic colour.
- *   > -1  → success
- *   > -2  → warning
- *   ≤ -2  → danger
+ *   > -1  → success (Sage Green)
+ *   > -2  → warning (Amber Glow)
+ *   ≤ -2  → danger  (Soft Rose)
  *   null  → labelTertiary
  */
 export function wazColor(
@@ -220,9 +254,9 @@ export function wazColor(
 
 /**
  * Risk level → semantic colour.
- *   Low    → success
- *   Medium → warning
- *   High   → danger
+ *   Low    → success (Sage Green)
+ *   Medium → warning (Amber Glow)
+ *   High   → danger  (Soft Rose)
  */
 export function riskColor(
   level: "Low" | "Medium" | "High",

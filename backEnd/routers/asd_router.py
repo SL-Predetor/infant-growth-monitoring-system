@@ -7,7 +7,7 @@ Endpoints (mounted under /asd by app.py):
 
   GET  /asd/status          — Model health check
   POST /asd/predict-face    — Infant face image → VGG-Face CNN → LogReg probe → P(ASD)
-  POST /asd/predict-video   — Infant face video → frames every 3s → soft-avg P(ASD)
+  POST /asd/predict-video   — Infant face video → every 3rd frame (skip blurry/no-face) → soft-avg P(ASD)
   POST /asd/predict-qchat   — 12 Q-CHAT-10 features → XGBoost → P(ASD)
   POST /asd/predict-fused   — α-weighted late fusion (α=0.15 facial, 0.85 Q-CHAT) + save to Supabase
 
@@ -40,7 +40,7 @@ router = APIRouter()
 ROUTER_DIR   = Path(__file__).resolve().parent        # backEnd/routers/
 BACKEND_DIR  = ROUTER_DIR.parent                      # backEnd/
 PROJECT_ROOT = BACKEND_DIR.parent                     # project root
-ML_ROOT      = ML_ROOT = BACKEND_DIR / "mlModels" / "autisumDetect"
+ML_ROOT      = PROJECT_ROOT / "mlModels" / "autisumDetect"
 
 # Facial stream
 H5_PATH      = ML_ROOT / "sector1/Stage_4/models/fold_5_best.h5"
@@ -65,29 +65,43 @@ FUSION_THRESHOLD   = 0.35
 print("[ASD] Loading models...")
 
 # --- Facial stream ---
-for path in (H5_PATH, SCALER_PATH, LOGREG_PATH):
-    if not path.exists():
-        raise RuntimeError(f"[ASD] Model file not found: {path}")
+vgg_model = None
+logreg_scaler = None
+logreg_model = None
+intermediate_model = None
 
-vgg_model     = keras_legacy.models.load_model(str(H5_PATH), compile=False)
-logreg_scaler = joblib.load(SCALER_PATH)
-logreg_model  = joblib.load(LOGREG_PATH)
+try:
+    for path in (H5_PATH, SCALER_PATH, LOGREG_PATH):
+        if not path.exists():
+            raise RuntimeError(f"[ASD] Model file not found: {path}")
 
-# Build the 256-D embedding sub-model once at startup (not per request)
-intermediate_model = keras_legacy.Model(
-    inputs=vgg_model.input,
-    outputs=vgg_model.get_layer("asd_feature_vector_256").output,
-)
+    vgg_model     = keras_legacy.models.load_model(str(H5_PATH), compile=False)
+    logreg_scaler = joblib.load(SCALER_PATH)
+    logreg_model  = joblib.load(LOGREG_PATH)
+
+    # Build the 256-D embedding sub-model once at startup (not per request)
+    intermediate_model = keras_legacy.Model(
+        inputs=vgg_model.input,
+        outputs=vgg_model.get_layer("asd_feature_vector").output,
+    )
+except Exception as e:
+    print(f"[ASD] WARNING: Failed to load facial ML models. Facial endpoints will return 503. {e}")
 
 # --- Q-CHAT stream ---
-for path in (XGBOOST_PATH, FEATURES_PATH):
-    if not path.exists():
-        raise RuntimeError(f"[ASD] Model file not found: {path}")
+xgboost_model = None
+feature_columns = None
 
-xgboost_model   = joblib.load(XGBOOST_PATH)
-feature_columns = joblib.load(FEATURES_PATH)
+try:
+    for path in (XGBOOST_PATH, FEATURES_PATH):
+        if not path.exists():
+            raise RuntimeError(f"[ASD] Model file not found: {path}")
 
-print(f"[ASD] All models loaded. Q-CHAT features: {feature_columns}")
+    xgboost_model   = joblib.load(XGBOOST_PATH)
+    feature_columns = joblib.load(FEATURES_PATH)
+except Exception as e:
+    print(f"[ASD] WARNING: Failed to load Q-CHAT ML models. Q-CHAT endpoints will return 503. {e}")
+
+print(f"[ASD] Model loading steps complete. Q-CHAT features: {'Loaded' if feature_columns else 'Missing'}")
 
 # --- MTCNN face detector ---
 mtcnn_detector = mtcnn.mtcnn.MTCNN()
@@ -138,16 +152,26 @@ def _detect_and_crop_face(bgr_frame: np.ndarray, margin: float = 0.1) -> Optiona
     return face if face.size > 0 else None
 
 
-def _infer_frame(bgr_frame: np.ndarray) -> tuple[float, Optional[np.ndarray]]:
+def _is_blurry(bgr_frame: np.ndarray, threshold: float = 50.0) -> bool:
+    """Return True if the frame is too blurry (Laplacian variance below threshold)."""
+    gray = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
+    return cv2.Laplacian(gray, cv2.CV_64F).var() < threshold
+
+
+def _infer_frame(bgr_frame: np.ndarray) -> tuple[Optional[float], Optional[np.ndarray]]:
     """
     MTCNN crop → VGG-Face preprocess → CNN embedding → LogReg → P(ASD).
     Returns (probability, cropped_face_bgr).
-    cropped_face_bgr is None if MTCNN found no face (raw frame used as fallback).
+    Returns (None, None) if no face is detected or the frame is too blurry — caller should skip.
     """
-    cropped = _detect_and_crop_face(bgr_frame)
-    face    = cropped if cropped is not None else bgr_frame   # fallback: raw frame
+    if _is_blurry(bgr_frame):
+        return None, None
 
-    img = cv2.resize(face, (224, 224)).astype(np.float32)
+    cropped = _detect_and_crop_face(bgr_frame)
+    if cropped is None:
+        return None, None
+
+    img = cv2.resize(cropped, (224, 224)).astype(np.float32)
     img[:, :, 0] -= 93.5940
     img[:, :, 1] -= 104.7624
     img[:, :, 2] -= 129.1863
@@ -184,6 +208,9 @@ async def predict_asd_face(file: UploadFile = File(...)):
               → StandardScaler → LogReg probe → P(ASD).
     """
     try:
+        if vgg_model is None or logreg_model is None or intermediate_model is None:
+            raise HTTPException(status_code=503, detail="Facial ML models are not loaded (missing model weights).")
+
         contents = await file.read()
         nparr    = np.frombuffer(contents, np.uint8)
         img      = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -195,6 +222,11 @@ async def predict_asd_face(file: UploadFile = File(...)):
             )
 
         p_facial, _ = _infer_frame(img)
+        if p_facial is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No face detected in the image, or the image is too blurry. Please upload a clear photo of the infant's face.",
+            )
         confidence = "High" if p_facial >= 0.80 else ("Moderate" if p_facial >= 0.50 else "Low")
         label      = "ASD Risk Detected" if p_facial >= FACIAL_THRESHOLD else "Low ASD Risk"
 
@@ -221,8 +253,9 @@ async def predict_asd_face(file: UploadFile = File(...)):
 async def predict_asd_video(file: UploadFile = File(...)):
     """
     Upload a short video (≤10s) of an infant's face.
-    Extracts 1 frame every 3 seconds, runs each through VGG-Face CNN → LogReg probe,
-    then soft-averages the ASD probabilities.
+    Samples every 3rd frame (e.g. frame 0, 3, 6, 9, ...),
+    skips blurry frames and frames with no detected face,
+    runs each through VGG-Face CNN → LogReg probe, then soft-averages the ASD probabilities.
     """
     suffix   = ".mp4"
     if file.filename:
@@ -232,6 +265,9 @@ async def predict_asd_video(file: UploadFile = File(...)):
 
     tmp_path = None
     try:
+        if vgg_model is None or logreg_model is None or intermediate_model is None:
+            raise HTTPException(status_code=503, detail="Facial ML models are not loaded (missing model weights).")
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
@@ -244,11 +280,11 @@ async def predict_asd_video(file: UploadFile = File(...)):
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration_sec = total_frames / fps
 
-        # One frame every 3 seconds (frames at 3s, 6s, 9s for a 10s video)
-        INTERVAL     = 3.0
-        sample_times = list(np.arange(INTERVAL, duration_sec + 0.1, INTERVAL))
-        if not sample_times:
-            sample_times = [duration_sec / 2]   # fallback: middle frame
+        # Sample every Nth frame (0, 3, 6, 9, ...)
+        FRAME_STEP    = 3
+        sample_indices = list(range(0, total_frames, FRAME_STEP))
+        if not sample_indices:
+            sample_indices = [total_frames // 2]   # fallback: middle frame
 
         probabilities = []
         frame_preds   = []
@@ -257,19 +293,24 @@ async def predict_asd_video(file: UploadFile = File(...)):
         # Lazy Supabase client — used for frame image upload
         sb = _get_supabase()
 
-        for t in sample_times:
-            frame_idx = min(int(t * fps), total_frames - 1)
+        skipped_frames = 0
+        for frame_idx in sample_indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
             if not ret or frame is None:
                 continue
 
             p, cropped_face = _infer_frame(frame)
+            if p is None:
+                skipped_frames += 1
+                continue
+
+            time_sec = frame_idx / fps
             probabilities.append(p)
-            frame_preds.append({"time_sec": round(t, 1), "asd_probability": round(p, 4)})
+            frame_preds.append({"frame": frame_idx, "time_sec": round(time_sec, 2), "asd_probability": round(p, 4)})
 
             # ── MD5-based frame upload to Supabase Storage ─────────────────
-            face_to_store = cropped_face if cropped_face is not None else frame
+            face_to_store = cropped_face
             ok, buf = cv2.imencode(".jpg", face_to_store, [cv2.IMWRITE_JPEG_QUALITY, 90])
             if ok and sb is not None:
                 try:
@@ -292,7 +333,7 @@ async def predict_asd_video(file: UploadFile = File(...)):
         if not probabilities:
             raise HTTPException(
                 status_code=400,
-                detail="No valid frames could be extracted from the video.",
+                detail=f"No usable frames found ({skipped_frames} skipped — no face detected or too blurry).",
             )
 
         p_facial   = float(np.mean(probabilities))
@@ -308,6 +349,7 @@ async def predict_asd_video(file: UploadFile = File(...)):
             "frame_predictions": frame_preds,
             "duration_sec":      round(duration_sec, 1),
             "frame_urls":        frame_urls,   # uploaded cropped-face images (MD5-named)
+            "frames_skipped":    skipped_frames,
         }
 
     except HTTPException:
@@ -356,6 +398,9 @@ async def predict_asd_qchat(data: QChatInput):
     Returns P(ASD), risk label, raw Q-CHAT score, and confidence.
     """
     try:
+        if xgboost_model is None or feature_columns is None:
+            raise HTTPException(status_code=503, detail="Q-CHAT ML models are not loaded.")
+
         row = {col: 0 for col in feature_columns}
         row["A1"]  = data.A1
         row["A2"]  = data.A2

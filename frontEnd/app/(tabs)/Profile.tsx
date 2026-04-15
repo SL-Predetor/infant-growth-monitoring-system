@@ -1,303 +1,374 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import {
+  View, Text, StyleSheet, Image, Pressable,
+  ActivityIndicator, Alert, ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Colors, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useAuth } from '@/lib/auth-context';
-import { Infant } from '@/lib/auth-context';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import {
+  ChevronLeft, Edit3, LogOut,
+  TrendingUp, Scale, ChevronRight,
+  Baby, Calendar,
+} from 'lucide-react-native';
+import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { useAuth, Infant } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 
+const C = Colors.light;
+
+/* ── helpers ── */
+function getInitials(fullName?: string | null, email?: string | null): string {
+  if (fullName) {
+    const parts = fullName.trim().split(' ').filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0]?.[0]?.toUpperCase() ?? 'U';
+  }
+  return email?.[0]?.toUpperCase() ?? 'U';
+}
+
+function getBabyAge(dob?: string | null): string {
+  if (!dob) return '';
+  const birth = new Date(dob);
+  const now = new Date();
+  const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+  if (months < 1) {
+    const days = Math.floor((now.getTime() - birth.getTime()) / 86400000);
+    return `${days} days old`;
+  }
+  if (months < 12) return `${months} months old`;
+  const y = Math.floor(months / 12), m = months % 12;
+  return m > 0 ? `${y} yr ${m} mo old` : `${y} year old`;
+}
+
 export default function ProfileScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const themeColors = Colors[colorScheme];
   const { user, profile, signOut } = useAuth();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [infant, setInfant] = useState<Infant | null>(null);
 
   useEffect(() => {
-    fetchInfant();
+    if (!user) return;
+    supabase
+      .from('infants')
+      .select('id, name, date_of_birth, gender, current_weight_kg, current_height_cm, last_measurement_date')
+      .eq('parent_id', user.id)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setInfant(data as Infant); });
   }, [user]);
 
-  const fetchInfant = async () => {
-    if (!user) return;
-    try {
-      const { data } = await supabase
-        .from('infants')
-        .select('id, name, date_of_birth, gender, birth_weight_kg, birth_height_cm, current_weight_kg, current_height_cm, last_measurement_date')
-        .eq('parent_id', user.id)
-        .limit(1)
-        .maybeSingle();
-      if (data) setInfant(data as Infant);
-    } catch {
-      // No infant found
-    }
-  };
-
-  const handleLogOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setSigningOut(true);
-              await signOut();
-            } catch (err) {
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
-            } finally {
-              setSigningOut(false);
-            }
-          },
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out', style: 'destructive',
+        onPress: async () => {
+          setSigningOut(true);
+          try { await signOut(); }
+          catch { Alert.alert('Error', 'Failed to sign out. Please try again.'); }
+          finally { setSigningOut(false); }
         },
-      ]
-    );
-  };
-
-  const handleEditProfile = () => {
-    router.push('/(tabs)/edit-profile');
-  };
-
-  const getInitials = (fullName?: string | null, email?: string | null) => {
-    if (fullName) {
-      const parts = fullName.trim().split(' ').filter(Boolean);
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-      }
-      return parts[0]?.[0]?.toUpperCase() || 'U';
-    }
-    if (email) {
-      return email[0].toUpperCase();
-    }
-    return 'U';
-  };
-
-  const getMemberSince = () => {
-    if (!user?.created_at) return '';
-    try {
-      return new Date(user.created_at).toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric',
-      });
-    } catch {
-      return '';
-    }
+      },
+    ]);
   };
 
   if (!user || !profile) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: themeColors.background }]}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#6C63FF" />
-        </View>
+      <SafeAreaView style={s.safe} edges={['top']}>
+        <View style={s.loader}><ActivityIndicator size="large" color={C.primary} /></View>
       </SafeAreaView>
     );
   }
 
-  const hasGrowthData = infant?.current_weight_kg != null || infant?.current_height_cm != null;
+  const displayName = profile.full_name || user.email?.split('@')[0] || 'User';
+  const initials    = getInitials(profile.full_name, user.email);
+  const babyAge     = getBabyAge(infant?.date_of_birth ?? null);
+  const hasStats    = infant?.current_weight_kg != null || infant?.current_height_cm != null;
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: themeColors.background }]}>
-      <ThemedView style={styles.container}>
-        {profile.avatar_url ? (
-          <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View
-            style={[
-              styles.avatar,
-              {
-                backgroundColor: '#6C63FF',
-                justifyContent: 'center',
-                alignItems: 'center',
-              },
-            ]}
-          >
-            <ThemedText style={styles.avatarInitials}>
-              {getInitials(profile.full_name, user.email)}
-            </ThemedText>
-          </View>
-        )}
+    <SafeAreaView style={s.safe} edges={['top']}>
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
-        <ThemedText style={styles.name}>
-          {profile.full_name || user.email?.split('@')[0] || 'User'}
-        </ThemedText>
-        <Text style={[styles.email, { color: themeColors.secondaryText }]}>
-          {user.email}
-        </Text>
-
-        {/* Bio */}
-        <Text
-          style={[
-            styles.bio,
-            { color: profile.bio ? themeColors.text : themeColors.secondaryText },
-          ]}
-        >
-          {profile.bio || 'No bio yet'}
-        </Text>
-
-        {/* Baby info + measurements */}
-        <View style={styles.infoRow}>
-          {infant?.name && (
-            <View style={styles.infoPill}>
-              <Text style={styles.infoPillText}>👶 {infant.name}</Text>
-            </View>
-          )}
-          {hasGrowthData && infant?.current_weight_kg != null && (
-            <View style={styles.infoPill}>
-              <Text style={styles.infoPillText}>⚖️ {infant.current_weight_kg} kg</Text>
-            </View>
-          )}
-          {hasGrowthData && infant?.current_height_cm != null && (
-            <View style={styles.infoPill}>
-              <Text style={styles.infoPillText}>📏 {infant.current_height_cm} cm</Text>
-            </View>
-          )}
-          {profile.role === 'parent' && (
-            <View style={styles.infoPill}>
-              <Text style={styles.infoPillText}>👨‍👩‍👧 Parent</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Add measurements link if no data */}
-        {infant && !hasGrowthData && (
-          <Pressable onPress={handleEditProfile} style={styles.addMeasurementsLink}>
-            <Text style={styles.addMeasurementsText}>📏 Add measurements</Text>
-          </Pressable>
-        )}
-
-        {getMemberSince() ? (
-          <Text style={[styles.memberSince, { color: themeColors.secondaryText }]}>
-            Member since {getMemberSince()}
-          </Text>
-        ) : null}
-
-        <View style={styles.actions}>
+        {/* ── Top bar with back button ── */}
+        <Animated.View entering={FadeInUp.duration(300).springify()} style={s.topBar}>
           <Pressable
-            style={[styles.button, { backgroundColor: themeColors.primary }]}
-            onPress={handleEditProfile}
+            style={s.backBtn}
+            onPress={() => router.push('/(tabs)/' as any)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Text style={styles.buttonText}>Edit Profile</Text>
+            <ChevronLeft size={20} color={C.label} strokeWidth={2} />
+            <Text style={s.backText}>Back</Text>
           </Pressable>
-
-          <TouchableOpacity
-            onPress={handleLogOut}
-            disabled={signingOut}
-            style={{
-              borderWidth: 1.5,
-              borderColor: '#6C63FF',
-              borderRadius: 12,
-              paddingVertical: 14,
-              alignItems: 'center',
-              opacity: signingOut ? 0.6 : 1,
-            }}
+          <Text style={s.pageTitle}>Profile</Text>
+          <Pressable
+            style={s.editPill}
+            onPress={() => router.push('/(tabs)/edit-profile' as any)}
           >
-            <Text style={{ color: '#6C63FF', fontSize: 16, fontWeight: '600' }}>
-              {signingOut ? 'Signing out...' : 'Log Out'}
+            <Edit3 size={13} color={C.primary} strokeWidth={2} />
+            <Text style={s.editPillText}>Edit</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* ── Avatar + Name card ── */}
+        <Animated.View entering={FadeInDown.delay(60).springify().damping(14)}>
+          <View style={s.profileCard}>
+            {profile.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={s.avatar} />
+            ) : (
+              <View style={s.avatarCircle}>
+                <Text style={s.avatarInitials}>{initials}</Text>
+              </View>
+            )}
+            <Text style={s.displayName}>{displayName}</Text>
+            <Text style={s.email}>{user.email}</Text>
+            {!!profile.bio && (
+              <Text style={s.bio}>{profile.bio}</Text>
+            )}
+          </View>
+        </Animated.View>
+
+        {/* ── Baby card ── */}
+        {infant && (
+          <Animated.View entering={FadeInDown.delay(130).springify().damping(14)}>
+            <Text style={s.sectionLabel}>Baby</Text>
+            <View style={s.card}>
+              {/* Baby identity row */}
+              <View style={s.babyRow}>
+                <View style={[s.babyIcon, { backgroundColor: C.primarySoft }]}>
+                  <Baby size={18} color={C.primary} strokeWidth={1.8} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.babyName}>{infant.name}</Text>
+                  {babyAge ? <Text style={s.babyAge}>{babyAge}</Text> : null}
+                </View>
+                {infant.gender && (
+                  <Text style={s.genderBadge}>{infant.gender === 'male' ? '👦' : '👧'}</Text>
+                )}
+              </View>
+
+              {/* Stats */}
+              {hasStats && (
+                <View style={s.statsRow}>
+                  {infant.current_weight_kg != null && (
+                    <View style={s.stat}>
+                      <Text style={s.statVal}>{infant.current_weight_kg} kg</Text>
+                      <Text style={s.statLbl}>Weight</Text>
+                    </View>
+                  )}
+                  {infant.current_weight_kg != null && infant.current_height_cm != null && (
+                    <View style={s.statDivider} />
+                  )}
+                  {infant.current_height_cm != null && (
+                    <View style={s.stat}>
+                      <Text style={s.statVal}>{infant.current_height_cm} cm</Text>
+                      <Text style={s.statLbl}>Height</Text>
+                    </View>
+                  )}
+                  {infant.last_measurement_date && (
+                    <>
+                      <View style={s.statDivider} />
+                      <View style={s.stat}>
+                        <Text style={s.statVal}>
+                          {new Date(infant.last_measurement_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        </Text>
+                        <Text style={s.statLbl}>Last measured</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+              )}
+
+              {/* Add measurements CTA if none */}
+              {!hasStats && (
+                <Pressable
+                  style={s.addRow}
+                  onPress={() => router.push('/(tabs)/update-measurements' as any)}
+                >
+                  <Text style={s.addRowText}>Add first measurements</Text>
+                  <ChevronRight size={14} color={C.primary} strokeWidth={2} />
+                </Pressable>
+              )}
+            </View>
+          </Animated.View>
+        )}
+
+        {/* ── Menu ── */}
+        <Animated.View entering={FadeInDown.delay(200).springify().damping(14)}>
+          <Text style={s.sectionLabel}>Growth</Text>
+          <View style={s.card}>
+            <MenuRow
+              icon={TrendingUp} iconColor={C.primary} iconBg={C.primarySoft}
+              label="Growth History"
+              onPress={() => router.push('/(tabs)/growth-history' as any)}
+            />
+            <View style={s.divider} />
+            <MenuRow
+              icon={Scale} iconColor={C.success} iconBg={C.successSoft}
+              label="Update Measurements"
+              onPress={() => router.push('/(tabs)/update-measurements' as any)}
+            />
+            <View style={s.divider} />
+            <MenuRow
+              icon={Calendar} iconColor={C.accent} iconBg={C.accentSoft}
+              label="Growth Insights"
+              onPress={() => router.push('/(tabs)/growth-insights' as any)}
+            />
+          </View>
+        </Animated.View>
+
+        {/* ── Sign out ── */}
+        <Animated.View entering={FadeInDown.delay(280).springify().damping(14)}>
+          <Pressable
+            style={[s.signOutBtn, signingOut && { opacity: 0.55 }]}
+            onPress={handleSignOut}
+            disabled={signingOut}
+          >
+            <LogOut size={17} color={C.danger} strokeWidth={1.8} />
+            <Text style={s.signOutText}>
+              {signingOut ? 'Signing out…' : 'Sign Out'}
             </Text>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
+          </Pressable>
+        </Animated.View>
+
+        <View style={{ height: 48 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
+function MenuRow({ icon: Icon, iconColor, iconBg, label, onPress }: {
+  icon: any; iconColor: string; iconBg: string;
+  label: string; onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
+      onPress={onPress}
+    >
+      <View style={[s.menuIcon, { backgroundColor: iconBg }]}>
+        <Icon size={16} color={iconColor} strokeWidth={1.8} />
+      </View>
+      <Text style={s.menuLabel}>{label}</Text>
+      <ChevronRight size={15} color={C.labelTertiary} strokeWidth={1.8} />
+    </Pressable>
+  );
+}
+
+const s = StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: C.background },
+  loader:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  content: { paddingHorizontal: Spacing.screenPadding, paddingTop: 8, paddingBottom: 40 },
+
+  /* Top bar */
+  topBar: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: Spacing.xl,
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  backBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingVertical: 6,
   },
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
+  backText:  { fontSize: 15, color: C.label, fontWeight: '500' },
+  pageTitle: { fontSize: 17, fontWeight: '700', color: C.label, letterSpacing: -0.3 },
+  editPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderWidth: 1.5, borderColor: C.primary,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: Radius.full,
+  },
+  editPillText: { fontSize: 13, fontWeight: '700', color: C.primary },
+
+  /* Profile card */
+  profileCard: {
+    backgroundColor: C.card, borderRadius: Radius.xxl,
+    padding: Spacing.xl, alignItems: 'center',
+    marginBottom: Spacing.xl, ...Shadows.md,
   },
   avatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 90, height: 90, borderRadius: 45,
     marginBottom: Spacing.lg,
-    borderWidth: 3,
-    borderColor: '#6C63FF',
+    borderWidth: 3, borderColor: C.primarySoft,
   },
-  avatarInitials: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  avatarCircle: {
+    width: 90, height: 90, borderRadius: 45,
+    backgroundColor: C.primary,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: Spacing.lg,
+    shadowColor: C.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25, shadowRadius: 12, elevation: 6,
   },
-  name: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: Spacing.sm,
-  },
-  email: {
-    fontSize: 14,
-    marginTop: Spacing.xs,
-  },
+  avatarInitials: { fontSize: 34, fontWeight: '700', color: '#FFF' },
+  displayName:    { fontSize: 20, fontWeight: '700', color: C.label, marginBottom: 4 },
+  email:          { fontSize: 13, color: C.labelTertiary, marginBottom: Spacing.sm },
   bio: {
-    fontSize: 15,
-    textAlign: 'center',
-    marginTop: Spacing.md,
-    lineHeight: 20,
-    fontStyle: 'italic',
+    fontSize: 13, color: C.labelTertiary, textAlign: 'center',
+    lineHeight: 20, marginTop: 4, fontStyle: 'italic',
   },
-  infoRow: {
+
+  /* Section label */
+  sectionLabel: {
+    fontSize: 12, fontWeight: '700', color: C.labelTertiary,
+    letterSpacing: 0.8, textTransform: 'uppercase',
+    marginBottom: Spacing.sm, marginLeft: 4, marginTop: 4,
+  },
+
+  /* Card shell */
+  card: {
+    backgroundColor: C.card, borderRadius: Radius.xl,
+    overflow: 'hidden', marginBottom: Spacing.xl, ...Shadows.sm,
+  },
+
+  /* Baby row */
+  babyRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: Spacing.md, padding: Spacing.lg,
+  },
+  babyIcon: {
+    width: 40, height: 40, borderRadius: Radius.md,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  babyName:    { fontSize: 16, fontWeight: '700', color: C.label },
+  babyAge:     { fontSize: 12, color: C.labelTertiary, marginTop: 1 },
+  genderBadge: { fontSize: 22 },
+
+  /* Stats */
+  statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: Spacing.md,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    borderTopWidth: 1, borderTopColor: C.border,
+    backgroundColor: C.cardSecondary,
   },
-  infoPill: {
-    backgroundColor: 'rgba(108, 99, 255, 0.15)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
+  stat:        { flex: 1, alignItems: 'center', paddingVertical: 14 },
+  statVal:     { fontSize: 16, fontWeight: '700', color: C.label, marginBottom: 2 },
+  statLbl:     { fontSize: 10, color: C.labelTertiary, fontWeight: '500' },
+  statDivider: { width: 1, backgroundColor: C.border, marginVertical: 8 },
+
+  /* Add row */
+  addRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: Spacing.lg,
+    borderTopWidth: 1, borderTopColor: C.border,
   },
-  infoPillText: {
-    color: '#6C63FF',
-    fontSize: 13,
-    fontWeight: '600',
+  addRowText: { fontSize: 14, color: C.primary, fontWeight: '600' },
+
+  /* Menu */
+  menuRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: Spacing.md, padding: Spacing.lg,
   },
-  addMeasurementsLink: {
+  menuIcon: {
+    width: 36, height: 36, borderRadius: Radius.md,
+    justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+  },
+  menuLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: C.label },
+  divider:   { height: 1, backgroundColor: C.border, marginHorizontal: Spacing.lg },
+
+  /* Sign out */
+  signOutBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: C.dangerSoft,
+    borderRadius: Radius.xl, paddingVertical: 16,
     marginTop: Spacing.sm,
-    paddingVertical: 6,
   },
-  addMeasurementsText: {
-    color: '#6C63FF',
-    fontSize: 14,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  memberSince: {
-    fontSize: 12,
-    marginTop: Spacing.md,
-  },
-  actions: {
-    width: '100%',
-    marginTop: Spacing.xl,
-    gap: Spacing.md,
-  },
-  button: {
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
+  signOutText: { fontSize: 15, fontWeight: '700', color: C.danger },
 });
