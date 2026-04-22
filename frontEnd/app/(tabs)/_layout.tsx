@@ -120,15 +120,17 @@ export default function TabLayout() {
     >
       {/* 1 — Cry Translator */}
       <Tabs.Screen
-        name="cry-translator"
+        name="smart-cry-analysis"
         options={{
           title: 'Cry',
-          href: '/(tabs)/cry-translator',
+          href: '/(tabs)/smart-cry-analysis',
           tabBarIcon: ({ color, focused }) => (
             <Mic size={focused ? 23 : 21} color={color} strokeWidth={focused ? 2.2 : 1.8} />
           ),
         }}
       />
+      {/* Hidden — old cry-translator route kept for backwards compat */}
+      <Tabs.Screen name="cry-translator" options={{ href: null, headerShown: false }} />
 
       {/* 2 — Daily Log */}
       <Tabs.Screen

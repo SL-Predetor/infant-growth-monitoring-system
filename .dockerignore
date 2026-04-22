@@ -1,0 +1,35 @@
+# Git
+.git
+.gitattributes
+
+# Environment (secrets — never bake into image)
+.env
+*.env
+frontEnd/.env
+
+# Frontend (not needed in backend container)
+frontEnd/node_modules/
+frontEnd/.expo/
+
+# Windows binary (container is Linux — ffmpeg installed via apt)
+backEnd/ffmpeg.exe
+
+# Duplicate model folder (routers use root mlModels/, not backEnd/mlModels/)
+backEnd/mlModels/
+
+# Empty directory (no longer referenced by Dockerfile)
+backEnd/wheels/
+
+# Training data / research scripts (not used at runtime)
+backEnd/postpartum/postpartum_dataset.xlsx
+backEnd/postpartum/postpartum_dataset_cleaned.csv
+backEnd/postpartum/postpartum_pipeline.py
+backEnd/postpartum/painpredict.py
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+
+# Documentation
+*.md
+!backEnd/README.md

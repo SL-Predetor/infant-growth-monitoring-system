@@ -1,4 +1,4 @@
-absl-py==2.4.0
+absl-py==2.3.1
 annotated-types==0.7.0
 anyio==3.7.1
 astunparse==1.6.3
@@ -22,7 +22,6 @@ h11==0.16.0
 h5py==3.15.1
 idna==3.11
 joblib==1.5.3
-keras==3.13.2
 kiwisolver==1.4.9
 lazy_loader==0.4
 libclang==18.1.1
@@ -41,8 +40,8 @@ namex==0.1.0
 noisereduce==3.0.3
 numba==0.64.0
 numpy==1.26.4
-opencv-contrib-python==4.13.0.92
-opencv-python==4.13.0.92
+opencv-contrib-python==4.10.0.84
+opencv-python==4.10.0.84
 opt_einsum==3.4.0
 optree==0.18.0
 packaging==26.0
@@ -71,9 +70,13 @@ soundfile==0.13.1
 soxr==1.0.0
 starlette==0.27.0
 supabase
+torch
+pymongo
 tensorboard==2.20.0
 tensorboard-data-server==0.7.2
-tensorflow_cpu==2.20.0
+tensorflow==2.20.0
+tf-keras==2.20.0
+shap==0.47.2
 termcolor==3.3.0
 threadpoolctl==3.6.0
 tqdm==4.67.3

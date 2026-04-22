@@ -5,15 +5,10 @@ services:
       dockerfile: backEnd/Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      # These variables can be overridden by a local .env file in the root
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - MONGODB_URI=${MONGODB_URI}
-    volumes:
-      # Optional: Mounts the local directories into the container
-      # This allows live-reloading during development without rebuilding the image
-      - ./backEnd:/app/backEnd
-      - ./mlModels:/app/mlModels
-    # If the user wants to use hot reloading, they can override the command:
+    env_file:
+      - .env
+    # For development with hot-reload, uncomment these lines:
+    # volumes:
+    #   - ./backEnd:/app/backEnd
+    #   - ./mlModels:/app/mlModels
     # command: uvicorn app:app --host 0.0.0.0 --port 8000 --reload

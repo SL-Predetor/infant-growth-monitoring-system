@@ -104,12 +104,15 @@ export default function AddInfantScreen() {
   const handleSave = async (isSkip: boolean = false) => {
     if (!isSkip && !validateStep2()) return;
     if (isSkip && !validateStep1()) return;
-    if (!user) return;
+    if (!user) {
+      setErrors({ form: 'Not signed in. Please sign up or sign in first.' });
+      return;
+    }
     setLoading(true);
     try {
       const [day, month, year] = dateOfBirth.split('/').map(Number);
       const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const { error } = await supabase.from('infants').insert({
+      const payload = {
         parent_id: user.id,
         name: babyName.trim(),
         date_of_birth: formattedDate,
@@ -122,15 +125,22 @@ export default function AddInfantScreen() {
         maternal_age: isSkip || !maternalAge ? null : parseInt(maternalAge),
         maternal_height_cm: isSkip || !maternalHeight ? null : parseFloat(maternalHeight),
         maternal_bmi: isSkip ? null : calculateBMI(),
-        ses_level: isSkip ? null : sesLevel,
-        maternal_nutrition_quality: isSkip ? null : nutritionQuality,
+        ses_level: isSkip || sesLevel === null ? null : String(sesLevel),
+        maternal_nutrition_quality: isSkip || nutritionQuality === null ? null : String(nutritionQuality),
         breastfeeding_status: isSkip ? null : isBreastfeeding,
         last_measurement_date: (currentWeight || currentHeight) ? new Date().toISOString().split('T')[0] : null,
-      });
-      if (error) setErrors({ form: error.message });
-      else router.replace('/(tabs)');
-    } catch {
-      setErrors({ form: 'Failed to add baby. Please try again.' });
+      };
+      console.log('[add-infant] inserting', payload);
+      const { error } = await supabase.from('infants').insert(payload);
+      if (error) {
+        console.error('[add-infant] insert error', error);
+        setErrors({ form: `${error.message}${error.hint ? ' — ' + error.hint : ''}` });
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (e: any) {
+      console.error('[add-infant] exception', e);
+      setErrors({ form: e?.message ?? 'Failed to add baby. Please try again.' });
     }
     setLoading(false);
   };

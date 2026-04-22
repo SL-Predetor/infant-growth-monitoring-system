@@ -53,8 +53,7 @@ infant-growth-monitoring-system/
 ├── mlModels/                # Machine learning research notebooks, artifacts, and weights (.pkl)
 ├── supabase/                # Database migrations and security schemas
 ├── docker-compose.yml       # Orchestration for the backend
-├── YASINDU_UPDATES.md       # Developer notes on recent architectural updates
-└── CLAUDE.md                # In-depth architectural/research documentation
+└── CLAUDE.md                # Master reference: architecture, env, Docker, Supabase, known issues
 ```
 
 ---

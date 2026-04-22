@@ -136,7 +136,7 @@ export default function ASDQChatResultScreen() {
         {/* Actions */}
         <TouchableOpacity
           style={styles.doneBtn}
-          onPress={() => router.push('/(tabs)/behavior')}
+          onPress={() => router.replace('/(tabs)/asd-screen' as any)}
         >
           <Text style={styles.doneBtnText}>Done</Text>
         </TouchableOpacity>
