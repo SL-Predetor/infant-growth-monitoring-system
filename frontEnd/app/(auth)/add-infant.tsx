@@ -15,6 +15,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { Colors, Spacing, Radius, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
+import { refreshHasInfants } from '../_layout';
 
 const C = Colors.light;
 
@@ -136,6 +137,7 @@ export default function AddInfantScreen() {
         console.error('[add-infant] insert error', error);
         setErrors({ form: `${error.message}${error.hint ? ' — ' + error.hint : ''}` });
       } else {
+        refreshHasInfants();
         router.replace('/(tabs)');
       }
     } catch (e: any) {

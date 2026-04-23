@@ -64,9 +64,11 @@ export default function SignUpScreen() {
   const handleSignUp = async () => {
     if (!validate()) return;
     setLoading(true);
-    const { error } = await signUpWithEmail(email, password, fullName);
+    const { error, needsEmailConfirmation } = await signUpWithEmail(email, password, fullName);
     if (error) {
       setErrors({ form: error.message || 'Failed to create account' });
+    } else if (needsEmailConfirmation) {
+      router.replace({ pathname: '/(auth)/check-email', params: { email } });
     } else {
       router.replace('/(auth)/add-infant');
     }

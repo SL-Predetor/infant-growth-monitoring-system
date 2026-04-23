@@ -4,12 +4,19 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { supabase } from '@/lib/supabase';
+
+let _refreshHasInfants: (() => void) | null = null;
+
+export function refreshHasInfants() {
+  _refreshHasInfants?.();
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -18,23 +25,58 @@ function RootLayoutNav() {
   const { session, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [hasInfants, setHasInfants] = useState<boolean | null>(null);
+
+  const userId = session?.user?.id ?? null;
+
+  const checkHasInfants = useCallback(async () => {
+    if (!userId) {
+      setHasInfants(null);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('infants')
+      .select('id')
+      .eq('parent_id', userId)
+      .limit(1);
+    if (error) {
+      console.warn('[layout] infants lookup failed', error.message);
+      setHasInfants(false);
+      return;
+    }
+    setHasInfants((data ?? []).length > 0);
+  }, [userId]);
+
+  useEffect(() => {
+    _refreshHasInfants = checkHasInfants;
+    return () => {
+      if (_refreshHasInfants === checkHasInfants) _refreshHasInfants = null;
+    };
+  }, [checkHasInfants]);
+
+  useEffect(() => {
+    checkHasInfants();
+  }, [checkHasInfants]);
 
   useEffect(() => {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const onAddInfant = inAuthGroup && segments[1] === 'add-infant';
 
-    if (!session && !inAuthGroup) {
-      // Redirect to sign-in if no session
-      router.replace('/(auth)/sign-in');
-    } else if (session && inAuthGroup) {
-      // Allow add-infant screen for new signups
-      const onAddInfant = segments[1] === 'add-infant';
-      if (!onAddInfant) {
-        router.replace('/(tabs)');
-      }
+    if (!session) {
+      if (!inAuthGroup) router.replace('/(auth)/sign-in');
+      return;
     }
-  }, [session, isLoading, segments]);
+
+    if (hasInfants === null) return;
+
+    if (hasInfants) {
+      if (inAuthGroup) router.replace('/(tabs)');
+    } else {
+      if (!onAddInfant) router.replace('/(auth)/add-infant');
+    }
+  }, [session, isLoading, segments, hasInfants]);
 
   if (isLoading) {
     return (

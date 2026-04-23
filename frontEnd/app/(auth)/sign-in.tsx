@@ -37,6 +37,12 @@ export default function SignInScreen() {
     setLoading(true);
     const { error: signInError } = await signInWithEmail(email, password);
     if (signInError) {
+      const isUnconfirmed = signInError.message?.toLowerCase().includes('not confirmed');
+      if (isUnconfirmed) {
+        setLoading(false);
+        router.replace({ pathname: '/(auth)/check-email', params: { email } });
+        return;
+      }
       setError(signInError.message || 'Failed to sign in');
     } else {
       router.replace('/(tabs)');
