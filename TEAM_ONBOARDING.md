@@ -11,13 +11,22 @@
 
 ## 2. What you'll receive privately (not in the repo)
 
-| Thing | Where to put it | Why it's not in git |
-|---|---|---|
-| Root `.env` contents | Paste into `.env` at repo root (copy from `.env.example` first) | Contains Supabase service-role key + Mongo URI |
-| `frontEnd/.env` contents | Paste into `frontEnd/.env` (copy from `frontEnd/.env.example` first) | Contains Supabase anon key |
-| `fold_5_best.h5` (ASD model, ~525 MB) | `mlModels/autisumDetect/sector1/Stage_4/models/fold_5_best.h5` | Too large for free GitHub LFS quota; shared via Drive |
+**Secrets** (Signal / 1Password / private email):
 
-Only Yasindu (ASD module owner) strictly needs the `.h5` file. The backend boots without it and auto-disables the ASD face endpoint — everyone else can ignore the "model not found" warning at startup.
+| Thing | Where to put it |
+|---|---|
+| Root `.env` contents | Paste into `.env` at repo root (copy from `.env.example` first) |
+| `frontEnd/.env` contents | Paste into `frontEnd/.env` (copy from `frontEnd/.env.example` first) |
+
+**Model files** (Google Drive link): the small and medium models ship with `git clone`. Only files in the table below need to be downloaded separately. **Preserve the exact path** — the backend loads by absolute path from repo root.
+
+| File (on Drive) | Drop it at this exact path | Needed by |
+|---|---|---|
+| `fold_5_best.h5` (~525 MB) | `mlModels/autisumDetect/sector1/Stage_4/models/fold_5_best.h5` | ASD module only |
+
+Everyone except the ASD owner can ignore this. The backend boots without `fold_5_best.h5` and auto-disables the ASD face endpoint — you'll see a single "model not found" warning in the logs, not a crash.
+
+> **Tip:** from your Drive folder, keep the filenames identical. Don't rename `fold_5_best.h5` to `fold_5.h5` or anything else — the backend matches by exact filename at [backEnd/routers/asd_router.py:69](backEnd/routers/asd_router.py#L69).
 
 ## 3. One-time setup
 
