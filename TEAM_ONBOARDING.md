@@ -18,7 +18,7 @@
 | Root `.env` contents | Paste into `.env` at repo root (copy from `.env.example` first) |
 | `frontEnd/.env` contents | Paste into `frontEnd/.env` (copy from `frontEnd/.env.example` first) |
 
-**Model files** (Google Drive link): the small and medium models ship with `git clone`. Only files in the table below need to be downloaded separately. **Preserve the exact path** — the backend loads by absolute path from repo root.
+**Model files** ([Google Drive folder](https://drive.google.com/drive/folders/1cjgTsKdSEUaK7Sb-NSdpepXP4jP469aG?usp=drive_link)): the small and medium models ship with `git clone`. Only files in the table below need to be downloaded separately. **Preserve the exact path** — the backend loads by absolute path from repo root.
 
 | File (on Drive) | Drop it at this exact path | Needed by |
 |---|---|---|
