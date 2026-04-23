@@ -1,0 +1,533 @@
+================================================================================
+SECTOR 2 — Q-CHAT-10 Questionnaire-Based ASD Detection
+Summary of Notebooks
+================================================================================
+
+OVERVIEW
+--------
+Sector 2 implements a questionnaire-based ASD detection pipeline using the
+Q-CHAT-10 screening tool. The pipeline has three layers:
+
+  Layer 1 (Q-CHAT-10/) : Individual dataset preprocessing and model training
+                          on single-source data (toddlers / children).
+
+  Layer 2 (Stage_0/)   : Multi-source data fusion — combines 5 compatible
+                          Q-CHAT-10 datasets into one large unified dataset
+                          for more robust downstream modelling.
+
+  Layer 3 (Stage_1/, Stage_2/) : Feature ablation and population filtering —
+                          Stage_1 removes administrative bias features;
+                          Stage_2 further filters to parent/family-reported
+                          rows only (deployment-realistic population).
+
+--------------------------------------------------------------------------------
+NOTEBOOKS — Layer 1 (Q-CHAT-10/)
+--------------------------------------------------------------------------------
+
+1. Q01.ipynb — Data Preprocessing (Toddlers Dataset)
+   --------------------------------------------------
+   Dataset : "Autism Dataset for Toddlers.csv"
+   Initial rows : 1054 → 975 after removing 79 duplicates
+   No missing values found.
+
+   Features:
+     - A1–A10     : Binary Q-CHAT-10 questionnaire responses (0/1)
+     - Age_Mons   : Age in months (12–36 months range)
+     - Qchat-10-Score : Total score (0–10)
+     - Sex, Ethnicity, Jaundice, Family_mem_with_ASD,
+       Who completed the test
+   Target : Class/ASD Traits (Yes/No)
+
+   Preprocessing steps:
+     - Dropped Case_No and duplicate rows
+     - No outliers found in Age_Mons or Qchat-10-Score (IQR method)
+     - Cleaned "Who completed the test": merged 'Health care professional'
+       → 'Health Care Professional', 'Self' → 'Others'
+     - Dropped all Ethnicity_* columns (deemed non-informative)
+     - One-hot encoded: Sex, Jaundice, Family_mem_with_ASD,
+       Who completed the test, Class/ASD Traits
+     - StandardScaler applied to Age_Mons and Qchat-10-Score
+   Output : pre_processed_data.csv
+
+
+2. Q02.ipynb — Data Preprocessing (Children Dataset)
+   ---------------------------------------------------
+   Dataset : "Children_ASD.csv"
+   Rows    : 1478 (no duplicates)
+   No missing values found.
+
+   Features:
+     - A1–A9, A10_Autism_Spectrum_Quotient : Binary responses
+     - Age_Years → converted to Age_in_Months (* 12)
+     - Sex, Jaundice, Family_mem_with_ASD, Who_completed_the_test
+   Target : ASD_traits (Yes/No)
+
+   Preprocessing steps:
+     - Dropped Unnamed: 0 index column and Ethnicity column
+     - Converted Age_Years (float) to Age_in_Months (int)
+     - No outliers found in Age_in_Months (IQR method)
+     - Cleaned Who_completed_the_test: 'Self' → 'Others'
+     - One-hot encoded categorical columns (drop_first=True)
+     - StandardScaler applied to Age_in_Months
+   Output : pre_processed_data2.csv
+
+   Final encoded features (18 total):
+     A1–A9, A10_Autism_Spectrum_Quotient, Age_in_Months, Sex_M,
+     Jaundice_Yes, Family_mem_with_ASD_Yes,
+     Who_completed_the_test_Health Care Professional,
+     Who_completed_the_test_Others,
+     Who_completed_the_test_School and NGO,
+     ASD_traits_Yes (target)
+
+
+3. QM.ipynb — Model Training & Evaluation (with SHAP)
+   ----------------------------------------------------
+   Input   : pre_processed_data2.csv (1478 rows)
+   Split   : 80% train / 20% test (random_state=42)
+   Target  : ASD_traits_Yes
+
+   Models trained and evaluated:
+
+   a) Logistic Regression (max_iter=1000)
+      - Test Accuracy : 93.24%
+      - Precision     : 94.69%
+      - Recall        : 95.61%
+      - F1 Score      : 95.15%
+      - ROC-AUC       : 91.76%
+      - 5-Fold CV Acc : 91.13%
+
+   b) Random Forest (random_state=42)
+      - Test Accuracy : 94.26%
+      - Precision     : 95.63%
+      - Recall        : 96.10%
+      - F1 Score      : 95.86%
+      - ROC-AUC       : 93.10%
+      - 5-Fold CV Acc : 94.04%
+
+   c) XGBoost (random_state=42)   [BEST MODEL]
+      - Test Accuracy : 95.95%
+      - Precision     : 97.54%
+      - Recall        : 96.59%
+      - F1 Score      : 97.06%
+      - ROC-AUC       : 95.55%
+      - 5-Fold CV Acc : 95.46%
+
+   d) SVM (kernel='linear', random_state=42)
+      - Test Accuracy : 95.27%
+      - Precision     : 97.51%
+      - Recall        : 95.61%
+      - F1 Score      : 96.55%
+      - ROC-AUC       : 95.06%
+      - 10-Fold CV Acc: 94.64%
+
+   Top Features (Random Forest importance):
+     1. A9  (0.1334)
+     2. A7  (0.1310)
+     3. A6  (0.1046)
+     4. A5  (0.0969)
+     5. A1  (0.0845)
+
+   Explainability:
+     - SHAP TreeExplainer applied to XGBoost and Random Forest
+     - SHAP summary plots generated for feature contribution analysis
+
+
+4. QM1.ipynb — Model Training & Evaluation (without SHAP)
+   --------------------------------------------------------
+   Identical to QM.ipynb except SHAP analysis is excluded.
+   Same dataset, same models, same results.
+   Used as a clean/lightweight version of the modelling notebook.
+
+--------------------------------------------------------------------------------
+KEY RESULTS SUMMARY (Layer 1 — Children Dataset)
+--------------------------------------------------------------------------------
+
+  Model               | Test Acc | F1 Score | CV Acc (5-fold)
+  --------------------|----------|----------|----------------
+  Logistic Regression | 93.24%   | 95.15%   | 91.13%
+  Random Forest       | 94.26%   | 95.86%   | 94.04%
+  XGBoost             | 95.95%   | 97.06%   | 95.46%   <-- Best
+  SVM (linear)        | 95.27%   | 96.55%   | 94.64%
+
+Best model : XGBoost
+  - Highest accuracy, F1, and ROC-AUC across all metrics
+  - Strong cross-validation score (95.46%) confirms generalisability
+
+--------------------------------------------------------------------------------
+NOTEBOOKS — Layer 2 (Stage_0/)
+--------------------------------------------------------------------------------
+
+5. Stage_0/combine_datasets.ipynb — Multi-Source Dataset Fusion
+   -------------------------------------------------------------
+   Purpose : Aggregate all compatible Q-CHAT-10 datasets into one large
+             unified preprocessed dataset for more robust downstream modelling.
+
+   Sources included:
+     Dataset                              | Raw Rows | After Dedup
+     -------------------------------------|----------|-----------
+     Autism Dataset for Toddlers.csv      |    1054  |       920
+     Children_ASD.csv                     |    2226  |      1105
+     Autism-Child-Data.arff               |     288* |       272
+     Autism-Adolescent-Data.arff          |     104  |       103
+     Autism_Screening_Data_Combined.csv   |    6075  |      5130
+     TOTAL                                |    9747  |      7530
+
+     * 4 rows dropped due to missing age values
+
+   Sources excluded:
+     - "Toddler Autism dataset July 2018.csv" — verified exact duplicate
+       of Toddlers CSV
+     - "data1.csv" — incompatible schema (25-item QCHAT, not 10-item)
+
+   Common raw schema (normalised before concatenation):
+     A1–A10, Age_in_Months, Sex, Jaundice, Family_mem_with_ASD,
+     Who_completed_the_test, ASD_traits, source
+
+   Age coverage after combining:
+     - Toddlers      : 12–36 months
+     - Children      : up to 120 months (10 years)
+     - Adolescents   : up to 192 months (16 years)
+
+   Normalisation helpers used:
+     - normalise_who()   : unifies 'parent'/'relative' → 'Family Member', etc.
+     - normalise_yesno() : standardises yes/no across datasets
+     - normalise_sex()   : standardises M/F casing
+     - normalise_asd()   : standardises YES/NO/y/n → 'Yes'/'No'
+
+   Deduplication:
+     - Based on all feature columns (source tag excluded)
+     - keep='first' strategy → 2217 cross-dataset duplicates removed
+
+   Preprocessing (to match QM1.ipynb schema):
+     - Dropped  : source, Age_in_Months, Jaundice
+     - Renamed  : A10 → A10_Autism_Spectrum_Quotient (retained as A10 in combined)
+     - Encoded  : OHE on Sex, Family_mem_with_ASD,
+                  Who_completed_the_test, ASD_traits (drop_first=True)
+     - No StandardScaler (Age_in_Months dropped; no continuous features remain)
+
+   Final output shape : 7530 rows × 16 columns
+   Output file        : pre_processed_data_combined.csv
+
+   Final encoded features (16 total):
+     A1–A9, A10_Autism_Spectrum_Quotient, Sex_M, Family_mem_with_ASD_Yes,
+     Who_completed_the_test_Health Care Professional,
+     Who_completed_the_test_Others,
+     Who_completed_the_test_School and NGO,
+     ASD_traits_Yes (target)
+
+   Class balance (after dedup):
+     Non-ASD (False) : 4414  (58.6%)
+     ASD     (True)  : 3116  (41.4%)
+     → Moderately imbalanced; manageable without heavy resampling
+
+
+6. Stage_0/qchat_model_training.ipynb — Model Training & Evaluation (Combined Dataset)
+   ------------------------------------------------------------------------------------
+   Purpose  : Full training, evaluation, calibration, and persistence pipeline
+              for the combined 7530-row Q-CHAT-10 dataset produced by notebook #5.
+   Input    : pre_processed_data_combined.csv (7530 rows × 16 cols)
+   Features : A1–A10 (binary), Sex_M, Family_mem_with_ASD_Yes,
+              Who_completed_the_test_Health Care Professional,
+              Who_completed_the_test_Others,
+              Who_completed_the_test_School and NGO   (15 features total)
+   Target   : ASD_traits_Yes (0=Non-ASD 58.6%, 1=ASD 41.4%)
+   Split    : Stratified 80/20  →  Train 6024 rows | Test 1506 rows
+
+   Models and CV strategy:
+     - StratifiedKFold (n_splits=5, shuffle=True, random_state=42)
+     - Classifiers: Logistic Regression, Random Forest, XGBoost, SVM (linear)
+
+   5-Fold Cross-Validation Results (sorted by ROC-AUC):
+
+     Model               | Acc Mean±Std      | Recall | F1     | ROC-AUC Mean±Std
+     --------------------|-------------------|--------|--------|------------------
+     XGBoost             | 0.9334 ± 0.0040   | 0.9394 | 0.9211 | 0.9773 ± 0.0010
+     Random Forest       | 0.9253 ± 0.0064   | 0.9250 | 0.9111 | 0.9709 ± 0.0033
+     Logistic Regression | 0.9195 ± 0.0045   | 0.9142 | 0.9038 | 0.9626 ± 0.0032
+     SVM (linear)        | 0.9168 ± 0.0094   | 0.9110 | 0.9007 | 0.9612 ± 0.0037
+
+   Test Set Results (held-out 1506 rows, sorted by ROC-AUC):
+
+     Model               | Accuracy | Precision | Recall | F1     | ROC-AUC
+     --------------------|----------|-----------|--------|--------|--------
+     XGBoost             | 94.56%   | 91.68%    | 95.51% | 93.55% | 98.06%  <-- Best
+     Random Forest       | 93.63%   | 90.98%    | 93.90% | 92.42% | 97.73%
+     Logistic Regression | 93.49%   | 91.60%    | 92.78% | 92.19% | 97.22%
+     SVM (linear)        | 90.84%   | 89.95%    | 87.64% | 88.78% | 96.95%
+
+   Best Model: XGBoost (selected by test ROC-AUC)
+     Accuracy  : 94.56%
+     Precision : 91.68%
+     Recall    : 95.51%
+     F1 Score  : 93.55%
+     ROC-AUC   : 98.06%
+
+   Calibration (XGBoost, test set, 10 bins):
+     Brier Score : 0.0448  (excellent; well below 0.25 threshold)
+     ECE         : 0.0244  (excellent; well below 0.10 threshold)
+     → XGBoost probabilities are reliable for risk scoring without recalibration.
+
+   Final Model (trained on full 7530 rows):
+     - XGBoost retrained on entire dataset for maximum coverage
+     - Saved: Stage_0/models/xgboost_qchat_combined.pkl  (406.1 KB)
+     - Saved: Stage_0/models/qchat_feature_columns.pkl   (0.2 KB)
+
+   SHAP Analysis:
+     STATUS: SUCCESS — shap.Explainer used (XGBoost 2.x compatible).
+             SHAP beeswarm and bar plots generated successfully.
+             Top SHAP features: A9 > A7 > A6 > A5 (consistent with Layer 1 QM.ipynb).
+
+   Saved Outputs:
+     Stage_0/results/cv_results_qchat.csv       — 5-fold CV metrics (all models)
+     Stage_0/results/test_results_qchat.csv     — test set metrics (all models)
+     Stage_0/plots/confusion_matrix_qchat.png   — XGBoost confusion matrix heatmap
+     Stage_0/plots/calibration_qchat.png        — reliability diagram + prob hist
+     Stage_0/plots/shap_summary_qchat.png       — SHAP beeswarm (15 features)
+     Stage_0/plots/shap_bar_qchat.png           — SHAP mean |SHAP| bar chart
+     Stage_0/models/xgboost_qchat_combined.pkl  — final XGBoost (all 7530 rows)
+     Stage_0/models/qchat_feature_columns.pkl   — ordered feature list (15 cols)
+     Stage_0/data/qchat_probabilities_combined.csv — P(ASD) for all 7530 rows
+
+   Known Issue:
+     The cell that generates P(ASD) for all rows (Section 7) does not display
+     output in the recorded notebook. The saved CSV is expected to be correct
+     based on the code logic, but re-running Section 7 is recommended to verify.
+
+   DSM-5 Alignment of Q-CHAT-10 items (documented in notebook Section 6 markdown):
+     A1 (name response), A2 (eye contact)     → DSM-5 A1 Social-emotional reciprocity
+     A3 (protodeclarative pointing), A4, A6,
+       A9 (gestures)                           → DSM-5 A2 Nonverbal communication
+     A5 (pretend play)                         → DSM-5 A3 Peer relationships
+     A7 (empathy/comfort)                      → DSM-5 A1 Social-emotional reciprocity
+     A8 (first words), A10 (visual fixation)   → DSM-5 B  Restricted/repetitive behaviours
+
+   Stage role : BASELINE — used as upper-bound reference; not deployment model.
+
+
+7. Stage_1/qchat_model_training.ipynb — Feature Ablation (12-feature model)
+   --------------------------------------------------------------------------
+   Purpose  : Remove the 3 Who_completed_test_* columns to isolate pure
+              behavioural + demographic signal from the mixed-population dataset.
+   Input    : pre_processed_data_combined.csv (same 7530 rows)
+   Features : A1–A10, Sex_M, Family_mem_with_ASD_Yes  (12 features)
+   Dropped  : Who_completed_the_test_Health Care Professional,
+              Who_completed_the_test_Others,
+              Who_completed_the_test_School and NGO
+   Split    : Stratified 80/20  →  Train 6024 | Test 1506 rows (same as Stage_0)
+   SHAP     : Uses shap.Explainer (XGBoost 2.x compatible — same fix as Stage_0)
+
+   5-Fold CV Results (sorted by ROC-AUC):
+     Model               | Acc Mean±Std      | Recall | ROC-AUC Mean±Std
+     --------------------|-------------------|--------|------------------
+     XGBoost             | 0.8459 ± 0.0090   | 0.8444 | 0.9126 ± 0.0060
+     Logistic Regression | 0.8496 ± 0.0073   | 0.8123 | 0.9067 ± 0.0046
+     SVM (linear)        | 0.8471 ± 0.0058   | 0.8227 | 0.9065 ± 0.0049
+     Random Forest       | 0.8443 ± 0.0063   | 0.8484 | 0.9060 ± 0.0044
+
+   Test Set Results (sorted by ROC-AUC):
+     Model               | Accuracy | Recall | F1     | ROC-AUC
+     --------------------|----------|--------|--------|--------
+     XGBoost             | 83.27%   | 81.38% | 80.09% | 91.51%  <-- Best ROC-AUC
+     Logistic Regression | 84.86%   | 81.38% | 81.64% | 91.18%
+     SVM (linear)        | 84.46%   | 82.02% | 81.37% | 91.16%
+     Random Forest       | 83.73%   | 82.18% | 80.69% | 90.74%
+
+   Key finding: ~11% accuracy drop vs Stage_0 → confirms Who_completed_test
+     columns encoded POPULATION CONTEXT (HCP-referred vs community),
+     not just administrative metadata.
+
+   Calibration (XGBoost): Brier=0.1172  ECE=0.0527  (degraded vs Stage_0)
+
+   SHAP Top Features (bar chart):  A6 > A9 > A7 > A10 > A5 > A2 > Sex_M > A4
+   → Joint attention (A6) and gestures (A9) dominate — consistent with
+     DSM-5 Criterion A2 literature on nonverbal communication deficits.
+
+   Saved: Stage_1/models/xgboost_qchat_stage1.pkl  (12-feature model)
+   Stage role : ABLATION STUDY — quantifies information carried by Who cols.
+
+
+8. Stage_2/qchat_model_training.ipynb — Deployment-Realistic Model  [PRODUCTION]
+   -------------------------------------------------------------------------------
+   Purpose  : Filter to parent/family-reported rows only → train on the
+              population the mobile app will actually serve.
+   Input    : pre_processed_data_combined.csv → filtered to Family Member rows
+   Filter   : Keep rows where all Who_completed_test_* = 0
+              (reference OHE category = 'Family Member' / parent/relative)
+   Features : A1–A10, Sex_M, Family_mem_with_ASD_Yes  (12 features, same as Stage_1)
+   Rows kept: 1838 of 7530  (24.4% of full dataset)
+   Split    : Stratified 80/20  →  Train 1470 | Test 368 rows
+
+   Population Analysis (key finding from plots/population_analysis.png):
+     Respondent Type            | n_rows | ASD Rate
+     ---------------------------|--------|----------
+     Others (self/friends)      |  5,240 | 29.6%   ← majority, low rate — casual users
+     Family Member (parent/rel) |  1,838 | 68.5%   ← Stage 2 subset — concerned parents
+     Health Care Professional   |    449 | 67.5%   ← clinical referrals
+     School and NGO             |      3 | 100.0%  ← negligible
+   → "Others" (29.6% ASD) was dragging Stage_1 down; their ASD rate
+     does not represent parents seeking screening for their children.
+   → Family Member 68.5% ASD rate makes clinical sense: parents who
+     actively seek an ASD screening tool already have genuine concerns.
+
+   5-Fold CV Results (sorted by ROC-AUC):
+     Model               | Acc Mean±Std      | Recall | ROC-AUC Mean±Std
+     --------------------|-------------------|--------|------------------
+     Random Forest       | 0.9279 ± 0.0076   | 0.9633 | 0.9757 ± 0.0045
+     XGBoost             | 0.9333 ± 0.0107   | 0.9583 | 0.9733 ± 0.0048
+     Logistic Regression | 0.9197 ± 0.0117   | 0.9573 | 0.9527 ± 0.0120
+     SVM (linear)        | 0.9184 ± 0.0099   | 0.9543 | 0.9524 ± 0.0115
+
+   Test Set Results (sorted by ROC-AUC):
+     Model               | Accuracy | Precision | Recall | F1     | ROC-AUC
+     --------------------|----------|-----------|--------|--------|--------
+     Random Forest       | 95.11%   | 95.35%    | 97.62% | 96.47% | 97.84%  <-- Best AUC
+     XGBoost             | 96.20%   | 96.48%    | 98.02% | 97.24% | 97.69%  <-- Best Acc/F1
+     Logistic Regression | 94.29%   | 93.92%    | 98.02% | 95.92% | 96.70%
+     SVM (linear)        | 93.21%   | 93.82%    | 96.43% | 95.11% | 96.51%
+
+   Production Model: XGBoost (best accuracy, F1, and recall)
+     Accuracy  : 96.20%
+     Precision : 96.48%
+     Recall    : 98.02%  ← only 6 missed ASD cases in 368 test rows
+     F1 Score  : 97.24%
+     ROC-AUC   : 97.69%
+
+   Confusion Matrix (XGBoost, test set n=368):
+     Best model in notebook is Random Forest; XGBoost slightly better on Acc/F1.
+     Confusion matrix shown for best_model_name (Random Forest):
+       TP=246  TN=104  FP=12  FN=6
+       ASD Recall=97.6%  |  Non-ASD Specificity=89.7%
+
+   Calibration (XGBoost, test set):
+     Brier Score : 0.0380  (better than Stage_0's 0.0448)
+     ECE         : 0.0382  (acceptable; <0.05 threshold)
+     Note: reliability diagram shows jagged mid-range — small sample artifact
+     (368 test rows → sparse bins 0.2–0.6). Endpoints well-calibrated.
+     Probability distribution: bimodal near 0 and 1 — model is decisive.
+
+   SHAP Top Features (Stage 2 parent-only model):
+     Rank | Feature | Mean |SHAP| | DSM-5 | Behaviour
+     -----|---------|-------------|-------|----------
+      1   | A4      |    1.57     |  A2   | Pointing to share interest (joint attention)
+      2   | A7      |    1.53     |  A1   | Empathy / comfort response
+      3   | A8      |    1.21     |  B    | Typicality of first words
+      4   | A1      |    1.14     |  A1   | Response to own name
+      5   | A9      |    1.13     |  A2   | Use of simple gestures
+      6   | A10     |    1.08     |  B    | Visual fixation / staring
+      7   | A2      |    0.93     |  A1   | Eye contact quality
+      8   | A6      |    0.88     |  A2   | Gaze following / joint attention
+      9   | A5      |    0.87     |  A3   | Pretend play
+     10   | A3      |    0.41     |  A2   | Protodeclarative pointing
+     11   | Sex_M   |    0.34     |  —    | Sex (male)
+     12   | Fam_ASD |    0.13     |  —    | Family history
+
+   Notable SHAP shift vs Stage_1: A4 (joint attention pointing) jumped from rank 4
+   to rank 1. This is a behavior parents observe in daily life more vividly than
+   clinical assessors, consistent with the parent-reported population.
+   SHAP values are also larger (range ±5 vs ±2 in Stage_1) — more decisive model.
+
+   Saved Outputs:
+     Stage_2/plots/population_analysis.png        — ASD rate by respondent type
+     Stage_2/results/cv_results_qchat.csv         — 5-fold CV (all 4 models)
+     Stage_2/results/test_results_qchat.csv       — test set metrics
+     Stage_2/results/stage_comparison.csv         — Stage 0 / 1 / 2 delta table
+     Stage_2/plots/confusion_matrix_qchat.png     — confusion matrix (test set)
+     Stage_2/plots/calibration_qchat.png          — reliability diagram + prob hist
+     Stage_2/plots/shap_summary_qchat.png         — SHAP beeswarm (12 features)
+     Stage_2/plots/shap_bar_qchat.png             — SHAP mean absolute importance
+     Stage_2/plots/stage_comparison.png           — 3-stage grouped bar chart
+     Stage_2/models/xgboost_qchat_stage2.pkl      — PRODUCTION model (1838 rows)
+     Stage_2/models/qchat_feature_columns.pkl     — 12-feature column list
+     Stage_2/data/qchat_probabilities_stage2.csv  — P(ASD) for all parent rows
+
+   Stage role : PRODUCTION — deployment model for mobile app inference.
+
+--------------------------------------------------------------------------------
+KEY RESULTS SUMMARY — Three-Stage Progression (XGBoost)
+--------------------------------------------------------------------------------
+
+  Stage | Data            | Feat | Accuracy | Recall | F1     | ROC-AUC | Brier
+  ------|-----------------|------|----------|--------|--------|---------|------
+  S0    | All 7530 rows   |  15  |  94.56%  | 95.51% | 93.55% | 98.06%  | 0.0448
+  S1    | All 7530 rows   |  12  |  83.27%  | 81.38% | 80.09% | 91.51%  | 0.1172
+  S2*   | Parent 1838 rows|  12  |  96.20%  | 98.02% | 97.24% | 97.69%  | 0.0380
+
+  * Stage 2 = PRODUCTION model   (* best on accuracy, recall, F1, and Brier)
+
+  Interpretation:
+    S0→S1 drop (-11.3% acc): Who_completed_test cols carried population context,
+                               not clinical signal. Removing them hurts Stage_0's
+                               inflated accuracy.
+    S1→S2 jump (+12.9% acc): The "Others" (self/friends, 5240 rows, 29.6% ASD)
+                               were diluting the signal. Parent rows (68.5% ASD)
+                               are the correct app population — cleaner, more
+                               consistent, and the model learns the right patterns.
+
+  All-model test results — Stage 2 (parent rows, 12 features):
+    Model               | Accuracy | Recall | F1     | ROC-AUC
+    --------------------|----------|--------|--------|--------
+    XGBoost             |  96.20%  | 98.02% | 97.24% | 97.69%  <-- Production
+    Random Forest       |  95.11%  | 97.62% | 96.47% | 97.84%
+    Logistic Regression |  94.29%  | 98.02% | 95.92% | 96.70%
+    SVM (linear)        |  93.21%  | 96.43% | 95.11% | 96.51%
+
+--------------------------------------------------------------------------------
+PIPELINE FLOW
+--------------------------------------------------------------------------------
+
+  --- Layer 1 (single-source) ---
+
+  Raw CSV (Toddlers) --> Q01.ipynb --> pre_processed_data.csv
+  Raw CSV (Children) --> Q02.ipynb --> pre_processed_data2.csv
+                                             |
+                                     QM.ipynb / QM1.ipynb
+                                             |
+                              4 classifiers trained & evaluated
+                              (LR, RF, XGBoost, SVM)
+                                             |
+                                    Best: XGBoost (~95.95%)
+
+  --- Layer 2 (multi-source fusion + ablation + production) ---
+
+  5 raw datasets (CSV + ARFF)
+          |
+  Stage_0/combine_datasets.ipynb
+          |
+    Normalise → Concatenate → Dedup → Preprocess
+          |
+  pre_processed_data_combined.csv
+  (7530 rows, 15 features, 41.4% ASD rate overall)
+          |
+    ┌─────────────────────────────────────────────────┐
+    │  Stage_0/qchat_model_training.ipynb             │
+    │  15 features, all 7530 rows                     │
+    │  XGBoost: 94.56% acc, 98.06% AUC  [BASELINE]   │
+    └─────────────────────────────────────────────────┘
+          |
+    Drop Who_completed_test_* (3 cols)
+          |
+    ┌─────────────────────────────────────────────────┐
+    │  Stage_1/qchat_model_training.ipynb             │
+    │  12 features, all 7530 rows                     │
+    │  XGBoost: 83.27% acc, 91.51% AUC  [ABLATION]   │
+    │  Reveals: Who cols = population context, not    │
+    │  clinical signal. "Others" rows (29.6% ASD)     │
+    │  dilute performance.                            │
+    └─────────────────────────────────────────────────┘
+          |
+    Filter: keep Family Member rows only (all Who cols = 0)
+    1838 of 7530 rows retained (24.4%)
+          |
+    ┌─────────────────────────────────────────────────┐
+    │  Stage_2/qchat_model_training.ipynb             │
+    │  12 features, 1838 parent/family rows           │
+    │  XGBoost: 96.20% acc, 97.69% AUC  [PRODUCTION] │
+    │  Recall 98.02%  Brier 0.0380                    │
+    │  SHAP #1: A4 (joint attention pointing)         │
+    └─────────────────────────────────────────────────┘
+          |
+  Stage_2/models/xgboost_qchat_stage2.pkl  ← PRODUCTION MODEL (app inference)
+  Stage_2/models/qchat_feature_columns.pkl ← 12-feature list for inference
+  Stage_2/data/qchat_probabilities_stage2.csv
+
+================================================================================

@@ -73,11 +73,11 @@ temp/
 *.tmp
 *.bak
 
-/mlModels/
+# mlModels/ and backEnd/postpartum/models/ are tracked so teammates get a working checkout.
+# Only the 525 MB ASD CNN (fold_5_best.h5) is excluded and shared via Drive.
 *.zip
 *.h5
 *.pt
-*.joblib
 temp_*
 
 
