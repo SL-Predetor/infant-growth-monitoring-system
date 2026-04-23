@@ -1,101 +1,63 @@
-# TinySteps: Infant Growth Monitoring System
+# TinySteps — Infant Growth Monitoring System
 
-TinySteps is a comprehensive, multi-modal infant care application developed as an SLIIT final-year research project. It leverages various Machine Learning models to assist parents in monitoring infant development, translating cries, detecting early signs of Autism Spectrum Disorder (ASD), and predicting postpartum recovery for mothers.
+A multi-modal infant care app built as a SLIIT final-year research project. Four ML modules (ASD screening, cry translation, growth forecasting, postpartum recovery) behind a FastAPI backend and a React Native / Expo frontend.
 
----
+## Stack
 
-## Technology Stack
 - **Frontend:** React Native, Expo 54, TypeScript
-- **Backend:** FastAPI (Python)
-- **Machine Learning:** TensorFlow 2.20, XGBoost, scikit-learn, OpenCV, MediaPipe
-- **Database / Auth:** Supabase (PostgreSQL), MongoDB
-- **Infrastructure:** Docker, Docker Compose
+- **Backend:** FastAPI (Python 3.11)
+- **ML:** TensorFlow 2.20, XGBoost, scikit-learn, OpenCV, MediaPipe, PyTorch
+- **Data:** Supabase (PostgreSQL + Auth + Storage), MongoDB
+- **Infra:** Docker / Docker Compose (conda env also supported)
 
----
+## The four ML modules
 
-## Core Intelligent Modules
+| Module | Approach |
+|---|---|
+| **ASD detection** | VGG-Face CNN + Logistic Regression probe (image) · XGBoost Q-CHAT-10 (questionnaire) · α = 0.15 late fusion |
+| **Cry translator** | GradientBoosting audio pipeline · RandomForest face landmarks · calibrated XGBoost 6-class fusion |
+| **Growth forecaster** | LSTM weight forecasting (21-feature window) · RF / XGBoost risk & anomaly · WHO WAZ percentiles |
+| **Postpartum recovery** | RandomForest perineal + C-section models · Ridge regression back/pelvic · SHAP explanations |
 
-### 1. ASD Detection (Autism Spectrum Disorder)
-A hybrid screening tool combining computer vision and behavioral analysis:
-*   **Facial Image Pipeline:** Uses a fine-tuned VGG-Face CNN and Logistic Regression probe to analyze facial features. *Note: The core `.h5` model is excluded from Git due to size, but the backend gracefully handles its absence.*
-*   **Q-CHAT-10 Pipeline:** Analyzes behavioral questionnaire responses using an XGBoost classifier (96%+ accuracy).
-*   **Fusion System:** A late-fusion model that combines both visual and behavioral signals for high-accuracy risk assessment.
+## Repository layout
 
-### 2. Smart Cry Translator
-Translates infant cries to identify underlying needs:
-*   **Audio Analysis:** GradientBoosting models to classify pain vs. no-pain, and hunger vs. normal.
-*   **Facial Pain Detection:** Random Forest model analyzing facial landmarks (MediaPipe) to detect distress.
-*   **Multi-Factor Fusion:** Integrates audio and visual cues using an XGBoost classifier for comprehensive cry categorization.
-
-### 3. Growth Forecaster
-Predicts physical development trajectories:
-*   **Forecasting:** LSTM networks utilizing a 21-feature window.
-*   **Risk Assessment:** RF/XGBoost models cross-referenced against WHO Weight-for-Age (WAZ) charts.
-
-### 4. Maternal Postpartum Recovery
-Monitors and predicts maternal health recovery:
-*   Random Forest and Ridge Regression models predict perineal, C-section, back, and pelvic pain, providing actionable insights with SHAP explainability.
-
----
-
-## Repository Structure
-
-```text
-infant-growth-monitoring-system/
-├── backEnd/                 # FastAPI server, API routers, and ML inference logic
-│   ├── routers/             # Endpoint definitions (asd, cry, growth, feedback, postpartum)
-│   ├── Dockerfile           # Backend containerization configuration
-│   └── requirements.txt     # Python dependencies
-├── frontEnd/                # React Native / Expo mobile application
-│   ├── app/                 # UI Screens and tabs (Home, ASD, Cry, Growth, Mom)
-│   ├── components/          # Reusable React components
-│   └── services/            # API integration clients
-├── mlModels/                # Machine learning research notebooks, artifacts, and weights (.pkl)
-├── supabase/                # Database migrations and security schemas
-├── docker-compose.yml       # Orchestration for the backend
-└── CLAUDE.md                # Master reference: architecture, env, Docker, Supabase, known issues
+```
+backEnd/          FastAPI app, routers, Dockerfile, postpartum models
+frontEnd/         Expo app, (auth) + (tabs) route groups
+mlModels/         ML artifacts: models, notebooks, research plots
+supabase/         SQL migrations
+docker-compose.yml
+CLAUDE.md         Master reference: endpoints, env vars, schema, known issues
+TEAM_ONBOARDING.md  Teammate setup (clone → run in under 10 minutes)
 ```
 
----
+## Getting started
 
-## Getting Started
+**New teammate?** Start at **[TEAM_ONBOARDING.md](TEAM_ONBOARDING.md)** — it covers the full clone → `.env` → Docker-or-conda → Expo path with the 525 MB ASD model downloaded separately from Drive.
 
-### Prerequisites
-*   **Docker** & **Docker Compose** (for running the Backend easily)
-*   **Node.js** (v18+) & **npm**
-*   **Expo CLI** (`npm install -g expo-cli`)
+**Quick version (Docker, for someone with the `.env` files already):**
 
-### Environment Variables
-Create a `.env` file in the root directory (for the Docker backend) and/or configure the frontend `.env` with the following credentials:
-```env
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-MONGODB_URI=your_mongodb_uri
-```
-
-### 1. Running the Backend (Dockerized)
-We use Docker to ensure consistent Python environments and avoid complicated ML dependency issues (TensorFlow, OpenCV, XGBoost).
-
-Open a terminal in the project root and run:
 ```bash
-docker-compose up --build
+git clone <repo-url>
+cd infant-growth-monitoring-system
+cp .env.example .env                   # paste the real values
+cp frontEnd/.env.example frontEnd/.env # paste the real values
+
+docker-compose up --build -d           # backend at http://localhost:8000
+
+cd frontEnd && npm install && npx expo start
 ```
-*The backend will start at `http://localhost:8000`. API documentation is available at `http://localhost:8000/docs`.*
 
-*(Note: If large model files like `fold_5_best.h5` are missing from your local `mlModels/` directory, the backend will still boot successfully and gracefully disable the dependent endpoints without crashing.)*
+API docs: `http://localhost:8000/docs`.
 
-### 2. Running the Frontend
-Open a new terminal, navigate to the `frontEnd` directory, and start the Expo development server:
-```bash
-cd frontEnd
-npm install
-npx expo start
-```
-Use the Expo Go app on your iOS/Android device to scan the QR code, or press `a` / `i` in the terminal to open an Android Emulator or iOS Simulator.
+## Documentation
 
----
+| Doc | Purpose |
+|---|---|
+| [TEAM_ONBOARDING.md](TEAM_ONBOARDING.md) | Teammate setup — Docker / conda, env vars, model file placement, daily workflow |
+| [CLAUDE.md](CLAUDE.md) | Deep reference — every endpoint, model file, env var, and the prioritized fix list |
+| [SUPABASE_SCHEMA_FIX.sql](SUPABASE_SCHEMA_FIX.sql) | Canonical Supabase schema (7 tables + RLS) |
 
-## License & Academic Disclosure
-This repository contains research artifacts and production code for a university final-year project. Models, embeddings, and architectures (particularly within the ASD and Cry translation modules) represent novel research and evaluations against public datasets. 
+## License
 
-For a deep dive into the research methodology, refer to `CLAUDE.md`.
+Research artifacts and production code for an SLIIT final-year research project. The ASD and cry-translation models contain novel evaluations against public datasets — see [CLAUDE.md](CLAUDE.md) §3.2 for the honest research findings.
