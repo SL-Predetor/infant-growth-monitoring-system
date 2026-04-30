@@ -12,16 +12,49 @@ load_dotenv()
 os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.abspath(__file__))
 
 # --- 2. IMPORT ROUTERS ---
-# ASD router (required — Yasindu's component)
-from routers.asd_router import router as asd_router
+# ASD router (optional on environments where TensorFlow cannot initialize)
+try:
+    from routers.asd_router import router as asd_router
+    asd_router_error = None
+except Exception as exc:
+    asd_router = None
+    asd_router_error = exc
+    print(f"[APP] WARNING: ASD router unavailable at startup: {exc}")
 
 # Teammates' routers
 from routers import cry_router_audio
 from routers import cry_router_img
-from routers import cry_router_fusion
-from routers.growth_router import router as growth_router
-from postpartum import router as postpartum_router
-from routers.feedback_router import router as feedback_router
+try:
+    from routers import cry_router_fusion
+    cry_router_fusion_error = None
+except Exception as exc:
+    cry_router_fusion = None
+    cry_router_fusion_error = exc
+    print(f"[APP] WARNING: Fusion router unavailable at startup: {exc}")
+
+try:
+    from routers.growth_router import router as growth_router
+    growth_router_error = None
+except Exception as exc:
+    growth_router = None
+    growth_router_error = exc
+    print(f"[APP] WARNING: Growth router unavailable at startup: {exc}")
+
+try:
+    from postpartum import router as postpartum_router
+    postpartum_router_error = None
+except Exception as exc:
+    postpartum_router = None
+    postpartum_router_error = exc
+    print(f"[APP] WARNING: Postpartum router unavailable at startup: {exc}")
+
+try:
+    from routers.feedback_router import router as feedback_router
+    feedback_router_error = None
+except Exception as exc:
+    feedback_router = None
+    feedback_router_error = exc
+    print(f"[APP] WARNING: Feedback router unavailable at startup: {exc}")
 
 
 app = FastAPI(title="Infant Growth Monitoring System API")
@@ -43,19 +76,32 @@ app.add_middleware(
 )
 
 # --- 4. INCLUDE THE ROUTERS ---
-app.include_router(asd_router, prefix="/api/asd", tags=["ASD"])
+if asd_router is not None:
+    app.include_router(asd_router, prefix="/api/asd", tags=["ASD"])
 
 app.include_router(cry_router_audio.router, tags=["Cry Analysis (Audio)"])
 app.include_router(cry_router_img.router, tags=["Face Analysis (Image)"])
-app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")
-app.include_router(growth_router, prefix="/api", tags=["Growth"])
-app.include_router(postpartum_router)
-app.include_router(feedback_router, tags=["Feedback"])
+if cry_router_fusion is not None:
+    app.include_router(cry_router_fusion.router, tags=["Fusion Analysis"], prefix="/fusion")
+if growth_router is not None:
+    app.include_router(growth_router, prefix="/api", tags=["Growth"])
+if postpartum_router is not None:
+    app.include_router(postpartum_router)
+if feedback_router is not None:
+    app.include_router(feedback_router, tags=["Feedback"])
 
 
 @app.get("/")
 def home():
-    return {"status": "online", "message": "Backend is running correctly (Audio + Face)"}
+    return {
+        "status": "online",
+        "message": "Backend is running correctly (Audio + Face)",
+        "asd_router_loaded": asd_router is not None,
+        "fusion_router_loaded": cry_router_fusion is not None,
+        "growth_router_loaded": growth_router is not None,
+        "postpartum_router_loaded": postpartum_router is not None,
+        "feedback_router_loaded": feedback_router is not None,
+    }
 
 if __name__ == "__main__":
     # Host 0.0.0.0 is required for mobile phones to connect

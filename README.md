@@ -44,7 +44,7 @@ cp .env.example .env                   # paste the real values
 cp frontEnd/.env.example frontEnd/.env # paste the real values
 
 docker-compose up --build -d           # backend at http://localhost:8000
-
+docker-compose up -d
 cd frontEnd && npm install && npx expo start
 ```
 

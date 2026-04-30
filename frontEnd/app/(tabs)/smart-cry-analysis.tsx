@@ -21,11 +21,16 @@ import FeedbackModal from '@/components/FeedbackModal';
 
 // --- CONFIGURATION ---
 const normalizeBaseUrl = (value?: string) => {
-  const trimmed = (value || '').trim().replace(/\/+$/, '');
+  let trimmed = (value || '').trim().replace(/\/+$/, '');
   if (!trimmed) {
-    return 'http://localhost:8000';
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+      return `http://${window.location.hostname}:9000`;
+    }
+    return 'http://127.0.0.1:9000';
   }
-
+  // Convert localhost:8000 → 127.0.0.1:9000
+  trimmed = trimmed.replace(/localhost:8000/, '127.0.0.1:9000');
+  // Ensure http:// prefix
   return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
 };
 
