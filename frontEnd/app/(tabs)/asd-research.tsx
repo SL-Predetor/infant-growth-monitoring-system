@@ -16,9 +16,10 @@ import {
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors, Radius, Spacing, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const API_BASE = 'http://127.0.0.1:9000';
+const API_BASE = getApiBaseUrl();
 
 // Same 5-option frequency questions as Q-CHAT-10
 // Scoring: Q1–Q9 optIdx >= 2 → atypical (1).  Q10 reversed: optIdx <= 2 → atypical (1).

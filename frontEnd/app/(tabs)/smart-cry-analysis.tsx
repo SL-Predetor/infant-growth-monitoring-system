@@ -18,28 +18,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
 import FeedbackModal from '@/components/FeedbackModal';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 // --- CONFIGURATION ---
-const normalizeBaseUrl = (value?: string) => {
-  let trimmed = (value || '').trim().replace(/\/+$/, '');
-  if (!trimmed) {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
-      return `http://${window.location.hostname}:9000`;
-    }
-    return 'http://127.0.0.1:9000';
-  }
-  // Convert localhost:8000 → 127.0.0.1:9000
-  trimmed = trimmed.replace(/localhost:8000/, '127.0.0.1:9000');
-  // Ensure http:// prefix
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-};
-
-const BASE_URL = normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
+const BASE_URL = getApiBaseUrl();
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;
 
-console.log('🔗 API Base URL:', BASE_URL);
+console.log('🔗 Smart Cry Analysis API:', BASE_URL);
 
 const { width: screenWidth } = Dimensions.get('window');
 

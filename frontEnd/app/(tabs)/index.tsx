@@ -36,9 +36,10 @@ import {
 import { useAuth, Infant } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const API_URL = 'http://127.0.0.1:9000/api';
+const API_URL = `${getApiBaseUrl()}/api`;
 
 /* ─────────────────────────────────────────────────────────── helpers */
 

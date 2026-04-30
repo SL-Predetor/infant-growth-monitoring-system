@@ -5,9 +5,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Radius, Spacing, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const API_BASE = 'http://127.0.0.1:9000';
+const API_BASE = getApiBaseUrl();
 
 const QUESTIONS = [
   { id: 'A1',  text: 'Does your child look at you when you call his/her name?',                                                                           options: ['Always', 'Usually', 'Sometimes', 'Rarely', 'Never'] },
