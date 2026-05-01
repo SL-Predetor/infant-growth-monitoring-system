@@ -154,7 +154,16 @@ async def predict_cry(file: UploadFile = File(...)):
         return {
             "label": final_label,
             "confidence": confidence,
-            "message": f"Detected: {final_label.replace('_', ' ').title()}"
+            "message": f"Detected: {final_label.replace('_', ' ').title()}",
+            "debug_info": {
+                "stage1_pain_prob": float(is_pain_prob[1]),
+                "stage1_no_pain_prob": float(is_pain_prob[0]),
+                "stage2_hunger_prob": float(is_hunger_prob[1]) if is_pain != 1 else None,
+                "stage2_normal_prob": float(is_hunger_prob[0]) if is_pain != 1 else None,
+                "audio_features_shape": raw_features.shape if raw_features is not None else None,
+                "audio_features_mean": float(np.mean(raw_features)) if raw_features is not None else None,
+                "audio_features_std": float(np.std(raw_features)) if raw_features is not None else None,
+            }
         }
 
     except HTTPException as he:

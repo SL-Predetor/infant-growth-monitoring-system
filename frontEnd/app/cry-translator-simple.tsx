@@ -16,9 +16,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 // --- CONFIGURATION ---
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = getApiBaseUrl();
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;

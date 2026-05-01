@@ -10,11 +10,10 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const API_URL = Platform.OS === 'web'
-  ? 'http://localhost:8000/api'
-  : 'http://192.168.8.119:8000/api';
+const API_URL = `${getApiBaseUrl()}/api`;
 
 /* ── Helpers ── */
 const RISK_COLORS = {

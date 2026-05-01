@@ -14,9 +14,10 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const API_URL = 'http://localhost:8000/api';
+const API_URL = `${getApiBaseUrl()}/api`;
 
 /* ── WAZ → friendly status ── */
 function getWazStatus(waz: number | null): {

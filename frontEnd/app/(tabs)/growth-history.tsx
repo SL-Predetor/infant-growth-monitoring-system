@@ -9,9 +9,10 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const API_URL = 'http://localhost:8000/api';
+const API_URL = `${getApiBaseUrl()}/api`;
 
 type Log = {
   log_date: string;

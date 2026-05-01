@@ -14,27 +14,30 @@ import {
 import { useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  FadeInDown,
+  withSpring,
+  withSequence,
+  withDelay,
+  runOnJS,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
 import FeedbackModal from '@/components/FeedbackModal';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 // --- CONFIGURATION ---
-const normalizeBaseUrl = (value?: string) => {
-  const trimmed = (value || '').trim().replace(/\/+$/, '');
-  if (!trimmed) {
-    return 'http://localhost:8000';
-  }
-
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-};
-
-const BASE_URL = normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
+const BASE_URL = getApiBaseUrl();
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 const FUSION_API = `${BASE_URL}/fusion/predict`;
 
-console.log('🔗 API Base URL:', BASE_URL);
+console.log('🔗 Smart Cry Analysis API:', BASE_URL);
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -67,8 +70,8 @@ export default function SmartAnalysisScreen() {
   const [currentStep, setCurrentStep] = useState<FlowStep>('record');
 
   // Audio
-  const [audioUri, setAudioUri] = useState<string | null>(null); // for playback (native file uri OR web objectURL)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null); // ONLY for web upload
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
 
@@ -113,11 +116,58 @@ export default function SmartAnalysisScreen() {
   const audioChunksRef = useRef<BlobPart[]>([]);
   const audioObjectUrlRef = useRef<string | null>(null);
 
-  // Light mode colors
-  const LIGHT_BG = '#F8F9FA';
+  // ========== ANIMATION SETUP ==========
+  // Screen entrance animation
+  const screenOpacity = useSharedValue(0);
+  const screenTranslateY = useSharedValue(30);
+
+  // Step badge animation
+  const badgeScale = useSharedValue(0.8);
+  const badgeOpacity = useSharedValue(0);
+
+  // Form fields staggered animation (5 fields)
+  const fieldAnimations = useRef([
+    useSharedValue(0), // Baby age
+    useSharedValue(0), // Feeding time
+    useSharedValue(0), // Sleep time
+    useSharedValue(0), // Diaper status
+    useSharedValue(0), // Room temperature
+  ]).current;
+
+  // Diaper button press animation
+  const diaperButtonScales = useRef({
+    Clean: useSharedValue(1),
+    Wet: useSharedValue(1),
+    Soiled: useSharedValue(1),
+  }).current;
+
+  // Analyze button press animation
+  const analyzeButtonScale = useSharedValue(1);
+  const analyzeButtonShadow = useSharedValue(2);
+
+  // Validation shake animation
+  const validationShakeX = useSharedValue(0);
+
+  // Loading pulse animation
+  const loadingPulse = useSharedValue(1);
+
+  // Modern color palette - Professional Baby Care Theme (Premium Healthcare)
+  // Soft pastels for calming, trustworthy aesthetic
+  const LIGHT_BG = '#FAFBFC';
   const LIGHT_CARD = '#FFFFFF';
-  const LIGHT_TEXT = '#1F2933';
-  const LIGHT_SECONDARY = '#6B7280';
+  const LIGHT_TEXT = '#0F172A';
+  const LIGHT_SECONDARY = '#5A6B7D';
+  const PRIMARY_TEAL = '#5DAFB9';
+  const SECONDARY_CORAL = '#F2B5A7';
+  const ACCENT_YELLOW = '#F6C76F';
+  const SUCCESS_MINT = '#7BC6A4';
+  const WARNING_AMBER = '#F59E0B';
+  const DANGER_RED = '#EF6F6C';
+  const BORDER_LIGHT = '#E8ECEF';
+  const SOFT_TEAL_BG = '#F0F9FA';
+  const SOFT_CORAL_BG = '#FEF4F2';
+  const SOFT_YELLOW_BG = '#FFFBF0';
+  const SOFT_MINT_BG = '#F1F8F5';
   const shadowColor = '#000';
 
   const backgroundColor = LIGHT_BG;
@@ -160,10 +210,65 @@ export default function SmartAnalysisScreen() {
     };
   }, []);
 
+  // ========== ANIMATION EFFECTS ==========
+  // Trigger animations when context screen opens
+  useEffect(() => {
+    if (currentStep === 'context') {
+      // Screen entrance: fade in + slide up
+      screenOpacity.value = withTiming(1, {
+        duration: 500,
+        easing: Easing.inOut(Easing.ease),
+      });
+      screenTranslateY.value = withTiming(0, {
+        duration: 500,
+        easing: Easing.inOut(Easing.ease),
+      });
+
+      // Step badge: scale + fade
+      badgeOpacity.value = withTiming(1, {
+        duration: 400,
+        easing: Easing.inOut(Easing.ease),
+      });
+      badgeScale.value = withTiming(1, {
+        duration: 400,
+        easing: Easing.out(Easing.back(1.2)),
+      });
+
+      // Form fields: staggered fade-in and slide-up
+      fieldAnimations.forEach((animation, index) => {
+        animation.value = withDelay(
+          150 + index * 100,
+          withTiming(1, {
+            duration: 400,
+            easing: Easing.inOut(Easing.ease),
+          })
+        );
+      });
+    } else {
+      // Reset animations when leaving context screen
+      screenOpacity.value = 0;
+      screenTranslateY.value = 30;
+      badgeScale.value = 0.8;
+      badgeOpacity.value = 0;
+      fieldAnimations.forEach(anim => (anim.value = 0));
+    }
+  }, [currentStep]);
+
+  // Loading pulse animation when analyzing
+  useEffect(() => {
+    if (isLoading && currentStep === 'context') {
+      loadingPulse.value = withSequence(
+        withTiming(1.05, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.95, { duration: 600, easing: Easing.inOut(Easing.ease) })
+      );
+    } else {
+      loadingPulse.value = 1;
+    }
+  }, [isLoading, currentStep]);
+
   const validateContext = (ctx: FusionContext) => {
     const errors: string[] = [];
 
-    // Check if fields are filled
     if (!babyAge.trim()) {
       errors.push('Baby age is required');
     } else if (!Number.isFinite(ctx.baby_age_months) || ctx.baby_age_months < 0 || ctx.baby_age_months > 36) {
@@ -195,6 +300,111 @@ export default function SmartAnalysisScreen() {
     return errors;
   };
 
+  // ========== ANIMATED STYLES (ALL AT TOP LEVEL - RULES OF HOOKS) ==========
+  const screenAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: screenOpacity.value,
+    transform: [{ translateY: screenTranslateY.value }],
+  }));
+
+  const badgeAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: badgeOpacity.value,
+    transform: [{ scale: badgeScale.value }],
+  }));
+
+  // Field animated styles - all 5 fields at top level
+  const fieldAnimatedStyle0 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[0].value,
+    transform: [{ translateY: (1 - fieldAnimations[0].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle1 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[1].value,
+    transform: [{ translateY: (1 - fieldAnimations[1].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle2 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[2].value,
+    transform: [{ translateY: (1 - fieldAnimations[2].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle3 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[3].value,
+    transform: [{ translateY: (1 - fieldAnimations[3].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle4 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[4].value,
+    transform: [{ translateY: (1 - fieldAnimations[4].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyles = [
+    fieldAnimatedStyle0,
+    fieldAnimatedStyle1,
+    fieldAnimatedStyle2,
+    fieldAnimatedStyle3,
+    fieldAnimatedStyle4,
+  ];
+
+  const analyzeButtonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: analyzeButtonScale.value }],
+  }));
+
+  const diaperButtonAnimatedStyleClean = useAnimatedStyle(() => ({
+    transform: [{ scale: diaperButtonScales.Clean.value }],
+  }));
+
+  const diaperButtonAnimatedStyleWet = useAnimatedStyle(() => ({
+    transform: [{ scale: diaperButtonScales.Wet.value }],
+  }));
+
+  const diaperButtonAnimatedStyleSoiled = useAnimatedStyle(() => ({
+    transform: [{ scale: diaperButtonScales.Soiled.value }],
+  }));
+
+  const diaperButtonAnimatedStyles = {
+    Clean: diaperButtonAnimatedStyleClean,
+    Wet: diaperButtonAnimatedStyleWet,
+    Soiled: diaperButtonAnimatedStyleSoiled,
+  };
+
+  const loadingButtonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: loadingPulse.value }],
+  }));
+
+  const shakeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: validationShakeX.value }],
+  }));
+
+  // ========== ANIMATION HANDLERS ==========
+  const handleDiaperPress = (status: 'Clean' | 'Wet' | 'Soiled') => {
+    // Scale animation on press
+    diaperButtonScales[status].value = withSequence(
+      withTiming(0.95, { duration: 100, easing: Easing.ease }),
+      withSpring(1, { damping: 0.7, mass: 1, stiffness: 100 })
+    );
+    // Preserve original functionality
+    setDiaperStatus(status);
+  };
+
+  const handleAnalyzePress = () => {
+    // Scale animation
+    analyzeButtonScale.value = withSequence(
+      withTiming(0.97, { duration: 80, easing: Easing.ease }),
+      withSpring(1, { damping: 0.6, mass: 1, stiffness: 120 })
+    );
+    // Trigger actual analysis (preserve original function)
+    submitAnalysis();
+  };
+
+  const performValidationShake = () => {
+    validationShakeX.value = withSequence(
+      withTiming(-8, { duration: 80, easing: Easing.ease }),
+      withTiming(8, { duration: 80, easing: Easing.ease }),
+      withTiming(-8, { duration: 80, easing: Easing.ease }),
+      withTiming(0, { duration: 80, easing: Easing.ease })
+    );
+  };
+
   const mapAudioLabel = (label?: string) => {
     const n = (label || '').toLowerCase();
     if (n === 'pain_cry') return 'Pain';
@@ -219,7 +429,6 @@ export default function SmartAnalysisScreen() {
   // -------- Recording (Native + Web) --------
   const startRecording = async () => {
     try {
-      // reset
       isStoppingRef.current = false;
       setAnalysisResult(null);
       setAudioUri(null);
@@ -233,7 +442,6 @@ export default function SmartAnalysisScreen() {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
 
-      // Web path
       if (Platform.OS === 'web') {
         cleanupWebRecorder();
 
@@ -245,7 +453,6 @@ export default function SmartAnalysisScreen() {
           return;
         }
 
-        // Check permission status before requesting (if API available)
         try {
           if (navigator.permissions?.query) {
             const permStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
@@ -264,7 +471,7 @@ export default function SmartAnalysisScreen() {
             }
           }
         } catch (_permCheckErr) {
-          // permissions.query may not support 'microphone' in all browsers — continue anyway
+          // permissions.query may not support 'microphone' in all browsers
         }
 
         let stream: MediaStream;
@@ -292,7 +499,6 @@ export default function SmartAnalysisScreen() {
         }
         mediaStreamRef.current = stream;
 
-        // Try to pick a decent mimeType; browser will fallback if unsupported.
         const possibleTypes = [
           'audio/webm;codecs=opus',
           'audio/webm',
@@ -331,7 +537,6 @@ export default function SmartAnalysisScreen() {
 
         recorder.start();
 
-        // Auto-stop at 5s
         if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
         stopTimeoutRef.current = setTimeout(() => {
           stopRecording();
@@ -340,7 +545,6 @@ export default function SmartAnalysisScreen() {
         return;
       }
 
-      // Native path
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
         setIsRecording(false);
@@ -369,7 +573,6 @@ export default function SmartAnalysisScreen() {
       setIsRecording(false);
       clearTimers();
 
-      // Catch any permission errors that slipped through
       if (Platform.OS === 'web' && error?.name === 'NotAllowedError') {
         Alert.alert(
           'Microphone Permission Denied',
@@ -390,16 +593,14 @@ export default function SmartAnalysisScreen() {
       if (isStoppingRef.current) return;
       isStoppingRef.current = true;
 
-      // Web stop
       if (Platform.OS === 'web') {
         const rec = mediaRecorderRef.current;
         if (rec && rec.state !== 'inactive') {
-          rec.stop(); // triggers onstop -> sets blob + uri
+          rec.stop();
         }
         return;
       }
 
-      // Native stop
       if (!recordingRef.current) return;
       await recordingRef.current.stopAndUnloadAsync();
       const recordedUri = recordingRef.current.getURI();
@@ -578,12 +779,12 @@ export default function SmartAnalysisScreen() {
 
       const errors = validateContext(context);
       if (errors.length) {
+        performValidationShake();
         Alert.alert('Invalid Input', errors.join('\n'));
         setIsLoading(false);
         return;
       }
 
-      // 1) Call audio + face models
       const [audioRes, faceRes] = await Promise.all([uploadAudio(), uploadFace()]);
 
       const audioPrediction = audioRes ? mapAudioLabel(audioRes.label) : 'Unknown';
@@ -592,7 +793,6 @@ export default function SmartAnalysisScreen() {
       const imagePrediction = faceRes ? mapFaceLabel(faceRes.label) : 'Unknown';
       const imageConfidence = faceRes ? to01(faceRes.confidence) : 0;
 
-      // 2) Fusion payload
       const payload = {
         baby_age_months: context.baby_age_months,
         audio_predicted_class: audioPrediction,
@@ -634,7 +834,6 @@ export default function SmartAnalysisScreen() {
     } catch (error: any) {
       console.error('❌ Analysis error:', error);
 
-      // Better error message extraction
       let errorMessage = 'Analysis failed';
       if (error instanceof Error) {
         errorMessage = error.message;
@@ -679,9 +878,9 @@ export default function SmartAnalysisScreen() {
 
   const getStepTitle = () => {
     switch (currentStep) {
-      case 'record': return 'Record Cry';
-      case 'capture': return 'Capture Face';
-      case 'context': return 'Add Context';
+      case 'record': return 'Record Baby Cry';
+      case 'capture': return 'Capture Baby Face';
+      case 'context': return 'Baby Care Info';
       case 'result': return 'Analysis Result';
     }
   };
@@ -696,14 +895,30 @@ export default function SmartAnalysisScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor }]} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: LIGHT_BG }]} 
+      contentContainerStyle={styles.scrollContent} 
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.headerTop}>
+        <Pressable
+          onPress={() => router.push('/(tabs)')}
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ThemedText style={styles.backButtonText}>← Back</ThemedText>
+        </Pressable>
+      </View>
+
       <View style={styles.header}>
         <View style={styles.progressContainer}>
-          <View style={[styles.stepIndicator, { backgroundColor: Colors.light.primary }]}>
-            <ThemedText style={styles.stepNumber}>{getStepNumber()}</ThemedText>
-          </View>
+          <Animated.View style={badgeAnimatedStyle}>
+            <View style={[styles.stepIndicator, { backgroundColor: PRIMARY_TEAL }]}>
+              <ThemedText style={styles.stepNumber}>{getStepNumber()}</ThemedText>
+            </View>
+          </Animated.View>
           {currentStep !== 'result' && (
-            <ThemedText style={[styles.stepInfo, { color: secondaryText }]}>
+            <ThemedText style={styles.stepInfo}>
               Step {getStepNumber()} of 3
             </ThemedText>
           )}
@@ -718,37 +933,37 @@ export default function SmartAnalysisScreen() {
             {!audioUri && (
               <>
                 <View style={styles.iconContainer}>
-                  <View style={[styles.recordIcon, { backgroundColor: isRecording ? Colors.light.error : Colors.light.primary }]}>
+                  <View style={[styles.recordIcon, { backgroundColor: isRecording ? DANGER_RED : PRIMARY_TEAL }]}>
                     <ThemedText style={styles.recordIconText}>{isRecording ? '⏺' : '🎤'}</ThemedText>
                   </View>
                 </View>
 
                 <ThemedText style={[styles.stepDescription, { color: secondaryText }]}>
-                  {isRecording ? 'Recording in progress...' : 'Hold your phone near baby and tap below'}
+                  {isRecording ? 'Recording in progress...' : 'Place your phone near your baby and record a short cry sample.'}
                 </ThemedText>
               </>
             )}
 
             {isRecording && (
               <View style={styles.recordingIndicator}>
-                <ThemedText style={[styles.recordingText, { color: Colors.light.error }]}>
+                <ThemedText style={[styles.recordingText, { color: DANGER_RED }]}>
                   Recording... {recordingDuration}s / 5s
                 </ThemedText>
                 <View style={styles.waveform}>
-                  <View style={[styles.waveBar, { backgroundColor: Colors.light.error }]} />
-                  <View style={[styles.waveBar, { backgroundColor: Colors.light.error }]} />
-                  <View style={[styles.waveBar, { backgroundColor: Colors.light.error }]} />
+                  <View style={[styles.waveBar, { backgroundColor: DANGER_RED }]} />
+                  <View style={[styles.waveBar, { backgroundColor: DANGER_RED }]} />
+                  <View style={[styles.waveBar, { backgroundColor: DANGER_RED }]} />
                 </View>
-                <ThemedText style={[styles.countdownText, { color: Colors.light.error }]}>
+                <ThemedText style={[styles.countdownText, { color: DANGER_RED }]}>
                   Stopping in {Math.max(0, 5 - recordingDuration)}...
                 </ThemedText>
               </View>
             )}
 
             {audioUri && !isRecording && (
-              <View style={styles.successContainer}>
-                <ThemedText style={[styles.successIcon, { color: Colors.light.success }]}>✓</ThemedText>
-                <ThemedText style={[styles.successText, { color: Colors.light.success }]}>
+              <View style={[styles.successContainer, { backgroundColor: SOFT_MINT_BG, borderColor: 'rgba(123, 198, 164, 0.25)' }]}>
+                <ThemedText style={[styles.successIcon, { color: SUCCESS_MINT }]}>✓</ThemedText>
+                <ThemedText style={[styles.successText, { color: SUCCESS_MINT }]}>
                   Audio recorded successfully
                 </ThemedText>
                 <ThemedText style={[styles.recordDurationText, { color: secondaryText }]}>
@@ -758,40 +973,48 @@ export default function SmartAnalysisScreen() {
             )}
 
             {!audioUri && (
-              <Pressable
-                style={[
-                  styles.recordButton,
-                  {
-                    backgroundColor: isRecording ? Colors.light.error : Colors.light.primary,
-                    opacity: isLoading ? 0.7 : 1,
-                  },
-                ]}
-                onPress={isRecording ? stopRecording : startRecording}
-                disabled={isLoading}
-              >
-                {isLoading && isRecording ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <View style={styles.buttonContent}>
-                    <ThemedText style={styles.recordButtonText}>
-                      {isRecording ? 'Recording... Tap to stop' : 'Tap to Record'}
-                    </ThemedText>
-                    {!isRecording && (
-                      <ThemedText style={styles.recordButtonSubtext}>
-                        Auto-stops at 5 seconds
+              <>
+                <Pressable
+                  style={[
+                    styles.recordButton,
+                    {
+                      backgroundColor: isRecording ? DANGER_RED : PRIMARY_TEAL,
+                      opacity: isLoading ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={isRecording ? stopRecording : startRecording}
+                  disabled={isLoading}
+                >
+                  {isLoading && isRecording ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <View style={styles.buttonContent}>
+                      <ThemedText style={styles.recordButtonText}>
+                        {isRecording ? 'Recording... Tap to stop' : 'Tap to Record'}
                       </ThemedText>
-                    )}
-                  </View>
-                )}
-              </Pressable>
+                      {!isRecording && (
+                        <ThemedText style={styles.recordButtonSubtext}>
+                          Auto-stops at 5 seconds
+                        </ThemedText>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+
+                <View style={styles.tipCard}>
+                  <ThemedText style={styles.tipIcon}>💡</ThemedText>
+                  <ThemedText style={styles.tipText}>
+                    Record in a quiet place for better accuracy.
+                  </ThemedText>
+                </View>
+              </>
             )}
 
             {audioUri && !isRecording && (
               <View style={styles.actionButtonsGroup}>
                 <Pressable
-                  style={[styles.outlineButton, { borderColor: Colors.light.primary }]}
+                  style={[styles.outlineButton, { borderColor: PRIMARY_TEAL }]}
                   onPress={() => {
-                    // cleanup old web object URL before re-record
                     if (Platform.OS === 'web' && audioObjectUrlRef.current) {
                       URL.revokeObjectURL(audioObjectUrlRef.current);
                       audioObjectUrlRef.current = null;
@@ -802,13 +1025,13 @@ export default function SmartAnalysisScreen() {
                   }}
                   disabled={isLoading}
                 >
-                  <ThemedText style={[styles.outlineButtonText, { color: Colors.light.primary }]}>
+                  <ThemedText style={[styles.outlineButtonText, { color: PRIMARY_TEAL }]}>
                     🔄 Record Again
                   </ThemedText>
                 </Pressable>
 
                 <Pressable
-                  style={[styles.solidButton, { backgroundColor: Colors.light.primary }]}
+                  style={[styles.solidButton, { backgroundColor: PRIMARY_TEAL }]}
                   onPress={() => setCurrentStep('capture')}
                   disabled={isLoading}
                 >
@@ -827,20 +1050,20 @@ export default function SmartAnalysisScreen() {
             {faceUri ? (
               <View style={styles.imagePreview}>
                 <Image source={{ uri: faceUri }} style={styles.previewImage} />
-                <ThemedText style={[styles.successText, { color: Colors.light.success }]}>
+                <ThemedText style={[styles.successText, { color: SUCCESS_MINT }]}>
                   ✓ Photo captured successfully
                 </ThemedText>
 
                 <View style={styles.actionButtons}>
                   <Pressable
-                    style={[styles.secondaryButton, { backgroundColor: Colors.light.primary }]}
+                    style={[styles.secondaryButton, { backgroundColor: PRIMARY_TEAL }]}
                     onPress={() => setFaceUri(null)}
                   >
                     <ThemedText style={styles.buttonText}>🔄 Retake Photo</ThemedText>
                   </Pressable>
 
                   <Pressable
-                    style={[styles.secondaryButton, { backgroundColor: Colors.light.success }]}
+                    style={[styles.secondaryButton, { backgroundColor: SUCCESS_MINT }]}
                     onPress={() => setCurrentStep('context')}
                   >
                     <ThemedText style={styles.buttonText}>Continue →</ThemedText>
@@ -850,18 +1073,18 @@ export default function SmartAnalysisScreen() {
             ) : (
               <>
                 <View style={styles.iconContainer}>
-                  <View style={[styles.recordIcon, { backgroundColor: Colors.light.accent }]}>
+                  <View style={[styles.recordIcon, { backgroundColor: ACCENT_YELLOW }]}>
                     <ThemedText style={styles.recordIconText}>📸</ThemedText>
                   </View>
                 </View>
 
                 <ThemedText style={[styles.stepDescription, { color: secondaryText }]}>
-                  Take or choose a clear photo of your baby's face
+                  Use a clear, well-lit photo where the baby's face is visible.
                 </ThemedText>
 
                 <View style={styles.buttonRow}>
                   <Pressable
-                    style={[styles.secondaryButton, { backgroundColor: Colors.light.accent }]}
+                    style={[styles.secondaryButton, { backgroundColor: SECONDARY_CORAL }]}
                     onPress={() => captureImage(true)}
                     disabled={isLoading}
                   >
@@ -869,19 +1092,26 @@ export default function SmartAnalysisScreen() {
                   </Pressable>
 
                   <Pressable
-                    style={[styles.secondaryButton, { backgroundColor: Colors.light.warning }]}
+                    style={[styles.secondaryButton, { backgroundColor: ACCENT_YELLOW }]}
                     onPress={() => captureImage(false)}
                     disabled={isLoading}
                   >
                     <ThemedText style={styles.buttonText}>Choose Photo</ThemedText>
                   </Pressable>
                 </View>
+
+                <View style={[styles.tipCard, { marginTop: 20 }]}>
+                  <ThemedText style={styles.tipIcon}>💡</ThemedText>
+                  <ThemedText style={styles.tipText}>
+                    Avoid blurry or dark images for best results.
+                  </ThemedText>
+                </View>
               </>
             )}
 
             {isLoading && (
               <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color={Colors.light.primary} />
+                <ActivityIndicator size="large" color={PRIMARY_TEAL} />
               </View>
             )}
           </View>
@@ -889,101 +1119,119 @@ export default function SmartAnalysisScreen() {
 
         {/* STEP 3: CONTEXT */}
         {currentStep === 'context' && (
-          <View style={[styles.stepCard, { backgroundColor: cardBackground, shadowColor }]}>
-            <ThemedText style={[styles.stepDescription, { color: secondaryText }]}>
-              Add context for better accuracy (required)
-            </ThemedText>
+          <Animated.View style={[screenAnimatedStyle, { width: '100%' }]}>
+            <View style={[styles.stepCard, { backgroundColor: cardBackground, shadowColor }]}>
+              <ThemedText style={[styles.stepDescription, { color: secondaryText, marginBottom: 8 }]}>
+                Share a few care details to improve the result
+              </ThemedText>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>Baby's age (months)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: Colors.light.border, color: textColor }]}
-                value={babyAge}
-                onChangeText={setBabyAge}
-                placeholder="3"
-                placeholderTextColor={secondaryText}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 0-36 months</ThemedText>
-            </View>
+              <Animated.View style={fieldAnimatedStyles[0]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>👶 Baby's age (months)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={babyAge}
+                    onChangeText={setBabyAge}
+                    placeholder="3"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-36 months</ThemedText>
+                </View>
+              </Animated.View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>Time since last feeding (hours)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: Colors.light.border, color: textColor }]}
-                value={feedingTime}
-                onChangeText={setFeedingTime}
-                placeholder="2"
-                placeholderTextColor={secondaryText}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 0-48 hours</ThemedText>
-            </View>
+              <Animated.View style={fieldAnimatedStyles[1]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>🍼 Time since last feeding (hours)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={feedingTime}
+                    onChangeText={setFeedingTime}
+                    placeholder="2"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-48 hours</ThemedText>
+                </View>
+              </Animated.View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>Time since last sleep (hours)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: Colors.light.border, color: textColor }]}
-                value={sleepTime}
-                onChangeText={setSleepTime}
-                placeholder="1"
-                placeholderTextColor={secondaryText}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 0-48 hours</ThemedText>
-            </View>
+              <Animated.View style={fieldAnimatedStyles[2]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>😴 Time since last sleep (hours)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={sleepTime}
+                    onChangeText={setSleepTime}
+                    placeholder="1"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-48 hours</ThemedText>
+                </View>
+              </Animated.View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>Diaper status</ThemedText>
-              <View style={styles.radioContainer}>
-                {['Clean', 'Wet', 'Soiled'].map(status => (
+              <Animated.View style={fieldAnimatedStyles[3]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>🚼 Diaper status</ThemedText>
+                  <View style={styles.radioContainer}>
+                    {(['Clean', 'Wet', 'Soiled'] as const).map(status => (
+                      <Animated.View key={status} style={diaperButtonAnimatedStyles[status]} collapsable={false}>
+                        <Pressable
+                          style={[
+                            styles.radioOption,
+                            diaperStatus === status && { ...styles.radioSelected, borderColor: PRIMARY_TEAL },
+                          ]}
+                          onPress={() => handleDiaperPress(status)}
+                        >
+                          <ThemedText style={[styles.radioText, { color: textColor }]}>
+                            {status}
+                          </ThemedText>
+                        </Pressable>
+                      </Animated.View>
+                    ))}
+                  </View>
+                </View>
+              </Animated.View>
+
+              <Animated.View style={fieldAnimatedStyles[4]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>🌡️ Room temperature (°C)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={roomTemperature}
+                    onChangeText={setRoomTemperature}
+                    placeholder="24"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 15-35°C</ThemedText>
+                </View>
+              </Animated.View>
+
+              <View style={styles.actionButtons}>
+                <Animated.View style={[analyzeButtonAnimatedStyle, isLoading ? loadingButtonAnimatedStyle : {}]}>
                   <Pressable
-                    key={status}
-                    style={[
-                      styles.radioOption,
-                      diaperStatus === status && styles.radioSelected,
-                      diaperStatus === status && { borderColor: Colors.light.primary },
-                    ]}
-                    onPress={() => setDiaperStatus(status)}
+                    style={[styles.primaryButton, { backgroundColor: PRIMARY_TEAL }]}
+                    onPress={handleAnalyzePress}
+                    disabled={isLoading}
                   >
-                    <ThemedText style={[styles.radioText, { color: textColor }]}>
-                      {status}
-                    </ThemedText>
+                    {isLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <ThemedText style={styles.buttonText}>Analyze Cry Pattern</ThemedText>
+                    )}
                   </Pressable>
-                ))}
+                </Animated.View>
               </View>
             </View>
-
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>Room temperature (°C)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: Colors.light.border, color: textColor }]}
-                value={roomTemperature}
-                onChangeText={setRoomTemperature}
-                placeholder="24"
-                placeholderTextColor={secondaryText}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: secondaryText }]}>Valid range: 15-35°C</ThemedText>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <Pressable
-                style={[styles.primaryButton, { backgroundColor: Colors.light.primary }]}
-                onPress={submitAnalysis}
-                disabled={isLoading}
-              >
-                {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <ThemedText style={styles.buttonText}>Analyze</ThemedText>}
-              </Pressable>
-            </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* RESULT */}
         {currentStep === 'result' && analysisResult && (
-          <View style={[styles.stepCard, { backgroundColor: cardBackground, shadowColor, shadowOpacity: 0.05, shadowRadius: 10 }]}>
+          <View style={[styles.stepCard, { backgroundColor: cardBackground }]}>
             <View style={styles.resultHeader}>
-              <View style={[styles.resultIcon, { backgroundColor: '#F0FFFE' }]}>
+              <View style={[styles.resultIcon, { backgroundColor: SOFT_TEAL_BG, borderColor: PRIMARY_TEAL }]}>
                 <ThemedText style={styles.resultIconText}>
                   {analysisResult.predicted_cry_reason === 'Pain' ? '😟' :
                     analysisResult.predicted_cry_reason === 'Hunger' ? '🍼' :
@@ -1002,25 +1250,25 @@ export default function SmartAnalysisScreen() {
               )}
 
               <View style={styles.confidenceContainer}>
-                <View style={[styles.confidenceBar, { backgroundColor: Colors.light.border }]}>
+                <View style={[styles.confidenceBar, { backgroundColor: BORDER_LIGHT }]}>
                   <View style={[styles.confidenceFill, {
-                    backgroundColor: (analysisResult.confidence ?? 0) > 0.8 ? Colors.light.success :
-                      (analysisResult.confidence ?? 0) > 0.6 ? Colors.light.warning : Colors.light.error,
+                    backgroundColor: (analysisResult.confidence ?? 0) > 0.8 ? SUCCESS_MINT :
+                      (analysisResult.confidence ?? 0) > 0.6 ? WARNING_AMBER : DANGER_RED,
                     width: `${Math.round((analysisResult.confidence ?? 0) * 100)}%`,
                   }]} />
                 </View>
-                <ThemedText style={[styles.confidenceText, { color: secondaryText }]}>
+                <ThemedText style={[styles.confidenceText, { color: LIGHT_TEXT }]}>
                   {Math.round((analysisResult.confidence ?? 0) * 100)}% Confidence Score
                 </ThemedText>
               </View>
             </View>
 
             {/* Individual Model Results */}
-            <View style={[styles.modelResultsContainer]}>
+            <View style={styles.modelResultsContainer}>
               <View style={[styles.modelResultCard, { backgroundColor: '#F0F9FF', borderLeftColor: '#3B82F6' }]}>
                 <View style={styles.modelResultHeader}>
                   <ThemedText style={styles.modelResultIcon}>🎙️</ThemedText>
-                  <ThemedText style={[styles.modelResultTitle, { color: textColor }]}>Audio Model</ThemedText>
+                  <ThemedText style={styles.modelResultTitle}>Audio Model</ThemedText>
                 </View>
                 <ThemedText style={[styles.modelResultLabel, { color: textColor }]}>
                   {analysisResult.audioPrediction || 'Unknown'}
@@ -1032,7 +1280,7 @@ export default function SmartAnalysisScreen() {
                       backgroundColor: '#3B82F6'
                     }]} />
                   </View>
-                  <ThemedText style={[styles.modelConfidenceText, { color: secondaryText }]}>
+                  <ThemedText style={[styles.modelConfidenceText, { color: LIGHT_TEXT }]}>
                     {Math.round((analysisResult.audioConfidence ?? 0) * 100)}%
                   </ThemedText>
                 </View>
@@ -1041,7 +1289,7 @@ export default function SmartAnalysisScreen() {
               <View style={[styles.modelResultCard, { backgroundColor: '#FEF3F2', borderLeftColor: '#EF4444' }]}>
                 <View style={styles.modelResultHeader}>
                   <ThemedText style={styles.modelResultIcon}>📷</ThemedText>
-                  <ThemedText style={[styles.modelResultTitle, { color: textColor }]}>Image Model</ThemedText>
+                  <ThemedText style={styles.modelResultTitle}>Image Model</ThemedText>
                 </View>
                 <ThemedText style={[styles.modelResultLabel, { color: textColor }]}>
                   {analysisResult.imagePrediction || 'Unknown'}
@@ -1053,7 +1301,7 @@ export default function SmartAnalysisScreen() {
                       backgroundColor: '#EF4444'
                     }]} />
                   </View>
-                  <ThemedText style={[styles.modelConfidenceText, { color: secondaryText }]}>
+                  <ThemedText style={[styles.modelConfidenceText, { color: LIGHT_TEXT }]}>
                     {Math.round((analysisResult.imageConfidence ?? 0) * 100)}%
                   </ThemedText>
                 </View>
@@ -1061,7 +1309,7 @@ export default function SmartAnalysisScreen() {
             </View>
 
             {analysisResult.all_class_probabilities && (
-              <View style={[styles.insightCard, { backgroundColor: Colors.light.background, borderLeftColor: Colors.light.accent }]}>
+              <View style={[styles.insightCard, { backgroundColor: SOFT_YELLOW_BG, borderLeftColor: ACCENT_YELLOW }]}>
                 <ThemedText style={[styles.insightTitle, { color: textColor }]}>Probability Breakdown</ThemedText>
                 <View style={styles.probabilityTable}>
                   {Object.entries(analysisResult.all_class_probabilities).map(([reason, prob]: [string, any]) => (
@@ -1069,13 +1317,13 @@ export default function SmartAnalysisScreen() {
                       <ThemedText style={[styles.probabilityLabel, { color: textColor }]} numberOfLines={1}>
                         {reason}
                       </ThemedText>
-                      <View style={[styles.probabilityBarSmall, { backgroundColor: Colors.light.border }]}>
+                      <View style={[styles.probabilityBarSmall, { backgroundColor: BORDER_LIGHT }]}>
                         <View style={[styles.probabilityFillSmall, {
                           width: `${Math.round((prob ?? 0) * 100)}%`,
-                          backgroundColor: (prob ?? 0) > 0.4 ? Colors.light.primary : Colors.light.warning
+                          backgroundColor: (prob ?? 0) > 0.4 ? PRIMARY_TEAL : WARNING_AMBER
                         }]} />
                       </View>
-                      <ThemedText style={[styles.probabilityValue, { color: secondaryText }]}>
+                      <ThemedText style={[styles.probabilityValue, { color: LIGHT_TEXT }]}>
                         {Math.round((prob ?? 0) * 100)}%
                       </ThemedText>
                     </View>
@@ -1084,15 +1332,15 @@ export default function SmartAnalysisScreen() {
               </View>
             )}
 
-            <View style={[styles.insightCard, { backgroundColor: cardBackground, borderLeftColor: Colors.light.primary }]}>
-              <ThemedText style={[styles.insightTitle, { color: textColor }]}>Recommendations</ThemedText>
+            <View style={[styles.insightCard, { backgroundColor: SOFT_MINT_BG, borderLeftColor: SUCCESS_MINT }]}>
+              <ThemedText style={[styles.insightTitle, { color: textColor }]}>Suggested Care Actions</ThemedText>
               <ThemedText style={[styles.insightText, { color: secondaryText }]}>
                 {analysisResult.recommendations.map(r => `• ${r}`).join('\n')}
               </ThemedText>
             </View>
 
             {analysisResult.disclaimer && (
-              <View style={[styles.disclaimerCard, { backgroundColor: 'rgba(255, 179, 71, 0.1)', borderLeftColor: Colors.light.warning }]}>
+              <View style={[styles.disclaimerCard, { backgroundColor: '#FEF3C7', borderColor: 'rgba(245, 158, 11, 0.3)' }]}>
                 <ThemedText style={[styles.disclaimerText, { color: secondaryText }]}>
                   {analysisResult.disclaimer}
                 </ThemedText>
@@ -1101,7 +1349,7 @@ export default function SmartAnalysisScreen() {
 
             <View style={styles.actionButtons}>
               <Pressable
-                style={[styles.analyzeAgainButton, { borderColor: Colors.light.primary }]}
+                style={[styles.analyzeAgainButton, { borderColor: PRIMARY_TEAL }]}
                 onPress={() => {
                   setCurrentStep('record');
                   setAudioUri(null);
@@ -1115,11 +1363,11 @@ export default function SmartAnalysisScreen() {
                   setRecordingDuration(0);
                 }}
               >
-                <ThemedText style={[styles.analyzeAgainText, { color: Colors.light.primary }]}>🔄 Analyze Again</ThemedText>
+                <ThemedText style={[styles.analyzeAgainText, { color: PRIMARY_TEAL }]}>🔄 Analyze Again</ThemedText>
               </Pressable>
 
               <Pressable
-                style={[styles.doneButton, { backgroundColor: Colors.light.primary, shadowColor, shadowOpacity: 0.1, shadowRadius: 8 }]}
+                style={[styles.doneButton, { backgroundColor: PRIMARY_TEAL, shadowColor: PRIMARY_TEAL }]}
                 onPress={() => setShowFeedback(true)}
               >
                 <ThemedText style={styles.doneButtonText}>✓ Done</ThemedText>
@@ -1172,240 +1420,655 @@ export default function SmartAnalysisScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: Spacing.xl },
-  scrollContent: { flexGrow: 1, paddingBottom: Spacing.xl * 2 },
-  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, alignItems: 'center' },
-  progressContainer: { alignItems: 'center', marginBottom: Spacing.lg },
-  stepIndicator: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.sm },
-  stepNumber: { color: '#FFFFFF', fontSize: Typography.sizes.lg, fontWeight: Typography.weights.bold },
-  stepInfo: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium },
-  stepTitle: { fontSize: Typography.sizes.xxl, fontWeight: Typography.weights.bold, textAlign: 'center' },
-  content: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
+  // ========== CONTAINER & LAYOUT ==========
+  container: { 
+    flex: 1,
+    backgroundColor: '#FAFBFC',
+  },
+  scrollContent: { 
+    flexGrow: 1, 
+    paddingBottom: 140,
+    paddingTop: 14,
+  },
+
+  // ========== HEADER & NAVIGATION ==========
+  headerTop: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 14, 
+    paddingTop: 12,
+    alignItems: 'flex-start',
+  },
+  backButton: { 
+    paddingVertical: 10, 
+    paddingHorizontal: 14, 
+    borderRadius: 12, 
+    alignItems: 'center',
+    backgroundColor: 'rgba(240, 249, 250, 0.9)',
+  },
+  backButtonText: { 
+    fontSize: 14, 
+    fontWeight: '600',
+    color: '#5DAFB9',
+  },
+
+  header: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 20, 
+    paddingTop: 8,
+    alignItems: 'center',
+  },
+  progressContainer: { 
+    alignItems: 'center', 
+    marginBottom: 16,
+    width: '100%',
+  },
+  stepIndicator: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  stepNumber: { 
+    color: '#FFFFFF', 
+    fontSize: 24, 
+    fontWeight: '700',
+  },
+  stepInfo: { 
+    fontSize: 13, 
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  stepTitle: { 
+    fontSize: 28, 
+    fontWeight: '700', 
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+
+  // ========== CONTENT & CARDS ==========
+  content: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 24,
+  },
   stepCard: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.lg,
-    shadowOffset: { width: 0, height: 2 },
+    padding: 28,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
     width: '100%',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8ECEF',
   },
-  iconContainer: { marginBottom: Spacing.xl },
-  recordIcon: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
-  recordIconText: { fontSize: 32 },
-  stepDescription: { fontSize: Typography.sizes.md, textAlign: 'center', lineHeight: 22, marginBottom: Spacing.xl },
-  recordingIndicator: { alignItems: 'center', marginBottom: Spacing.xl },
-  recordingText: { fontSize: Typography.sizes.lg, fontWeight: Typography.weights.semiBold, marginBottom: Spacing.md },
-  waveform: { flexDirection: 'row', gap: 4 },
-  waveBar: { width: 4, height: 20, borderRadius: 2 },
-  countdownText: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium, marginTop: Spacing.sm },
+
+  // ========== ICONS & CONTAINERS ==========
+  iconContainer: { 
+    marginBottom: 24,
+    marginTop: 8,
+  },
+  recordIcon: { 
+    width: 110, 
+    height: 110, 
+    borderRadius: 55, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  recordIconText: { 
+    fontSize: 48,
+  },
+
+  // ========== TYPOGRAPHY & TEXT ==========
+  stepDescription: { 
+    fontSize: 16, 
+    textAlign: 'center', 
+    lineHeight: 25, 
+    marginBottom: 28,
+    fontWeight: '500',
+    color: '#5A6B7D',
+  },
+
+  // ========== RECORDING STATE ==========
+  recordingIndicator: { 
+    alignItems: 'center', 
+    marginBottom: 24,
+    width: '100%',
+  },
+  recordingText: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    marginBottom: 16,
+  },
+  waveform: { 
+    flexDirection: 'row', 
+    gap: 6,
+    marginBottom: 16,
+  },
+  waveBar: { 
+    width: 5, 
+    height: 24, 
+    borderRadius: 2.5,
+  },
+  countdownText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    marginTop: 12,
+  },
+
+  // ========== BUTTONS - PRIMARY ==========
+  recordButton: {
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginTop: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 0,
+  },
+  buttonContent: { 
+    alignItems: 'center',
+    width: '100%',
+  },
+  recordButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 18, 
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  recordButtonSubtext: { 
+    color: 'rgba(255, 255, 255, 0.9)', 
+    fontSize: 14, 
+    marginTop: 6,
+    fontWeight: '500',
+  },
+
+  // ========== BUTTONS - SECONDARY ==========
   primaryButton: {
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.xl,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 3,
   },
   secondaryButton: {
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-  },
-  buttonText: { color: '#FFFFFF', fontSize: Typography.sizes.md, fontWeight: Typography.weights.semiBold },
-  recordButton: {
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginTop: Spacing.lg,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 2,
   },
-  buttonContent: { alignItems: 'center' },
-  recordButtonText: { color: '#FFFFFF', fontSize: Typography.sizes.lg, fontWeight: Typography.weights.semiBold },
-  recordButtonSubtext: { color: 'rgba(255, 255, 255, 0.7)', fontSize: Typography.sizes.sm, marginTop: Spacing.xs },
-  successIcon: { fontSize: 40, marginBottom: Spacing.sm },
-  successText: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.medium },
-  recordDurationText: { fontSize: Typography.sizes.sm, marginTop: Spacing.sm },
-  actionButtonsGroup: { flexDirection: 'row', gap: Spacing.md, width: '100%', marginTop: Spacing.xl },
+  buttonText: { 
+    color: '#FFFFFF', 
+    fontSize: 15, 
+    fontWeight: '700',
+  },
+  actionButtonsGroup: { 
+    flexDirection: 'row', 
+    gap: 14, 
+    width: '100%', 
+    marginTop: 28,
+  },
   outlineButton: {
     flex: 1,
-    borderRadius: BorderRadius.md,
-    borderWidth: 2,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
+    borderRadius: 18,
+    borderWidth: 2.5,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 0,
   },
-  outlineButtonText: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.semiBold },
+  outlineButtonText: { 
+    fontSize: 15, 
+    fontWeight: '700',
+  },
   solidButton: {
     flex: 1,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  solidButtonText: { color: '#FFFFFF', fontSize: Typography.sizes.md, fontWeight: Typography.weights.semiBold },
-  buttonRow: { flexDirection: 'row', gap: Spacing.md, width: '100%' },
-  imagePreview: { alignItems: 'center', width: '100%' },
-  previewImage: { width: 200, height: 200, borderRadius: BorderRadius.lg, marginBottom: Spacing.lg },
-  inputContainer: { width: '100%', marginBottom: Spacing.xl, paddingBottom: Spacing.sm },
-  inputLabel: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium, marginBottom: Spacing.sm },
-  textInput: {
+  solidButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 15, 
+    fontWeight: '700',
+  },
+  buttonRow: { 
+    flexDirection: 'row', 
+    gap: 14, 
+    width: '100%',
+    marginTop: 24,
+  },
+
+  // ========== IMAGE PREVIEW ==========
+  imagePreview: { 
+    alignItems: 'center', 
+    width: '100%',
+  },
+  previewImage: { 
+    width: 240, 
+    height: 240, 
+    borderRadius: 24, 
+    marginBottom: 24,
     borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    fontSize: Typography.sizes.md,
+    borderColor: '#E8ECEF',
+    backgroundColor: '#F8FAFC',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  inputHint: { fontSize: Typography.sizes.xs, marginTop: Spacing.xs, fontStyle: 'italic' },
-  resultHeader: { alignItems: 'center', marginBottom: Spacing.xl, width: '100%' },
-  resultIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg },
-  resultIconText: { fontSize: 24 },
-  resultTitle: { fontSize: Typography.sizes.xl, fontWeight: Typography.weights.bold, marginBottom: Spacing.lg, textAlign: 'center' },
-  confidenceContainer: { width: '100%', alignItems: 'center' },
-  confidenceBar: { width: '100%', height: 8, borderRadius: 4, marginBottom: Spacing.sm },
-  confidenceFill: { height: '100%', borderRadius: 4 },
-  confidenceText: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium },
+
+  // ========== FORMS & INPUTS ==========
+  inputContainer: { 
+    width: '100%', 
+    marginBottom: 22,
+    paddingBottom: 6,
+  },
+  inputLabel: { 
+    fontSize: 15, 
+    fontWeight: '700', 
+    marginBottom: 10,
+    letterSpacing: 0.2,
+    color: '#0F172A',
+  },
+  textInput: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    fontSize: 16,
+    fontWeight: '500',
+    backgroundColor: '#F8FAFC',
+  },
+  inputHint: { 
+    fontSize: 12, 
+    marginTop: 6, 
+    fontWeight: '500',
+    fontStyle: 'italic',
+    color: '#94A3B8',
+  },
+
+  // ========== RADIO / SEGMENTED BUTTONS ==========
+  radioContainer: { 
+    flexDirection: 'row', 
+    gap: 10, 
+    justifyContent: 'space-between', 
+    width: '100%',
+  },
+  radioOption: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: '#E8ECEF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    minHeight: 56,
+  },
+  radioSelected: { 
+    backgroundColor: 'rgba(93, 175, 185, 0.1)',
+  },
+  radioText: { 
+    fontSize: 14, 
+    fontWeight: '700', 
+    textAlign: 'center',
+  },
+
+  // ========== SUCCESS STATES ==========
+  successIcon: { 
+    fontSize: 48, 
+    marginBottom: 12,
+  },
+  successText: { 
+    fontSize: 17, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  successContainer: {
+    width: '100%',
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    alignItems: 'center',
+    marginBottom: 18,
+    marginTop: 18,
+    borderWidth: 1,
+  },
+  recordDurationText: { 
+    fontSize: 14, 
+    marginTop: 8,
+    fontWeight: '500',
+  },
+
+  // ========== TIP CARD ==========
+  tipCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    backgroundColor: '#FFFBF0',
+    borderRadius: 16,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(246, 199, 111, 0.25)',
+  },
+  tipIcon: {
+    fontSize: 20,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+    lineHeight: 20,
+  },
+
+  // ========== RESULT SCREEN ==========
+  resultHeader: { 
+    alignItems: 'center', 
+    marginBottom: 28, 
+    width: '100%',
+    paddingVertical: 12,
+  },
+  resultIcon: { 
+    width: 90, 
+    height: 90, 
+    borderRadius: 45, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginBottom: 18,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  resultIconText: { 
+    fontSize: 40,
+  },
+  resultTitle: { 
+    fontSize: 34, 
+    fontWeight: '700', 
+    marginBottom: 14, 
+    textAlign: 'center',
+    letterSpacing: 0.4,
+    color: '#0F172A',
+  },
+  confidenceMessage: { 
+    fontSize: 13, 
+    fontStyle: 'italic', 
+    marginVertical: 8, 
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+
+  // ========== CONFIDENCE & PROGRESS BARS ==========
+  confidenceContainer: { 
+    width: '100%', 
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  confidenceBar: { 
+    width: '100%', 
+    height: 12, 
+    borderRadius: 6, 
+    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F0F4F8',
+  },
+  confidenceFill: { 
+    height: '100%', 
+    borderRadius: 6,
+  },
+  confidenceText: { 
+    fontSize: 13, 
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+
+  // ========== MODEL RESULTS CARDS ==========
   modelResultsContainer: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: 12,
     width: '100%',
-    marginBottom: Spacing.xl,
+    marginBottom: 24,
+    paddingBottom: 8,
   },
   modelResultCard: {
     flex: 1,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderLeftWidth: 4,
+    padding: 18,
+    borderRadius: 18,
+    borderLeftWidth: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E8ECEF',
   },
   modelResultHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 10,
   },
   modelResultIcon: {
-    fontSize: 16,
-    marginRight: Spacing.xs,
+    fontSize: 18,
+    marginRight: 8,
   },
   modelResultTitle: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.medium,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   modelResultLabel: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.bold,
-    marginBottom: Spacing.sm,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
   },
   modelConfidenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 8,
   },
   modelConfidenceBar: {
     flex: 1,
-    height: 6,
-    borderRadius: 3,
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: '#F0F4F8',
   },
   modelConfidenceFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
   },
   modelConfidenceText: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.medium,
-    minWidth: 35,
+    fontSize: 12,
+    fontWeight: '700',
+    minWidth: 40,
     textAlign: 'right',
   },
+
+  // ========== INSIGHT CARDS ==========
   insightCard: {
     width: '100%',
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderLeftWidth: 4,
-    marginBottom: Spacing.xl,
+    padding: 24,
+    borderRadius: 20,
+    borderLeftWidth: 6,
+    marginBottom: 22,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
     shadowRadius: 10,
-    elevation: 2,
-  },
-  insightTitle: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.semiBold, marginBottom: Spacing.sm },
-  insightText: { fontSize: Typography.sizes.sm, lineHeight: 20 },
-  actionButtons: { flexDirection: 'row', gap: Spacing.md, width: '100%' },
-  successContainer: {
-    width: '100%',
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-    marginTop: Spacing.lg,
-  },
-  radioContainer: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'space-between', width: '100%' },
-  radioOption: {
-    flex: 1,
+    elevation: 1,
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    maxWidth: '32%',
+    borderColor: '#E8ECEF',
   },
-  radioSelected: { backgroundColor: 'rgba(78, 205, 196, 0.15)' },
-  radioText: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium, textAlign: 'center' },
-  confidenceMessage: { fontSize: Typography.sizes.sm, fontStyle: 'italic', marginVertical: Spacing.md, textAlign: 'center' },
-  probabilityTable: { width: '100%' },
-  probabilityRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm },
-  probabilityLabel: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium, flex: 1, maxWidth: 100 },
-  probabilityBarSmall: { flex: 2, height: 6, borderRadius: 3, backgroundColor: Colors.light.border },
-  probabilityFillSmall: { height: '100%', borderRadius: 3 },
-  probabilityValue: { fontSize: Typography.sizes.sm, fontWeight: Typography.weights.medium, minWidth: 45, textAlign: 'right' },
-  disclaimerCard: { width: '100%', padding: Spacing.lg, borderRadius: BorderRadius.lg, borderLeftWidth: 4, marginBottom: Spacing.xl },
-  disclaimerText: { fontSize: Typography.sizes.xs, lineHeight: 18, fontStyle: 'italic' },
+  insightTitle: { 
+    fontSize: 17, 
+    fontWeight: '700', 
+    marginBottom: 14,
+    letterSpacing: 0.3,
+    color: '#0F172A',
+  },
+  insightText: { 
+    fontSize: 15, 
+    lineHeight: 23,
+    fontWeight: '500',
+    color: '#5A6B7D',
+  },
+
+  // ========== PROBABILITY TABLE ==========
+  probabilityTable: { 
+    width: '100%',
+  },
+  probabilityRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 14, 
+    gap: 10,
+  },
+  probabilityLabel: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    flex: 1, 
+    maxWidth: 110,
+  },
+  probabilityBarSmall: { 
+    flex: 2, 
+    height: 8, 
+    borderRadius: 4, 
+    overflow: 'hidden',
+    backgroundColor: '#F0F4F8',
+  },
+  probabilityFillSmall: { 
+    height: '100%', 
+    borderRadius: 4,
+  },
+  probabilityValue: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    minWidth: 45, 
+    textAlign: 'right',
+  },
+
+  // ========== DISCLAIMER ==========
+  disclaimerCard: { 
+    width: '100%', 
+    padding: 16, 
+    borderRadius: 14, 
+    borderLeftWidth: 5,
+    marginBottom: 20,
+    borderWidth: 1,
+  },
+  disclaimerText: { 
+    fontSize: 12, 
+    lineHeight: 18, 
+    fontStyle: 'italic',
+    fontWeight: '500',
+  },
+
+  // ========== ACTION BUTTONS - FINAL ==========
+  actionButtons: { 
+    flexDirection: 'row', 
+    gap: 12, 
+    width: '100%',
+  },
   analyzeAgainButton: {
     flex: 1,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
+    borderRadius: 16,
+    borderWidth: 2.5,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
   },
-  analyzeAgainText: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.semiBold },
+  analyzeAgainText: { 
+    fontSize: 15, 
+    fontWeight: '700',
+  },
   doneButton: {
     flex: 1,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  doneButtonText: { color: '#FFFFFF', fontSize: Typography.sizes.md, fontWeight: Typography.weights.semiBold },
+  doneButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 15, 
+    fontWeight: '700',
+  },
+
+  // ========== LOADING STATE ==========
   loadingOverlay: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
+    top: 0, 
+    left: 0, 
+    right: 0, 
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: BorderRadius.lg,
+    backgroundColor: 'rgba(250, 251, 252, 0.98)',
+    borderRadius: 24,
   },
 });

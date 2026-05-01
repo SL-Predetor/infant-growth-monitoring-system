@@ -3,12 +3,12 @@ import { Platform } from 'react-native';
 const getCandidateBaseUrls = (): string[] => {
     const urls = new Set<string>();
     if (Platform.OS === 'web') {
-        urls.add('http://localhost:8000');
-        urls.add('http://127.0.0.1:8000');
+        urls.add('http://localhost:9000');
+        urls.add('http://127.0.0.1:9000');
     } else {
-        urls.add('http://10.0.2.2:8000');
-        urls.add('http://localhost:8000');
-        urls.add('http://192.168.8.119:8000');
+        urls.add('http://10.0.2.2:9000');
+        urls.add('http://localhost:9000');
+        urls.add('http://192.168.8.119:9000');
     }
     return Array.from(urls);
 };

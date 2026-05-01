@@ -36,9 +36,10 @@ import {
 import { useAuth, Infant } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const API_URL = 'http://localhost:8000/api';
+const API_URL = `${getApiBaseUrl()}/api`;
 
 /* ─────────────────────────────────────────────────────────── helpers */
 
@@ -197,8 +198,8 @@ export default function DashboardScreen() {
         }
         /* Mom */
         const { data: pp } = await supabase
-          .from('postpartum_logs')
-          .select('weeks_since_delivery, pain_score, sleep_hours, created_at')
+          .from('postpartum_checkins')
+          .select('weeks_since_delivery, pain_severity, created_at')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(1).maybeSingle();
@@ -281,22 +282,13 @@ export default function DashboardScreen() {
               </View>
 
               <View style={st.metricsRow}>
-                {postpartumData.sleep_hours != null && (
+                {postpartumData.pain_severity != null && (
                   <View style={st.metric}>
-                    <Text style={st.metricValue}>{postpartumData.sleep_hours}h</Text>
-                    <Text style={st.metricLabel}>Last sleep</Text>
+                    <Text style={[st.metricValue, { color: postpartumData.pain_severity > 5 ? C.danger : C.success }]}>
+                      {postpartumData.pain_severity}/10
+                    </Text>
+                    <Text style={st.metricLabel}>Pain level</Text>
                   </View>
-                )}
-                {postpartumData.pain_score != null && (
-                  <>
-                    <View style={st.metricDivider} />
-                    <View style={st.metric}>
-                      <Text style={[st.metricValue, { color: postpartumData.pain_score > 5 ? C.danger : C.success }]}>
-                        {postpartumData.pain_score}/10
-                      </Text>
-                      <Text style={st.metricLabel}>Pain level</Text>
-                    </View>
-                  </>
                 )}
                 <View style={st.metricDivider} />
                 <View style={st.metric}>
@@ -496,8 +488,7 @@ export default function DashboardScreen() {
                 </Text>
                 <Text style={st.motherSub}>
                   {[
-                    postpartumData.sleep_hours   != null && `😴 ${postpartumData.sleep_hours}h sleep`,
-                    postpartumData.pain_score    != null && `Pain: ${postpartumData.pain_score}/10`,
+                    postpartumData.pain_severity != null && `Pain: ${postpartumData.pain_severity}/10`,
                   ].filter(Boolean).join('  ·  ')}
                 </Text>
               </View>

@@ -17,9 +17,10 @@ import {
   RotateCcw, Volume2,
 } from 'lucide-react-native';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
+import { getApiBaseUrl } from '@/lib/api-config';
 
 const C = Colors.light;
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = getApiBaseUrl();
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 
