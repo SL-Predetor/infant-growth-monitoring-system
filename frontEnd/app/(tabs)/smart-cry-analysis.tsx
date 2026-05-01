@@ -14,6 +14,17 @@ import {
 import { useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  FadeInDown,
+  withSpring,
+  withSequence,
+  withDelay,
+  runOnJS,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing, BorderRadius, Typography } from '@/constants/theme';
@@ -105,6 +116,41 @@ export default function SmartAnalysisScreen() {
   const audioChunksRef = useRef<BlobPart[]>([]);
   const audioObjectUrlRef = useRef<string | null>(null);
 
+  // ========== ANIMATION SETUP ==========
+  // Screen entrance animation
+  const screenOpacity = useSharedValue(0);
+  const screenTranslateY = useSharedValue(30);
+
+  // Step badge animation
+  const badgeScale = useSharedValue(0.8);
+  const badgeOpacity = useSharedValue(0);
+
+  // Form fields staggered animation (5 fields)
+  const fieldAnimations = useRef([
+    useSharedValue(0), // Baby age
+    useSharedValue(0), // Feeding time
+    useSharedValue(0), // Sleep time
+    useSharedValue(0), // Diaper status
+    useSharedValue(0), // Room temperature
+  ]).current;
+
+  // Diaper button press animation
+  const diaperButtonScales = useRef({
+    Clean: useSharedValue(1),
+    Wet: useSharedValue(1),
+    Soiled: useSharedValue(1),
+  }).current;
+
+  // Analyze button press animation
+  const analyzeButtonScale = useSharedValue(1);
+  const analyzeButtonShadow = useSharedValue(2);
+
+  // Validation shake animation
+  const validationShakeX = useSharedValue(0);
+
+  // Loading pulse animation
+  const loadingPulse = useSharedValue(1);
+
   // Modern color palette - Professional Baby Care Theme (Premium Healthcare)
   // Soft pastels for calming, trustworthy aesthetic
   const LIGHT_BG = '#FAFBFC';
@@ -164,6 +210,62 @@ export default function SmartAnalysisScreen() {
     };
   }, []);
 
+  // ========== ANIMATION EFFECTS ==========
+  // Trigger animations when context screen opens
+  useEffect(() => {
+    if (currentStep === 'context') {
+      // Screen entrance: fade in + slide up
+      screenOpacity.value = withTiming(1, {
+        duration: 500,
+        easing: Easing.inOut(Easing.ease),
+      });
+      screenTranslateY.value = withTiming(0, {
+        duration: 500,
+        easing: Easing.inOut(Easing.ease),
+      });
+
+      // Step badge: scale + fade
+      badgeOpacity.value = withTiming(1, {
+        duration: 400,
+        easing: Easing.inOut(Easing.ease),
+      });
+      badgeScale.value = withTiming(1, {
+        duration: 400,
+        easing: Easing.out(Easing.back(1.2)),
+      });
+
+      // Form fields: staggered fade-in and slide-up
+      fieldAnimations.forEach((animation, index) => {
+        animation.value = withDelay(
+          150 + index * 100,
+          withTiming(1, {
+            duration: 400,
+            easing: Easing.inOut(Easing.ease),
+          })
+        );
+      });
+    } else {
+      // Reset animations when leaving context screen
+      screenOpacity.value = 0;
+      screenTranslateY.value = 30;
+      badgeScale.value = 0.8;
+      badgeOpacity.value = 0;
+      fieldAnimations.forEach(anim => (anim.value = 0));
+    }
+  }, [currentStep]);
+
+  // Loading pulse animation when analyzing
+  useEffect(() => {
+    if (isLoading && currentStep === 'context') {
+      loadingPulse.value = withSequence(
+        withTiming(1.05, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.95, { duration: 600, easing: Easing.inOut(Easing.ease) })
+      );
+    } else {
+      loadingPulse.value = 1;
+    }
+  }, [isLoading, currentStep]);
+
   const validateContext = (ctx: FusionContext) => {
     const errors: string[] = [];
 
@@ -196,6 +298,111 @@ export default function SmartAnalysisScreen() {
     }
 
     return errors;
+  };
+
+  // ========== ANIMATED STYLES (ALL AT TOP LEVEL - RULES OF HOOKS) ==========
+  const screenAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: screenOpacity.value,
+    transform: [{ translateY: screenTranslateY.value }],
+  }));
+
+  const badgeAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: badgeOpacity.value,
+    transform: [{ scale: badgeScale.value }],
+  }));
+
+  // Field animated styles - all 5 fields at top level
+  const fieldAnimatedStyle0 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[0].value,
+    transform: [{ translateY: (1 - fieldAnimations[0].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle1 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[1].value,
+    transform: [{ translateY: (1 - fieldAnimations[1].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle2 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[2].value,
+    transform: [{ translateY: (1 - fieldAnimations[2].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle3 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[3].value,
+    transform: [{ translateY: (1 - fieldAnimations[3].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyle4 = useAnimatedStyle(() => ({
+    opacity: fieldAnimations[4].value,
+    transform: [{ translateY: (1 - fieldAnimations[4].value) * 15 }],
+  }));
+
+  const fieldAnimatedStyles = [
+    fieldAnimatedStyle0,
+    fieldAnimatedStyle1,
+    fieldAnimatedStyle2,
+    fieldAnimatedStyle3,
+    fieldAnimatedStyle4,
+  ];
+
+  const analyzeButtonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: analyzeButtonScale.value }],
+  }));
+
+  const diaperButtonAnimatedStyleClean = useAnimatedStyle(() => ({
+    transform: [{ scale: diaperButtonScales.Clean.value }],
+  }));
+
+  const diaperButtonAnimatedStyleWet = useAnimatedStyle(() => ({
+    transform: [{ scale: diaperButtonScales.Wet.value }],
+  }));
+
+  const diaperButtonAnimatedStyleSoiled = useAnimatedStyle(() => ({
+    transform: [{ scale: diaperButtonScales.Soiled.value }],
+  }));
+
+  const diaperButtonAnimatedStyles = {
+    Clean: diaperButtonAnimatedStyleClean,
+    Wet: diaperButtonAnimatedStyleWet,
+    Soiled: diaperButtonAnimatedStyleSoiled,
+  };
+
+  const loadingButtonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: loadingPulse.value }],
+  }));
+
+  const shakeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: validationShakeX.value }],
+  }));
+
+  // ========== ANIMATION HANDLERS ==========
+  const handleDiaperPress = (status: 'Clean' | 'Wet' | 'Soiled') => {
+    // Scale animation on press
+    diaperButtonScales[status].value = withSequence(
+      withTiming(0.95, { duration: 100, easing: Easing.ease }),
+      withSpring(1, { damping: 0.7, mass: 1, stiffness: 100 })
+    );
+    // Preserve original functionality
+    setDiaperStatus(status);
+  };
+
+  const handleAnalyzePress = () => {
+    // Scale animation
+    analyzeButtonScale.value = withSequence(
+      withTiming(0.97, { duration: 80, easing: Easing.ease }),
+      withSpring(1, { damping: 0.6, mass: 1, stiffness: 120 })
+    );
+    // Trigger actual analysis (preserve original function)
+    submitAnalysis();
+  };
+
+  const performValidationShake = () => {
+    validationShakeX.value = withSequence(
+      withTiming(-8, { duration: 80, easing: Easing.ease }),
+      withTiming(8, { duration: 80, easing: Easing.ease }),
+      withTiming(-8, { duration: 80, easing: Easing.ease }),
+      withTiming(0, { duration: 80, easing: Easing.ease })
+    );
   };
 
   const mapAudioLabel = (label?: string) => {
@@ -572,6 +779,7 @@ export default function SmartAnalysisScreen() {
 
       const errors = validateContext(context);
       if (errors.length) {
+        performValidationShake();
         Alert.alert('Invalid Input', errors.join('\n'));
         setIsLoading(false);
         return;
@@ -704,9 +912,11 @@ export default function SmartAnalysisScreen() {
 
       <View style={styles.header}>
         <View style={styles.progressContainer}>
-          <View style={[styles.stepIndicator, { backgroundColor: PRIMARY_TEAL }]}>
-            <ThemedText style={styles.stepNumber}>{getStepNumber()}</ThemedText>
-          </View>
+          <Animated.View style={badgeAnimatedStyle}>
+            <View style={[styles.stepIndicator, { backgroundColor: PRIMARY_TEAL }]}>
+              <ThemedText style={styles.stepNumber}>{getStepNumber()}</ThemedText>
+            </View>
+          </Animated.View>
           {currentStep !== 'result' && (
             <ThemedText style={styles.stepInfo}>
               Step {getStepNumber()} of 3
@@ -909,97 +1119,112 @@ export default function SmartAnalysisScreen() {
 
         {/* STEP 3: CONTEXT */}
         {currentStep === 'context' && (
-          <View style={[styles.stepCard, { backgroundColor: cardBackground, shadowColor }]}>
-            <ThemedText style={[styles.stepDescription, { color: secondaryText, marginBottom: 8 }]}>
-              Share a few care details to improve the result
-            </ThemedText>
+          <Animated.View style={[screenAnimatedStyle, { width: '100%' }]}>
+            <View style={[styles.stepCard, { backgroundColor: cardBackground, shadowColor }]}>
+              <ThemedText style={[styles.stepDescription, { color: secondaryText, marginBottom: 8 }]}>
+                Share a few care details to improve the result
+              </ThemedText>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>👶 Baby's age (months)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
-                value={babyAge}
-                onChangeText={setBabyAge}
-                placeholder="3"
-                placeholderTextColor={LIGHT_SECONDARY}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-36 months</ThemedText>
-            </View>
+              <Animated.View style={fieldAnimatedStyles[0]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>👶 Baby's age (months)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={babyAge}
+                    onChangeText={setBabyAge}
+                    placeholder="3"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-36 months</ThemedText>
+                </View>
+              </Animated.View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>🍼 Time since last feeding (hours)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
-                value={feedingTime}
-                onChangeText={setFeedingTime}
-                placeholder="2"
-                placeholderTextColor={LIGHT_SECONDARY}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-48 hours</ThemedText>
-            </View>
+              <Animated.View style={fieldAnimatedStyles[1]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>🍼 Time since last feeding (hours)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={feedingTime}
+                    onChangeText={setFeedingTime}
+                    placeholder="2"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-48 hours</ThemedText>
+                </View>
+              </Animated.View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>😴 Time since last sleep (hours)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
-                value={sleepTime}
-                onChangeText={setSleepTime}
-                placeholder="1"
-                placeholderTextColor={LIGHT_SECONDARY}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-48 hours</ThemedText>
-            </View>
+              <Animated.View style={fieldAnimatedStyles[2]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>😴 Time since last sleep (hours)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={sleepTime}
+                    onChangeText={setSleepTime}
+                    placeholder="1"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 0-48 hours</ThemedText>
+                </View>
+              </Animated.View>
 
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>🚼 Diaper status</ThemedText>
-              <View style={styles.radioContainer}>
-                {['Clean', 'Wet', 'Soiled'].map(status => (
+              <Animated.View style={fieldAnimatedStyles[3]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>🚼 Diaper status</ThemedText>
+                  <View style={styles.radioContainer}>
+                    {(['Clean', 'Wet', 'Soiled'] as const).map(status => (
+                      <Animated.View key={status} style={diaperButtonAnimatedStyles[status]} collapsable={false}>
+                        <Pressable
+                          style={[
+                            styles.radioOption,
+                            diaperStatus === status && { ...styles.radioSelected, borderColor: PRIMARY_TEAL },
+                          ]}
+                          onPress={() => handleDiaperPress(status)}
+                        >
+                          <ThemedText style={[styles.radioText, { color: textColor }]}>
+                            {status}
+                          </ThemedText>
+                        </Pressable>
+                      </Animated.View>
+                    ))}
+                  </View>
+                </View>
+              </Animated.View>
+
+              <Animated.View style={fieldAnimatedStyles[4]}>
+                <View style={styles.inputContainer}>
+                  <ThemedText style={[styles.inputLabel, { color: textColor }]}>🌡️ Room temperature (°C)</ThemedText>
+                  <TextInput
+                    style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
+                    value={roomTemperature}
+                    onChangeText={setRoomTemperature}
+                    placeholder="24"
+                    placeholderTextColor={LIGHT_SECONDARY}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 15-35°C</ThemedText>
+                </View>
+              </Animated.View>
+
+              <View style={styles.actionButtons}>
+                <Animated.View style={[analyzeButtonAnimatedStyle, isLoading ? loadingButtonAnimatedStyle : {}]}>
                   <Pressable
-                    key={status}
-                    style={[
-                      styles.radioOption,
-                      diaperStatus === status && { ...styles.radioSelected, borderColor: PRIMARY_TEAL },
-                    ]}
-                    onPress={() => setDiaperStatus(status)}
+                    style={[styles.primaryButton, { backgroundColor: PRIMARY_TEAL }]}
+                    onPress={handleAnalyzePress}
+                    disabled={isLoading}
                   >
-                    <ThemedText style={[styles.radioText, { color: textColor }]}>
-                      {status}
-                    </ThemedText>
+                    {isLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <ThemedText style={styles.buttonText}>Analyze Cry Pattern</ThemedText>
+                    )}
                   </Pressable>
-                ))}
+                </Animated.View>
               </View>
             </View>
-
-            <View style={styles.inputContainer}>
-              <ThemedText style={[styles.inputLabel, { color: textColor }]}>🌡️ Room temperature (°C)</ThemedText>
-              <TextInput
-                style={[styles.textInput, { borderColor: BORDER_LIGHT, color: textColor }]}
-                value={roomTemperature}
-                onChangeText={setRoomTemperature}
-                placeholder="24"
-                placeholderTextColor={LIGHT_SECONDARY}
-                keyboardType="numeric"
-              />
-              <ThemedText style={[styles.inputHint, { color: LIGHT_SECONDARY }]}>Valid range: 15-35°C</ThemedText>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <Pressable
-                style={[styles.primaryButton, { backgroundColor: PRIMARY_TEAL }]}
-                onPress={submitAnalysis}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <ThemedText style={styles.buttonText}>Analyze Cry Pattern</ThemedText>
-                )}
-              </Pressable>
-            </View>
-          </View>
+          </Animated.View>
         )}
 
         {/* RESULT */}
