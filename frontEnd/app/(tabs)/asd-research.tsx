@@ -18,7 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors, Radius, Spacing, Shadows } from '@/constants/theme';
 
 const C = Colors.light;
-const API_BASE = 'http://localhost:8000';
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 // Same 5-option frequency questions as Q-CHAT-10
 // Scoring: Q1–Q9 optIdx >= 2 → atypical (1).  Q10 reversed: optIdx <= 2 → atypical (1).
@@ -126,19 +126,59 @@ export default function ASDResearchScreen() {
     if (!allDone) return;
     setScreen('processing');
     try {
-      setStatus('Analysing video frames…');
+      setStatus('Analysing facial features…');
       let p_facial = 0;
       let frame_urls: string[] = [];
+      
+      // Analyze facial features from video using predict-video endpoint
       if (videoUri) {
-        const form = new FormData();
-        form.append('file', { uri: videoUri, type: 'video/mp4', name: 'asd_video.mp4' } as any);
-        const vRes  = await fetch(`${API_BASE}/api/asd/predict-video`, { method: 'POST', body: form });
-        const vData = await vRes.json();
-        p_facial   = vData.asd_probability ?? 0;
-        frame_urls = vData.frame_urls ?? [];
+        try {
+          setStatus('Analysing video for facial features…');
+
+          // On web, we need to fetch and convert to blob. On native, FormData handles URIs.
+          let fileData: any;
+          if (Platform.OS === 'web') {
+            const response = await fetch(videoUri);
+            const blob = await response.blob();
+            fileData = blob;
+          } else {
+            fileData = {
+              uri: videoUri,
+              type: 'video/mp4',
+              name: 'asd_video.mp4',
+            };
+          }
+
+          const form = new FormData();
+          form.append('file', fileData, Platform.OS === 'web' ? 'asd_video.mp4' : undefined);
+
+          // Use predict-video endpoint (handles videos) for facial ASD probability
+          const vRes = await fetch(`${API_BASE}/api/asd/predict-video`, { method: 'POST', body: form });
+          console.log('Video response status:', vRes.status);
+          const vData = await vRes.json();
+          console.log('Video response body:', vData);
+
+          if (!vRes.ok) {
+            const errorDetail = Array.isArray(vData.detail)
+              ? vData.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join('; ')
+              : vData.detail;
+            throw new Error(`Video analysis failed (${vRes.status}): ${errorDetail}`);
+          }
+
+          p_facial = vData.asd_probability ?? 0;  // ← Real ASD probability from video!
+          frame_urls = vData.frame_urls ?? [];
+
+          console.log('✅ Facial analysis complete:', vData);
+        } catch (videoError) {
+          console.warn('⚠️ Video analysis failed, using fallback:', videoError);
+          p_facial = 0;
+          frame_urls = [];
+        }
+      } else {
+        console.warn('⚠️ No video recorded - facial prediction will be 0');
       }
 
-      setStatus('Running questionnaire model…');
+      setStatus('Analysing questionnaire responses…');
       const payload = {
         A1: answers['A1'] ?? 0, A2: answers['A2'] ?? 0, A3: answers['A3'] ?? 0,
         A4: answers['A4'] ?? 0, A5: answers['A5'] ?? 0, A6: answers['A6'] ?? 0,

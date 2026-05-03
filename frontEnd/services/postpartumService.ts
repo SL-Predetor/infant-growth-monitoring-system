@@ -2,13 +2,12 @@ import { Platform } from 'react-native';
 
 const getCandidateBaseUrls = (): string[] => {
     const urls = new Set<string>();
+    const primaryUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    urls.add(primaryUrl);
     if (Platform.OS === 'web') {
-        urls.add('http://localhost:8000');
         urls.add('http://127.0.0.1:8000');
     } else {
         urls.add('http://10.0.2.2:8000');
-        urls.add('http://localhost:8000');
-        urls.add('http://192.168.8.119:8000');
     }
     return Array.from(urls);
 };

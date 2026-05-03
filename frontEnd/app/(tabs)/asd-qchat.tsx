@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Colors, Radius, Spacing, Shadows } from '@/constants/theme';
 
 const C = Colors.light;
-const API_BASE = 'http://localhost:8000';
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 const QUESTIONS = [
   { id: 'A1',  text: 'Does your child look at you when you call his/her name?',                                                                           options: ['Always', 'Usually', 'Sometimes', 'Rarely', 'Never'] },

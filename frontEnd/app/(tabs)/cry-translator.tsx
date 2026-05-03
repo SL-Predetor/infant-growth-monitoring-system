@@ -19,7 +19,7 @@ import {
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
 
 const C = Colors.light;
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;
 

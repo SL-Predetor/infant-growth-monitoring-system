@@ -1,10 +1,8 @@
 import { Platform, Alert } from 'react-native';
 
-// Configuration - Uses environment variable REACT_APP_API_BASE_URL from .env
+// Configuration - Uses environment variable EXPO_PUBLIC_API_BASE_URL from .env
 // Falls back to localhost:8000 if not set (for backward compatibility)
-const BASE_URL = Platform.OS === 'web'
-  ? `http://${process.env.REACT_APP_API_BASE_URL || 'localhost:8000'}`
-  : `http://${process.env.REACT_APP_API_BASE_URL || 'localhost:8000'}`;
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 const AUDIO_API = `${BASE_URL}/predict-cry`;
 const FACE_API = `${BASE_URL}/predict-face`;

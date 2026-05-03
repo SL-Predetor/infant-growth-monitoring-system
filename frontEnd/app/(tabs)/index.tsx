@@ -196,12 +196,15 @@ export default function DashboardScreen() {
           setHasLoggedToday(!!log);
         }
         /* Mom */
-        const { data: pp } = await supabase
-          .from('postpartum_logs')
-          .select('weeks_since_delivery, pain_score, sleep_hours, created_at')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1).maybeSingle();
+        // Note: postpartum_logs table doesn't exist in Supabase
+        // Postpartum data is managed via API endpoints
+        // const { data: pp } = await supabase
+        //   .from('postpartum_logs')
+        //   .select('weeks_since_delivery, pain_score, sleep_hours, created_at')
+        //   .eq('user_id', user.id)
+        //   .order('created_at', { ascending: false })
+        //   .limit(1).maybeSingle();
+        const pp = null; // Disable until postpartum table exists or use API endpoint
         if (pp) setPostpartumData(pp);
       } catch (e) { console.log(e); }
       finally { setLoading(false); }

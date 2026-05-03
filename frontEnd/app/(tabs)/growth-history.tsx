@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
 
 const C = Colors.light;
-const API_URL = 'http://localhost:8000/api';
+const API_URL = `${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api`;
 
 type Log = {
   log_date: string;
