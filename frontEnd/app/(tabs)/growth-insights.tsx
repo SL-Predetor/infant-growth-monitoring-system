@@ -29,13 +29,6 @@ function getRiskColor(level: string | null) {
   return RISK_COLORS.none.fg;
 }
 
-function getAnomalyColor(label: string | null) {
-  if (label === 'critical')   return '#EF4444';
-  if (label === 'anomaly')    return '#F97316';
-  if (label === 'monitoring') return '#F59E0B';
-  return '#22C55E';
-}
-
 export default function GrowthInsightsScreen() {
   const router  = useRouter();
   const { user } = useAuth();
@@ -137,8 +130,7 @@ export default function GrowthInsightsScreen() {
     };
   }, [riskScore, anomalyData]);
 
-  const riskColor        = useMemo(() => getRiskColor(riskLevel), [riskLevel]);
-  const anomalyLabelColor = useMemo(() => getAnomalyColor(anomalyData?.anomaly_label ?? null), [anomalyData]);
+  const riskColor = useMemo(() => getRiskColor(riskLevel), [riskLevel]);
 
   if (pageLoading) {
     return <View style={s.centered}><ActivityIndicator size="large" color={C.primary} /></View>;
@@ -191,7 +183,7 @@ export default function GrowthInsightsScreen() {
         {/* ── TODAY'S SIGNAL ── */}
         <Text style={s.sectionTitle}>Today's Signal</Text>
         <View style={s.scoreRow}>
-          {/* 7-Day Risk */}
+          {/* 7-Day Risk — full width now */}
           <View style={[s.scoreCard, { borderLeftColor: riskColor }, Shadows.sm]}>
             <Text style={s.scoreEmoji}>🔮</Text>
             <Text style={s.scoreCardLabel}>7-Day Risk</Text>
@@ -201,63 +193,12 @@ export default function GrowthInsightsScreen() {
             <Text style={[s.scoreStatus, { color: riskColor }]}>{riskLevel || 'Checking…'}</Text>
             <Text style={s.scoreHint}>Next 7 days outlook</Text>
           </View>
-
-          {/* Today's State */}
-          <View style={[s.scoreCard, { borderLeftColor: anomalyLabelColor }, Shadows.sm]}>
-            <Text style={s.scoreEmoji}>🎯</Text>
-            <Text style={s.scoreCardLabel}>Today's State</Text>
-            <Text style={[s.scoreValue, { color: anomalyLabelColor }]}>
-              {anomalyData?.ensemble_anomaly_score !== undefined
-                ? `${Math.round(anomalyData.ensemble_anomaly_score * 100)}%`
-                : '--'}
-            </Text>
-            <Text style={[s.scoreStatus, { color: anomalyLabelColor }]}>
-              {anomalyData?.anomaly_label
-                ? anomalyData.anomaly_label.charAt(0).toUpperCase() + anomalyData.anomaly_label.slice(1)
-                : (anomalyLoading ? 'Analyzing…' : 'Unavailable')}
-            </Text>
-            <Text style={s.scoreHint}>
-              {anomalyData ? 'Present-state signal' : 'Anomaly engine offline'}
-            </Text>
-          </View>
         </View>
 
         {/* ── WHAT THIS MEANS ── */}
         <View style={[s.explanationCard, { backgroundColor: alertMatrix.soft }]}>
           <Text style={[s.explanationTitle, { color: alertMatrix.color }]}>{alertMatrix.text}</Text>
           <Text style={[s.explanationDesc, { color: alertMatrix.color }]}>{alertMatrix.desc}</Text>
-        </View>
-
-        {/* ── MODEL CONFIDENCE ── */}
-        <Text style={s.sectionTitle}>Model Confidence</Text>
-        <View style={[s.confidenceCard, Shadows.sm]}>
-          <View style={s.confidenceHeader}>
-            <Text style={s.confidenceTitle}>Anomaly Engines</Text>
-            <View style={[s.confidenceBadge, {
-              backgroundColor: anomalyData?.confidence === 'high'
-                ? '#DCFCE7' : (anomalyData ? '#FEF3C7' : C.cardSecondary),
-            }]}>
-              <Text style={[s.confidenceBadgeText, {
-                color: anomalyData?.confidence === 'high'
-                  ? '#22C55E' : (anomalyData ? '#F59E0B' : C.labelTertiary),
-              }]}>
-                {anomalyData?.confidence
-                  ? anomalyData.confidence.toUpperCase()
-                  : (anomalyLoading ? 'PENDING' : 'OFFLINE')}
-              </Text>
-            </View>
-          </View>
-
-          <BarRow
-            label="Random Forest"
-            pct={(anomalyData?.rf_anomaly_score || 0) * 100}
-            color={C.primary}
-          />
-          <BarRow
-            label="XGBoost"
-            pct={(anomalyData?.xgb_anomaly_score || 0) * 100}
-            color="#4A8F98"
-          />
         </View>
 
         {/* ── CONDITIONAL BANNERS ── */}
@@ -283,9 +224,6 @@ export default function GrowthInsightsScreen() {
           <Text style={s.infoText}>
             🔮 7-Day Risk — trained on 33,000 infant records to predict underweight risk in the next 7 days.
           </Text>
-          <Text style={[s.infoText, { marginTop: 8 }]}>
-            🎯 Today's State — detects if your baby is currently below their personal growth baseline.
-          </Text>
           <Text style={s.infoFooter}>Scores update each time you log daily data.</Text>
         </View>
 
@@ -308,20 +246,6 @@ export default function GrowthInsightsScreen() {
         <View style={{ height: 60 }} />
       </View>
     </ScrollView>
-  );
-}
-
-function BarRow({ label, pct, color }: { label: string; pct: number; color: string }) {
-  return (
-    <View style={s.barItem}>
-      <View style={s.barLabelRow}>
-        <Text style={s.barLabel}>{label}</Text>
-        <Text style={s.barPct}>{Math.round(pct)}%</Text>
-      </View>
-      <View style={s.barTrack}>
-        <View style={[s.barFill, { width: `${pct}%` as any, backgroundColor: color }]} />
-      </View>
-    </View>
   );
 }
 
@@ -371,19 +295,6 @@ const s = StyleSheet.create({
   explanationCard: { padding: Spacing.lg, borderRadius: Radius.xl, marginBottom: Spacing.xl },
   explanationTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
   explanationDesc: { fontSize: 13, lineHeight: 20 },
-
-  /* Confidence */
-  confidenceCard: { backgroundColor: C.card, padding: Spacing.lg, borderRadius: Radius.xl, marginBottom: Spacing.xl },
-  confidenceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.lg },
-  confidenceTitle: { fontSize: 15, fontWeight: '700', color: C.label },
-  confidenceBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },
-  confidenceBadgeText: { fontSize: 11, fontWeight: '700' },
-  barItem: { marginBottom: 14 },
-  barLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  barLabel: { fontSize: 12, color: C.labelSecondary },
-  barPct: { fontSize: 12, color: C.labelTertiary },
-  barTrack: { height: 5, borderRadius: 3, backgroundColor: C.border, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 3 },
 
   /* Banners */
   banner: {
