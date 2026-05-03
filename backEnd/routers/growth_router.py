@@ -168,31 +168,35 @@ def calculate_waz(weight_kg: float, age_days: int, gender: str) -> float:
     sd = median * 0.13
     return round((weight_kg - median) / sd, 3)
 
+# ── Mapping constants ─────────────────────────────────────────────────────────
+SES_MAP = {'low': 1, 'medium': 2, 'high': 3}
+NUTRITION_MAP = {'poor': 1, 'fair': 2, 'good': 3, 'excellent': 4}
+
 # ── Build one feature row from log + infant ───────────────────────────────────
 def build_feature_row(log: dict, infant: dict, age_days: int) -> dict:
     feed_type = log.get('feed_type', 'breastfed')
     return {
-        'F_Breast_Formula':       log.get('f_breast_formula', 0),
-        'F_Solid_Meal':           log.get('f_solid_meal', 0),
-        'F_Nutritious_Snacks':    log.get('f_nutritious_snacks', 0),
-        'F_Iron_Rich':            log.get('f_iron_rich', 0),
-        'F_Animal_Protein':       log.get('f_animal_protein', 0),
-        'F_Plant_Based':          log.get('f_plant_based', 0),
-        'F_Junk_Food':            log.get('f_junk_food', 0),
-        'Feeding_Frequency':      log.get('feeding_frequency', 0),
-        'Sleep_Hours':            float(log.get('sleep_hours', 12.0)),
-        'Age_in_Days':            age_days,
-        'Gender':                 1 if str(infant.get('gender', 'male')).lower() == 'male' else 0,
-        'Illness_Day':            1 if log.get('has_illness', False) else 0,
-        'SES_Level':              int(infant.get('ses_level', 1)),
-        'Maternal_BMI':           float(infant.get('maternal_bmi', 22.0) or 22.0),
-        'Gestational_Age_Weeks':  int(infant.get('gestational_age_weeks', 38) or 38),
-        'Birth_Weight_g':         float((infant.get('birth_weight_kg', 3.2) or 3.2)) * 1000,
-        'Gestational_Diabetes':   1 if infant.get('gestational_diabetes', False) else 0,
-        'Maternal_Nutrition_Score': int(infant.get('maternal_nutrition_quality', 1) or 1),
-        'FeedType_breastfed':     1 if feed_type == 'breastfed' else 0,
-        'FeedType_formula':       1 if feed_type == 'formula' else 0,
-        'FeedType_mixed':         1 if feed_type == 'mixed' else 0,
+        'F_Breast_Formula':         log.get('f_breast_formula', 0),
+        'F_Solid_Meal':             log.get('f_solid_meal', 0),
+        'F_Nutritious_Snacks':      log.get('f_nutritious_snacks', 0),
+        'F_Iron_Rich':              log.get('f_iron_rich', 0),
+        'F_Animal_Protein':         log.get('f_animal_protein', 0),
+        'F_Plant_Based':            log.get('f_plant_based', 0),
+        'F_Junk_Food':              log.get('f_junk_food', 0),
+        'Feeding_Frequency':        log.get('feeding_frequency', 0),
+        'Sleep_Hours':              float(log.get('sleep_hours', 12.0) or 12.0),
+        'Age_in_Days':              age_days,
+        'Gender':                   1 if str(infant.get('gender', 'male')).lower() == 'male' else 0,
+        'Illness_Day':              1 if log.get('has_illness', False) else 0,
+        'SES_Level':                SES_MAP.get(str(infant.get('ses_level') or '').lower(), 1),
+        'Maternal_BMI':             float(infant.get('maternal_bmi', 22.0) or 22.0),
+        'Gestational_Age_Weeks':    int(infant.get('gestational_age_weeks', 38) or 38),
+        'Birth_Weight_g':           float(infant.get('birth_weight_kg', 3.2) or 3.2) * 1000,
+        'Gestational_Diabetes':     1 if infant.get('gestational_diabetes', False) else 0,
+        'Maternal_Nutrition_Score': NUTRITION_MAP.get(str(infant.get('maternal_nutrition_quality') or '').lower(), 1),
+        'FeedType_breastfed':       1 if feed_type == 'breastfed' else 0,
+        'FeedType_formula':         1 if feed_type == 'formula' else 0,
+        'FeedType_mixed':           1 if feed_type == 'mixed' else 0,
     }
 
 # XGB 2A uses same 31 behavioral features as RF 2B for now.

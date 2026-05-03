@@ -65,7 +65,7 @@ export default function ProfileScreen() {
         text: 'Sign Out', style: 'destructive',
         onPress: async () => {
           setSigningOut(true);
-          try { await signOut(); }
+          try { await signOut(); router.replace('/(auth)/sign-in'); }
           catch { Alert.alert('Error', 'Failed to sign out. Please try again.'); }
           finally { setSigningOut(false); }
         },
