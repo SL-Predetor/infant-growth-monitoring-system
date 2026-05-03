@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   Pressable, ActivityIndicator, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth-context';
@@ -49,70 +49,69 @@ export default function GrowthInsightsScreen() {
   const [pageLoading, setPageLoading]     = useState(true);
   const [anomalyLoading, setAnomalyLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user) { setPageLoading(false); return; }
-      try {
-        const { data: infantData } = await supabase
-          .from('infants').select('*').eq('parent_id', user.id).maybeSingle();
-        if (!infantData) { setPageLoading(false); return; }
-        setInfant(infantData);
+  const fetchData = useCallback(async () => {
+    if (!user) { setPageLoading(false); return; }
+    try {
+      const { data: infantData } = await supabase
+        .from('infants').select('*').eq('parent_id', user.id).maybeSingle();
+      if (!infantData) { setPageLoading(false); return; }
+      setInfant(infantData);
 
-        const dashRes = await fetch(`${API_URL}/growth/dashboard/${infantData.id}`);
-        if (!dashRes.ok) throw new Error('Dashboard API failed');
-        const dashData = await dashRes.json();
+      const dashRes = await fetch(`${API_URL}/growth/dashboard/${infantData.id}`);
+      if (!dashRes.ok) throw new Error('Dashboard API failed');
+      const dashData = await dashRes.json();
 
-        setRiskScore(dashData.risk_score ?? null);
-        setRiskLevel(dashData.risk_level ?? null);
+      setRiskScore(dashData.risk_score ?? null);
+      setRiskLevel(dashData.risk_level ?? null);
 
-        setAnomalyLoading(true);
-        const { data: log } = await supabase.from('daily_logs')
-          .select('*').eq('infant_id', infantData.id)
-          .order('log_date', { ascending: false }).limit(1).maybeSingle();
+      setAnomalyLoading(true);
+      const { data: log } = await supabase.from('daily_logs')
+        .select('*').eq('infant_id', infantData.id)
+        .order('log_date', { ascending: false }).limit(1).maybeSingle();
 
-        if (log) {
-          let weightVelocity = 0;
-          if (dashData.chart_data?.length >= 2) {
-            const m = dashData.chart_data;
-            const latest = m[m.length - 1], prev = m[m.length - 2];
-            const daysDiff = (new Date(latest.measured_date).getTime() - new Date(prev.measured_date).getTime()) / 86400000;
-            if (daysDiff > 0) weightVelocity = (latest.weight_g - prev.weight_g) / daysDiff;
-          }
-          const anomalyRes = await fetch(`${API_URL}/growth/anomaly-score`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              age_in_days: dashData.age_days ?? 0,
-              weight_g: dashData.latest_weight_g ?? 3500,
-              height_cm: dashData.latest_height_cm ?? 50,
-              waz_score: dashData.current_waz ?? 0,
-              illness_day: log.has_illness ? 1 : 0,
-              recovery_day: log.recovery_day ?? 0,
-              has_illness_episode: log.has_illness ? 1 : 0,
-              sleep_hours: log.sleep_hours ?? 16,
-              feeding_frequency: log.feeding_frequency ?? 8,
-              daily_calorie_intake: log.daily_calorie_intake ?? 0,
-              appetite_factor: log.has_illness ? 0.6 : 1.0,
-              gestational_diabetes: infantData.gestational_diabetes ? 1 : 0,
-              maternal_bmi: infantData.maternal_bmi ?? 22,
-              weight_velocity: weightVelocity,
-              f_solid_meal: log.f_solid_meal ?? 0,
-              f_nutritious_snacks: log.f_nutritious_snacks ?? 0,
-              underweight_flag: (dashData.current_waz ?? 0) < -2 ? 1 : 0,
-              severe_underweight_flag: (dashData.current_waz ?? 0) < -3 ? 1 : 0,
-            }),
-          });
-          if (anomalyRes.ok) setAnomalyData(await anomalyRes.json());
+      if (log) {
+        let weightVelocity = 0;
+        if (dashData.chart_data?.length >= 2) {
+          const m = dashData.chart_data;
+          const latest = m[m.length - 1], prev = m[m.length - 2];
+          const daysDiff = (new Date(latest.measured_date).getTime() - new Date(prev.measured_date).getTime()) / 86400000;
+          if (daysDiff > 0) weightVelocity = (latest.weight_g - prev.weight_g) / daysDiff;
         }
-      } catch (err) {
-        console.error('Growth Insights fetch error:', err);
-      } finally {
-        setPageLoading(false);
-        setAnomalyLoading(false);
+        const anomalyRes = await fetch(`${API_URL}/growth/anomaly-score`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            age_in_days: dashData.age_days ?? 0,
+            weight_g: dashData.latest_weight_g ?? 3500,
+            height_cm: dashData.latest_height_cm ?? 50,
+            waz_score: dashData.current_waz ?? 0,
+            illness_day: log.has_illness ? 1 : 0,
+            recovery_day: log.recovery_day ?? 0,
+            has_illness_episode: log.has_illness ? 1 : 0,
+            sleep_hours: log.sleep_hours ?? 16,
+            feeding_frequency: log.feeding_frequency ?? 8,
+            daily_calorie_intake: log.daily_calorie_intake ?? 0,
+            appetite_factor: log.has_illness ? 0.6 : 1.0,
+            gestational_diabetes: infantData.gestational_diabetes ? 1 : 0,
+            maternal_bmi: infantData.maternal_bmi ?? 22,
+            weight_velocity: weightVelocity,
+            f_solid_meal: log.f_solid_meal ?? 0,
+            f_nutritious_snacks: log.f_nutritious_snacks ?? 0,
+            underweight_flag: (dashData.current_waz ?? 0) < -2 ? 1 : 0,
+            severe_underweight_flag: (dashData.current_waz ?? 0) < -3 ? 1 : 0,
+          }),
+        });
+        if (anomalyRes.ok) setAnomalyData(await anomalyRes.json());
       }
-    };
-    fetchData();
+    } catch (err) {
+      console.error('Growth Insights fetch error:', err);
+    } finally {
+      setPageLoading(false);
+      setAnomalyLoading(false);
+    }
   }, [user]);
+
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
   const alertMatrix = useMemo(() => {
     const rs = riskScore ?? 0;
