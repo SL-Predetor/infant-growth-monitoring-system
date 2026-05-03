@@ -29,6 +29,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Svg, { Polyline, Polygon, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import {
   TrendingUp, CheckCircle2, Clock, Heart,
   ChevronRight, Plus,
@@ -38,7 +39,7 @@ import { supabase } from '@/lib/supabase';
 import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
 
 const C = Colors.light;
-const API_URL = 'http://localhost:8000/api';
+const API_URL = `${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api`;
 
 /* ─────────────────────────────────────────────────────────── helpers */
 
@@ -107,54 +108,161 @@ function getHealthStatus(waz: number | null) {
   };
 }
 
-/* ── Mini weight trend chart ── */
+/* ── Mini weight trend sparkline ── */
 function MiniWeightChart({ data, color }: { data: { weight_g: number }[]; color: string }) {
   const [w, setW] = useState(0);
   if (data.length < 2) return null;
+
+  const H       = 92;
+  const padL    = 12;
+  const padR    = 18;    // a touch more on the right so the latest dot doesn't kiss the edge
+  const padTop  = 30;    // generous room for the value pill above the line
+  const padBot  = 18;    // room for the min-axis label
+
   const vals  = data.map(d => d.weight_g);
   const minV  = Math.min(...vals);
-  const range = (Math.max(...vals) - minV) || 1;
-  const H     = 40;
-  const pts   = data.map((d, i) => ({
-    x: (i / (data.length - 1)) * 100,
-    y: H - ((d.weight_g - minV) / range) * H,
+  const maxV  = Math.max(...vals);
+  const range = (maxV - minV) || 1;
+
+  const innerH  = H - padTop - padBot;
+  const usableW = Math.max(w - padL - padR, 1);
+
+  const pts = data.map((d, i) => ({
+    x: padL + (i / (data.length - 1)) * usableW,
+    y: padTop + (1 - (d.weight_g - minV) / range) * innerH,
   }));
 
+  const linePoints = pts.map(p => `${p.x},${p.y}`).join(' ');
+  const areaPoints =
+    `${pts[0].x},${H - padBot} ` +
+    pts.map(p => `${p.x},${p.y}`).join(' ') +
+    ` ${pts[pts.length - 1].x},${H - padBot}`;
+
+  const last     = pts[pts.length - 1];
+  const latestKg = (data[data.length - 1].weight_g / 1000).toFixed(2);
+  const minKg    = (minV / 1000).toFixed(1);
+
+  // Pill sits ABOVE the dot with a clear gap. Width is intrinsic so the text never clips.
+  const PILL_GAP = 14;
+  const pillTop  = Math.max(0, last.y - PILL_GAP - 18);
+
   return (
-    <View style={{ height: H + 8, flex: 1 }} onLayout={e => setW(e.nativeEvent.layout.width)}>
-      {w > 0 && pts.map((p1, i) => {
-        if (i === pts.length - 1) return null;
-        const p2  = pts[i + 1];
-        const x1  = (p1.x / 100) * w, y1 = p1.y + 4;
-        const x2  = (p2.x / 100) * w, y2 = p2.y + 4;
-        const dx  = x2 - x1, dy = y2 - y1;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        const ang = Math.atan2(dy, dx) * (180 / Math.PI);
-        return (
-          <View key={i} style={{
-            position: 'absolute',
-            left: (x1 + x2) / 2 - len / 2, top: (y1 + y2) / 2 - 1.5,
-            width: len, height: 3, backgroundColor: color,
-            opacity: 0.65, borderRadius: 2,
-            transform: [{ rotate: `${ang}deg` }],
-          }} />
-        );
-      })}
-      {/* Latest point dot */}
-      {pts.length > 0 && (() => {
-        const last = pts[pts.length - 1];
-        return (
-          <View style={{
-            position: 'absolute',
-            left: (last.x / 100) * w - 5, top: last.y + 4 - 5,
-            width: 10, height: 10, borderRadius: 5,
-            backgroundColor: color, borderWidth: 2, borderColor: '#FFF',
-          }} />
-        );
-      })()}
+    <View
+      style={{ height: H, width: '100%' }}
+      onLayout={e => setW(e.nativeEvent.layout.width)}
+    >
+      {w > 0 && (
+        <>
+          <Svg width={w} height={H}>
+            <Defs>
+              <LinearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={color} stopOpacity="0.28" />
+                <Stop offset="1" stopColor={color} stopOpacity="0" />
+              </LinearGradient>
+            </Defs>
+
+            {/* Baseline */}
+            <Polyline
+              points={`${padL},${H - padBot} ${w - padR},${H - padBot}`}
+              stroke={C.border}
+              strokeWidth="1"
+              strokeDasharray="3,4"
+            />
+
+            {/* Area fill */}
+            <Polygon points={areaPoints} fill="url(#areaGrad)" />
+
+            {/* Trend line */}
+            <Polyline
+              points={linePoints}
+              fill="none"
+              stroke={color}
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* Earlier dots */}
+            {pts.slice(0, -1).map((p, i) => (
+              <Circle key={i} cx={p.x} cy={p.y} r="2.5" fill={color} opacity={0.55} />
+            ))}
+
+            {/* Latest dot — solid, no white center to avoid clashing with the pill */}
+            <Circle cx={last.x} cy={last.y} r="6" fill="#FFF" />
+            <Circle cx={last.x} cy={last.y} r="4" fill={color} />
+          </Svg>
+
+          {/* Floating "latest weight" pill above the last dot — auto-width, centered, clamped */}
+          <View
+            style={[
+              chartS.pill,
+              {
+                top: pillTop,
+                left: 0,
+                right: 0,
+                alignItems: 'flex-start',
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <View
+              style={[
+                chartS.pillBubble,
+                {
+                  backgroundColor: color,
+                  // center horizontally on the dot, then clamp to chart bounds
+                  marginLeft: clampPillLeft(last.x, w, padL, padR),
+                },
+              ]}
+            >
+              <Text style={chartS.pillText}>{latestKg} kg</Text>
+            </View>
+          </View>
+
+          {/* Min-axis label only — max is already shown in the pill */}
+          <Text style={[chartS.axisLabel, { bottom: 0, left: padL }]}>{minKg} kg</Text>
+        </>
+      )}
     </View>
   );
 }
+
+/** Center a ~52px pill on x but clamp inside [padL, w - padR]. */
+function clampPillLeft(centerX: number, w: number, padL: number, padR: number): number {
+  const PILL_W_APPROX = 52;
+  const half = PILL_W_APPROX / 2;
+  const lo   = padL;
+  const hi   = w - padR - PILL_W_APPROX;
+  return Math.max(lo, Math.min(centerX - half, hi));
+}
+
+const chartS = StyleSheet.create({
+  pill: {
+    position: 'absolute',
+  },
+  pillBubble: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  pillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+    letterSpacing: 0.2,
+  },
+  axisLabel: {
+    position: 'absolute',
+    fontSize: 10,
+    color: C.labelTertiary,
+    fontWeight: '600',
+  },
+});
 
 /* ─────────────────────────────────────────────────────── main screen */
 
@@ -415,8 +523,11 @@ export default function DashboardScreen() {
 
             {/* 7-day weight trend */}
             {chartData.length >= 2 && (
-              <View style={{ marginBottom: Spacing.md }}>
-                <Text style={st.chartLabel}>Weight this week →</Text>
+              <View style={st.chartWrap}>
+                <View style={st.chartHeader}>
+                  <Text style={st.chartLabel}>Weight trend</Text>
+                  <Text style={st.chartRange}>Last {chartData.length} readings</Text>
+                </View>
                 <MiniWeightChart data={chartData} color={health.color} />
               </View>
             )}
@@ -655,7 +766,22 @@ const st = StyleSheet.create({
   metricDivider:{ width: 1, backgroundColor: C.border, marginVertical: 4 },
 
   /* Chart */
-  chartLabel: { fontSize: 11, color: C.labelTertiary, fontWeight: '600', marginBottom: 6, letterSpacing: 0.2 },
+  chartWrap: {
+    marginBottom: Spacing.md,
+    backgroundColor: C.cardSecondary,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  chartLabel: { fontSize: 11, color: C.labelSecondary, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  chartRange: { fontSize: 10, color: C.labelTertiary, fontWeight: '500' },
 
   /* Prediction */
   predRow: {

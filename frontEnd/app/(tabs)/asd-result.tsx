@@ -1,32 +1,31 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
+  Pressable,
   ScrollView,
-  Platform,
   StatusBar,
+  BackHandler,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import {
+  ChevronLeft,
+  ShieldCheck,
+  AlertTriangle,
+  Stethoscope,
+  Hospital,
+} from 'lucide-react-native';
+import { Colors, Spacing, Radius, Shadows, Typography } from '@/constants/theme';
 
-const RISK_COLOR_MAP: Record<string, string> = {
-  green:  '#34C759',
-  orange: '#FF9500',
-  red:    '#FF3B30',
-};
+const C = Colors.light;
 
-const RISK_BG_MAP: Record<string, string> = {
-  green:  '#F0FFF4',
-  orange: '#FFF9F0',
-  red:    '#FFF1F0',
-};
-
-const RISK_BORDER_MAP: Record<string, string> = {
-  green:  '#C3F0C8',
-  orange: '#FFE0B2',
-  red:    '#FFD6D3',
+/* Map backend risk_color → theme semantic palette */
+const RISK_PALETTE: Record<string, { fg: string; soft: string; border: string }> = {
+  green:  { fg: C.success, soft: C.successSoft, border: 'rgba(130,167,136,0.35)' },
+  orange: { fg: C.warning, soft: C.warningSoft, border: 'rgba(230,168,85,0.35)' },
+  red:    { fg: C.danger,  soft: C.dangerSoft,  border: 'rgba(214,118,118,0.35)' },
 };
 
 export default function ASDResultScreen() {
@@ -43,84 +42,103 @@ export default function ASDResultScreen() {
     facial_label:   string;
   }>();
 
-  const pFacial       = parseFloat(params.p_facial   ?? '0');
-  const pQchat        = parseFloat(params.p_qchat    ?? '0');
-  const qchatScore    = parseInt(params.qchat_score  ?? '0', 10);
-  const fusedProb     = parseFloat(params.fused_prob ?? '0');
-  const riskLevel     = params.risk_level     ?? 'Low';
-  const riskColorKey  = params.risk_color     ?? 'green';
+  const pFacial        = parseFloat(params.p_facial   ?? '0');
+  const pQchat         = parseFloat(params.p_qchat    ?? '0');
+  const qchatScore     = parseInt(params.qchat_score  ?? '0', 10);
+  const fusedProb      = parseFloat(params.fused_prob ?? '0');
+  const riskLevel      = params.risk_level     ?? 'Low';
+  const riskColorKey   = params.risk_color     ?? 'green';
   const recommendation = params.recommendation ?? '';
-  const qchatLabel    = params.qchat_label    ?? 'Low ASD Risk';
-  const facialLabel   = params.facial_label   ?? 'Low ASD Risk';
+  const qchatLabel     = params.qchat_label    ?? 'Low ASD Risk';
+  const facialLabel    = params.facial_label   ?? 'Low ASD Risk';
 
-  const accent     = RISK_COLOR_MAP[riskColorKey]  ?? '#34C759';
-  const bannerBg   = RISK_BG_MAP[riskColorKey]     ?? '#F0FFF4';
-  const bannerBorder = RISK_BORDER_MAP[riskColorKey] ?? '#C3F0C8';
-
+  const palette    = RISK_PALETTE[riskColorKey] ?? RISK_PALETTE.green;
   const isHighRisk = riskLevel === 'High';
   const isMod      = riskLevel === 'Moderate';
-  const riskEmoji  = isHighRisk ? '⚠️' : isMod ? '⚠️' : '✅';
+
+  const RiskIcon     = isHighRisk || isMod ? AlertTriangle : ShieldCheck;
+  const facialDanger = pFacial >= 0.06;
+  const qchatDanger  = pQchat  >= 0.35;
+
+  // Android hardware back → return to ASD home, not the previous tab.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        router.replace('/(tabs)/asd-screen' as any);
+        return true;
+      });
+      return () => sub.remove();
+    }, [router])
+  );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor={C.background} />
+
+      {/* Header */}
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={() => router.replace('/(tabs)/asd-screen' as any)}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ChevronLeft size={24} color={C.label} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Screening Result</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>AI Screening Result</Text>
-          <View style={{ width: 60 }} />
-        </View>
-
-        {/* Risk banner */}
-        <View style={[styles.riskBanner, { backgroundColor: bannerBg, borderColor: bannerBorder }]}>
-          <View>
-            <Text style={[styles.riskLevel, { color: accent }]}>{riskLevel} Risk</Text>
+        {/* Risk banner — hero */}
+        <View style={[styles.riskBanner, { backgroundColor: palette.soft, borderColor: palette.border }]}>
+          <View style={styles.riskBannerLeft}>
+            <Text style={[styles.riskLevel, { color: palette.fg }]}>
+              {riskLevel} Risk
+            </Text>
             <Text style={styles.riskSub}>Multi-signal ASD assessment</Text>
           </View>
-          <Text style={styles.riskEmoji}>{riskEmoji}</Text>
+          <View style={[styles.riskIconWrap, { backgroundColor: palette.fg }]}>
+            <RiskIcon size={26} color="#FFFFFF" strokeWidth={2.2} />
+          </View>
         </View>
 
-        {/* Fused score — main result */}
+        {/* Fused — main score */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>FUSED AI SCORE</Text>
-          <Text style={[styles.fusedValue, { color: accent }]}>
+          <Text style={styles.cardLabel}>Fused AI Score</Text>
+          <Text style={[styles.fusedValue, { color: palette.fg }]}>
             {(fusedProb * 100).toFixed(1)}%
           </Text>
           <Text style={styles.fusedNote}>
-            Weighted: 15% facial · 85% questionnaire
+            Weighted blend · 15% facial · 85% questionnaire
           </Text>
         </View>
 
         {/* Two sub-scores */}
         <View style={styles.rowCards}>
-          {/* Facial */}
-          <View style={[styles.subCard, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.cardLabel}>FACIAL AI</Text>
-            <Text style={[styles.subValue, { color: pFacial >= 0.06 ? '#FF3B30' : '#34C759' }]}>
+          <View style={[styles.subCard, { marginRight: Spacing.sm }]}>
+            <Text style={styles.cardLabel}>Facial AI</Text>
+            <Text style={[styles.subValue, { color: facialDanger ? C.danger : C.success }]}>
               {(pFacial * 100).toFixed(1)}%
             </Text>
             <Text style={styles.subLabel}>{facialLabel}</Text>
           </View>
 
-          {/* Q-CHAT */}
-          <View style={[styles.subCard, { flex: 1, marginLeft: 8 }]}>
+          <View style={[styles.subCard, { marginLeft: Spacing.sm }]}>
             <Text style={styles.cardLabel}>Q-CHAT-10</Text>
-            <Text style={[styles.subValue, { color: pQchat >= 0.35 ? '#FF3B30' : '#34C759' }]}>
+            <Text style={[styles.subValue, { color: qchatDanger ? C.danger : C.success }]}>
               {(pQchat * 100).toFixed(1)}%
             </Text>
             <Text style={styles.subLabel}>{qchatLabel}</Text>
           </View>
         </View>
 
-        {/* Q-CHAT score boxes */}
+        {/* Q-CHAT score breakdown */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Q-CHAT-10 SCORE</Text>
+          <Text style={styles.cardLabel}>Q-CHAT-10 Score</Text>
+
           <View style={styles.scoreBoxRow}>
             {Array.from({ length: 10 }, (_, i) => {
               const filled = i < qchatScore;
@@ -130,38 +148,52 @@ export default function ASDResultScreen() {
                   key={i}
                   style={[
                     styles.scoreBox,
-                    filled && danger  && styles.scoreBoxDanger,
-                    filled && !danger && styles.scoreBoxSafe,
-                    !filled           && styles.scoreBoxEmpty,
+                    !filled           && { backgroundColor: C.cardTertiary },
+                    filled && danger  && { backgroundColor: C.danger },
+                    filled && !danger && { backgroundColor: C.success },
                   ]}
                 />
               );
             })}
           </View>
+
           <View style={styles.scoreNumRow}>
-            <Text style={[styles.scoreNum, { color: qchatScore >= 3 ? '#FF3B30' : '#34C759' }]}>
+            <Text style={[styles.scoreNum, { color: qchatScore >= 3 ? C.danger : C.success }]}>
               {qchatScore}
             </Text>
             <Text style={styles.scoreMax}> / 10</Text>
           </View>
+
           <Text style={styles.scoreNote}>
-            Scores of <Text style={{ fontWeight: '700' }}>3 or above</Text> indicate possible ASD indicators
+            Scores of <Text style={{ fontWeight: '700', color: C.label }}>3 or above</Text> indicate possible ASD indicators
           </Text>
         </View>
 
         {/* Recommendation */}
-        <View style={[styles.recCard, { backgroundColor: bannerBg, borderColor: bannerBorder }]}>
-          <Text style={styles.recTitle}>
-            {isHighRisk ? '🏥  Consult a Specialist' : isMod ? '👨‍⚕️  Discuss with Pediatrician' : '✅  No Significant Indicators'}
-          </Text>
+        <View style={[styles.recCard, { backgroundColor: palette.soft, borderColor: palette.border }]}>
+          <View style={styles.recTitleRow}>
+            <View style={[styles.recIconWrap, { backgroundColor: palette.fg }]}>
+              {isHighRisk ? (
+                <Hospital size={18} color="#FFFFFF" strokeWidth={2.2} />
+              ) : isMod ? (
+                <Stethoscope size={18} color="#FFFFFF" strokeWidth={2.2} />
+              ) : (
+                <ShieldCheck size={18} color="#FFFFFF" strokeWidth={2.2} />
+              )}
+            </View>
+            <Text style={styles.recTitle}>
+              {isHighRisk ? 'Consult a Specialist' : isMod ? 'Discuss with Pediatrician' : 'No Significant Indicators'}
+            </Text>
+          </View>
+
           {recommendation ? (
             <Text style={styles.recBody}>{recommendation}</Text>
           ) : isHighRisk ? (
             <Text style={styles.recBody}>
               Your child's multi-signal assessment suggests indicators that warrant professional evaluation.{'\n\n'}
               Please schedule an appointment with a{' '}
-              <Text style={{ fontWeight: '700' }}>pediatric developmental specialist</Text> or{' '}
-              <Text style={{ fontWeight: '700' }}>child psychiatrist</Text>.
+              <Text style={styles.recEmphasis}>pediatric developmental specialist</Text> or{' '}
+              <Text style={styles.recEmphasis}>child psychiatrist</Text>.
             </Text>
           ) : isMod ? (
             <Text style={styles.recBody}>
@@ -176,11 +208,16 @@ export default function ASDResultScreen() {
           {isHighRisk && (
             <View style={styles.recSteps}>
               {[
-                '1. Contact your child\'s pediatrician',
-                '2. Request a developmental assessment referral',
-                '3. Early intervention is highly effective — act promptly',
+                "Contact your child's pediatrician",
+                'Request a developmental assessment referral',
+                'Early intervention is highly effective — act promptly',
               ].map((step, i) => (
-                <Text key={i} style={styles.recStep}>{step}</Text>
+                <View key={i} style={styles.recStepRow}>
+                  <View style={[styles.recStepDot, { backgroundColor: palette.fg }]}>
+                    <Text style={styles.recStepNum}>{i + 1}</Text>
+                  </View>
+                  <Text style={styles.recStep}>{step}</Text>
+                </View>
               ))}
             </View>
           )}
@@ -190,111 +227,242 @@ export default function ASDResultScreen() {
           </Text>
         </View>
 
-        {/* Actions */}
-        <TouchableOpacity
-          style={styles.doneBtn}
+        {/* Done */}
+        <Pressable
+          style={({ pressed }) => [styles.doneBtn, pressed && { opacity: 0.85 }]}
           onPress={() => router.replace('/(tabs)/asd-screen' as any)}
         >
           <Text style={styles.doneBtnText}>Done</Text>
-        </TouchableOpacity>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+/* ─────────────────────────── styles ─────────────────────────── */
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F2F2F7' },
+  safe: { flex: 1, backgroundColor: C.background },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 20 : 10,
-    paddingBottom: 40,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing.xxxl,
   },
 
+  /* Header */
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.lg,
   },
-  backText:    { fontSize: 16, color: '#007AFF', fontWeight: '500' },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: '#000' },
+  backBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    ...Typography.headline,
+    color: C.label,
+  },
 
+  /* Risk banner */
   riskBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 18,
-    marginBottom: 16,
+    borderRadius: Radius.xxl,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    marginBottom: Spacing.cardGap,
   },
-  riskLevel: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
-  riskSub:   { fontSize: 13, color: '#6E6E73', marginTop: 2 },
-  riskEmoji: { fontSize: 32 },
+  riskBannerLeft: { flex: 1 },
+  riskLevel: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+  },
+  riskSub: {
+    ...Typography.footnote,
+    color: C.labelTertiary,
+    marginTop: 2,
+  },
+  riskIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
+  /* Cards */
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: C.card,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.cardGap,
+    ...Shadows.sm,
   },
   cardLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#8E8E93',
+    color: C.labelTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 10,
+    marginBottom: Spacing.md,
   },
-  fusedValue: { fontSize: 52, fontWeight: '700', letterSpacing: -1.5, marginBottom: 4 },
-  fusedNote:  { fontSize: 13, color: '#8E8E93' },
+  fusedValue: {
+    fontSize: 56,
+    fontWeight: '800',
+    letterSpacing: -1.8,
+    marginBottom: 4,
+  },
+  fusedNote: {
+    ...Typography.footnote,
+    color: C.labelTertiary,
+  },
 
-  rowCards: { flexDirection: 'row', marginBottom: 14 },
+  /* Sub-score row */
+  rowCards: {
+    flexDirection: 'row',
+    marginBottom: Spacing.cardGap,
+  },
   subCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    flex: 1,
+    backgroundColor: C.card,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    ...Shadows.sm,
   },
-  subValue: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginBottom: 4 },
-  subLabel: { fontSize: 12, color: '#6E6E73' },
+  subValue: {
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: -0.6,
+    marginBottom: 4,
+  },
+  subLabel: {
+    ...Typography.caption,
+    color: C.labelTertiary,
+  },
 
-  scoreBoxRow:  { flexDirection: 'row', gap: 5, marginBottom: 14 },
-  scoreBox:     { flex: 1, height: 10, borderRadius: 5 },
-  scoreBoxDanger: { backgroundColor: '#FF3B30' },
-  scoreBoxSafe:   { backgroundColor: '#34C759' },
-  scoreBoxEmpty:  { backgroundColor: '#E5E5EA' },
-  scoreNumRow:  { flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 },
-  scoreNum:     { fontSize: 42, fontWeight: '700', letterSpacing: -1 },
-  scoreMax:     { fontSize: 20, color: '#8E8E93' },
-  scoreNote:    { fontSize: 13, color: '#6E6E73', lineHeight: 18 },
+  /* Q-CHAT score */
+  scoreBoxRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: Spacing.lg,
+  },
+  scoreBox: {
+    flex: 1,
+    height: 10,
+    borderRadius: 5,
+  },
+  scoreNumRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: Spacing.sm,
+  },
+  scoreNum: {
+    fontSize: 44,
+    fontWeight: '700',
+    letterSpacing: -1,
+  },
+  scoreMax: {
+    fontSize: 20,
+    color: C.labelTertiary,
+    marginLeft: 2,
+  },
+  scoreNote: {
+    ...Typography.footnote,
+    color: C.labelTertiary,
+    lineHeight: 18,
+  },
 
+  /* Recommendation */
   recCard: {
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xxl,
   },
-  recTitle: { fontSize: 18, fontWeight: '700', color: '#000', marginBottom: 12 },
-  recBody:  { fontSize: 15, color: '#3A3A3C', lineHeight: 24, marginBottom: 16 },
-  recSteps: { marginBottom: 14 },
-  recStep:  { fontSize: 14, color: '#3A3A3C', lineHeight: 24 },
-  disclaimer: { fontSize: 12, color: '#8E8E93', lineHeight: 18, fontStyle: 'italic' },
-
-  doneBtn: {
-    backgroundColor: '#000',
-    borderRadius: 14,
-    paddingVertical: 16,
+  recTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: Spacing.md,
   },
-  doneBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  recIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  recTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: C.label,
+    flex: 1,
+  },
+  recBody: {
+    fontSize: 15,
+    color: C.label,
+    lineHeight: 23,
+    marginBottom: Spacing.lg,
+  },
+  recEmphasis: {
+    fontWeight: '700',
+    color: C.label,
+  },
+  recSteps: {
+    marginBottom: Spacing.lg,
+    gap: Spacing.md,
+  },
+  recStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  recStepDot: {
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+    marginTop: 1,
+  },
+  recStepNum: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  recStep: {
+    flex: 1,
+    fontSize: 14,
+    color: C.label,
+    lineHeight: 22,
+  },
+  disclaimer: {
+    fontSize: 12,
+    color: C.labelTertiary,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+
+  /* Done button */
+  doneBtn: {
+    backgroundColor: C.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.lg,
+    alignItems: 'center',
+    ...Shadows.sm,
+  },
+  doneBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.1,
+  },
 });

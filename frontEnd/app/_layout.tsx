@@ -10,6 +10,8 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { AsdInferenceProvider } from '@/lib/asd-inference-context';
+import AsdInferenceModal from '@/components/AsdInferenceModal';
 import { supabase } from '@/lib/supabase';
 
 let _refreshHasInfants: (() => void) | null = null;
@@ -78,7 +80,13 @@ function RootLayoutNav() {
     }
   }, [session, isLoading, segments, hasInfants]);
 
-  if (isLoading) {
+  // Stay on the loader until the routing decision is fully resolved.
+  // If a session was restored from cache, we also need hasInfants before we
+  // can decide between (tabs) and (auth)/add-infant — rendering the auth
+  // stack in the meantime briefly flashes sign-in for already-signed-in
+  // users, which made it look like "tapping the screen logs you in".
+  const decisionPending = isLoading || (!!session && hasInfants === null);
+  if (decisionPending) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#6C63FF" />
@@ -99,6 +107,8 @@ function RootLayoutNav() {
         <Stack.Screen name="asd-result" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
+      {/* Global ASD inference popup — sibling of <Stack> so it overlays the tab bar */}
+      <AsdInferenceModal />
       <StatusBar style="auto" />
     </ThemeProvider>
   );
@@ -133,7 +143,9 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <AsdInferenceProvider>
+        <RootLayoutNav />
+      </AsdInferenceProvider>
     </AuthProvider>
   );
 }

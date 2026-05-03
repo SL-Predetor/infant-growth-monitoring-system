@@ -116,6 +116,8 @@ export default function TabLayout() {
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600', letterSpacing: 0.1, marginTop: 2 },
         headerShown: false,
         tabBarButton: AnimatedTabButton,
+        // Reset every tab screen when blurred — fresh scroll/state on return.
+        unmountOnBlur: true,
       }}
     >
       {/* 1 — Cry Translator */}
@@ -162,6 +164,14 @@ export default function TabLayout() {
             <Brain size={focused ? 23 : 21} color={color} strokeWidth={focused ? 2.2 : 1.8} />
           ),
         }}
+        listeners={({ navigation }) => ({
+          // Always send the user to asd-screen when the ASD tab is tapped,
+          // even if they were last on asd-research / asd-qchat / a result page.
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('asd-screen' as never);
+          },
+        })}
       />
 
       {/* 5 — Mom's Recovery */}
@@ -182,7 +192,9 @@ export default function TabLayout() {
       {/* Hidden — ASD flow */}
       <Tabs.Screen name="asd-qchat"        options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="asd-qchat-result" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="asd-research"     options={{ href: null, headerShown: false }} />
+      {/* asd-research is the in-flight video-screening flow — keep mounted
+          so the video / answers aren't lost while inference is running. */}
+      <Tabs.Screen name="asd-research"     options={{ href: null, headerShown: false, unmountOnBlur: false }} />
       <Tabs.Screen name="asd-result"       options={{ href: null, headerShown: false }} />
 
       {/* Hidden */}

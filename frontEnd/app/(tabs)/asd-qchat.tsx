@@ -1,9 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, ScrollView, Platform, StatusBar,
+  SafeAreaView, ScrollView, Platform, StatusBar, BackHandler,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Radius, Spacing, Shadows } from '@/constants/theme';
 
 const C = Colors.light;
@@ -44,6 +44,17 @@ export default function ASDQChatScreen() {
 
   const answered = Object.values(answers).filter(v => v !== null && v !== undefined).length;
   const allDone  = answered >= TOTAL;
+
+  // Android hardware back → return to ASD home, not to whatever tab was last active.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        router.replace('/(tabs)/asd-screen' as any);
+        return true;
+      });
+      return () => sub.remove();
+    }, [router])
+  );
 
   const setAnswer = (id: string, score: number) => {
     setAnswers(prev => ({ ...prev, [id]: score }));

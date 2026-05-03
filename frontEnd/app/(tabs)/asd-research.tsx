@@ -7,18 +7,18 @@
  *   'processing' → loading while inference runs
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, Animated, ScrollView,
-  Platform, StatusBar, Alert,
+  SafeAreaView, ScrollView,
+  Platform, StatusBar, Alert, BackHandler,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors, Radius, Spacing, Shadows } from '@/constants/theme';
+import { useAsdInference } from '@/lib/asd-inference-context';
 
 const C = Colors.light;
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 // Same 5-option frequency questions as Q-CHAT-10
 // Scoring: Q1–Q9 optIdx >= 2 → atypical (1).  Q10 reversed: optIdx <= 2 → atypical (1).
@@ -47,56 +47,33 @@ const DEMOGRAPHICS = [
 
 const TOTAL = QUESTIONS.length + DEMOGRAPHICS.length;
 
-type View = 'intro' | 'video' | 'questions' | 'processing';
-
-/* ── Animated loading dots ── */
-function LoadingDots() {
-  const dots = [
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-  ];
-  useEffect(() => {
-    const anims = dots.map((dot, i) =>
-      Animated.loop(Animated.sequence([
-        Animated.delay(i * 160),
-        Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
-        Animated.delay((dots.length - i) * 160),
-      ]))
-    );
-    Animated.parallel(anims).start();
-    return () => anims.forEach(a => a.stop());
-  }, []);
-  return (
-    <View style={dot.row}>
-      {dots.map((d, i) => (
-        <Animated.View key={i} style={[dot.dot, {
-          opacity: d,
-          transform: [{ scale: d.interpolate({ inputRange: [0,1], outputRange: [0.7, 1.3] }) }],
-        }]} />
-      ))}
-    </View>
-  );
-}
-const dot = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: C.primary },
-});
+type View = 'intro' | 'video' | 'questions';
 
 /* ── Main ── */
 export default function ASDResearchScreen() {
   const router = useRouter();
+  const { state: inferenceState, start: startInference } = useAsdInference();
 
   const [screen,    setScreen]    = useState<View>('intro');
   const [videoUri,  setVideoUri]  = useState<string | null>(null);
   const [answers,   setAnswers]   = useState<Record<string, number>>({});
   const [selections,setSelections]= useState<Record<string, number>>({}); // tracks option idx per question
-  const [status,    setStatus]    = useState('');
 
   const answered = Object.keys(selections).length;
   const allDone  = answered >= TOTAL;
+
+  // Android hardware back: step backwards through internal screens, then exit to ASD home.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (screen === 'questions') { setScreen('video'); return true; }
+        if (screen === 'video')     { setScreen('intro'); return true; }
+        router.replace('/(tabs)/asd-screen' as any);
+        return true;
+      });
+      return () => sub.remove();
+    }, [screen, router])
+  );
 
   const setAnswer = (id: string, score: number, btnIdx: number) => {
     setAnswers(prev => ({ ...prev, [id]: score }));
@@ -121,104 +98,10 @@ export default function ASDResearchScreen() {
     }
   };
 
-  /* ── Run all three endpoints ── */
+  /* ── Kick off background inference via global context ── */
   const runInference = async () => {
-    if (!allDone) return;
-    setScreen('processing');
-    try {
-      setStatus('Analysing facial features…');
-      let p_facial = 0;
-      let frame_urls: string[] = [];
-      
-      // Analyze facial features from video using predict-video endpoint
-      if (videoUri) {
-        try {
-          setStatus('Analysing video for facial features…');
-
-          // On web, we need to fetch and convert to blob. On native, FormData handles URIs.
-          let fileData: any;
-          if (Platform.OS === 'web') {
-            const response = await fetch(videoUri);
-            const blob = await response.blob();
-            fileData = blob;
-          } else {
-            fileData = {
-              uri: videoUri,
-              type: 'video/mp4',
-              name: 'asd_video.mp4',
-            };
-          }
-
-          const form = new FormData();
-          form.append('file', fileData, Platform.OS === 'web' ? 'asd_video.mp4' : undefined);
-
-          // Use predict-video endpoint (handles videos) for facial ASD probability
-          const vRes = await fetch(`${API_BASE}/api/asd/predict-video`, { method: 'POST', body: form });
-          console.log('Video response status:', vRes.status);
-          const vData = await vRes.json();
-          console.log('Video response body:', vData);
-
-          if (!vRes.ok) {
-            const errorDetail = Array.isArray(vData.detail)
-              ? vData.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join('; ')
-              : vData.detail;
-            throw new Error(`Video analysis failed (${vRes.status}): ${errorDetail}`);
-          }
-
-          p_facial = vData.asd_probability ?? 0;  // ← Real ASD probability from video!
-          frame_urls = vData.frame_urls ?? [];
-
-          console.log('✅ Facial analysis complete:', vData);
-        } catch (videoError) {
-          console.warn('⚠️ Video analysis failed, using fallback:', videoError);
-          p_facial = 0;
-          frame_urls = [];
-        }
-      } else {
-        console.warn('⚠️ No video recorded - facial prediction will be 0');
-      }
-
-      setStatus('Analysing questionnaire responses…');
-      const payload = {
-        A1: answers['A1'] ?? 0, A2: answers['A2'] ?? 0, A3: answers['A3'] ?? 0,
-        A4: answers['A4'] ?? 0, A5: answers['A5'] ?? 0, A6: answers['A6'] ?? 0,
-        A7: answers['A7'] ?? 0, A8: answers['A8'] ?? 0, A9: answers['A9'] ?? 0,
-        A10: answers['A10'] ?? 0,
-        Sex_M:                   answers['Sex_M']                   ?? 0,
-        Family_mem_with_ASD_Yes: answers['Family_mem_with_ASD_Yes'] ?? 0,
-      };
-      const qRes  = await fetch(`${API_BASE}/api/asd/predict-qchat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
-      const qData    = await qRes.json();
-      const p_qchat  = qData.asd_probability ?? 0;
-      const qchat_score = qData.qchat_score ?? 0;
-
-      setStatus('Computing fused prediction…');
-      const fRes  = await fetch(`${API_BASE}/api/asd/predict-fused`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_facial, p_qchat, qchat_score, qchat_answers: payload, frame_urls }),
-      });
-      const fData = await fRes.json();
-
-      router.replace({
-        pathname: '/(tabs)/asd-result' as any,
-        params: {
-          p_facial:       String(p_facial),
-          p_qchat:        String(p_qchat),
-          qchat_score:    String(qchat_score),
-          fused_prob:     String(fData.fused_probability ?? 0),
-          risk_level:     fData.risk_level     ?? 'Low',
-          risk_color:     fData.risk_color      ?? 'green',
-          recommendation: fData.recommendation ?? '',
-          qchat_label:    qData.label           ?? 'Low ASD Risk',
-          facial_label:   p_facial >= 0.06 ? 'ASD Risk Detected' : 'Low ASD Risk',
-        },
-      });
-    } catch (e) {
-      Alert.alert('Error', 'Could not connect to the server. Please check your connection and try again.');
-      setScreen('questions');
-    }
+    if (!allDone || inferenceState === 'running') return;
+    await startInference({ videoUri, answers });
   };
 
   /* ══════════════════════════════════════════════════════
@@ -273,21 +156,7 @@ export default function ASDResearchScreen() {
     );
   }
 
-  /* ══════════════════════════════════════════════════════
-     PROCESSING
-  ══════════════════════════════════════════════════════ */
-  if (screen === 'processing') {
-    return (
-      <SafeAreaView style={[s.safe, { backgroundColor: C.card }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={C.card} />
-        <View style={s.processingWrap}>
-          <LoadingDots />
-          <Text style={s.processingTitle}>Analysing…</Text>
-          <Text style={s.processingStatus}>{status}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  /* Inference modal is mounted globally in app/_layout.tsx */
 
   /* ══════════════════════════════════════════════════════
      VIDEO
@@ -436,7 +305,11 @@ export default function ASDResearchScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.background },
+  safe: {
+    flex: 1,
+    backgroundColor: C.background,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
 
   /* ── Intro ── */
   introWrap: {
@@ -469,10 +342,6 @@ const s = StyleSheet.create({
   stepLabel: { fontSize: 15, color: C.labelSecondary, flex: 1, lineHeight: 22 },
   introNote: { fontSize: 13, color: C.labelTertiary, lineHeight: 18 },
 
-  /* ── Processing ── */
-  processingWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  processingTitle:  { fontSize: 24, fontWeight: '700', color: C.label, marginTop: 24, letterSpacing: -0.3 },
-  processingStatus: { fontSize: 15, color: C.labelTertiary, marginTop: 10 },
 
   /* ── Shared nav ── */
   navRow: {
