@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   Pressable, ActivityIndicator, Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth-context';
@@ -36,7 +36,7 @@ export default function GrowthHistoryScreen() {
   const [error, setError]   = useState(false);
   const [filter, setFilter] = useState<'All' | 'Healthy' | 'Sick'>('All');
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     if (!user) return;
     setLoading(true); setError(false);
     try {
@@ -58,9 +58,9 @@ export default function GrowthHistoryScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  useEffect(() => { fetchHistory(); }, [user]);
+  useFocusEffect(useCallback(() => { fetchHistory(); }, [fetchHistory]));
 
   const filteredLogs = logs.filter(log => {
     if (filter === 'All')     return true;

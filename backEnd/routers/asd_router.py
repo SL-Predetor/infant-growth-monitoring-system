@@ -10,6 +10,9 @@ Endpoints (mounted under /asd by app.py):
   POST /asd/predict-video   — Infant face video → every 3rd frame (skip blurry/no-face) → soft-avg P(ASD)
   POST /asd/predict-qchat   — 12 Q-CHAT-10 features → XGBoost → P(ASD)
   POST /asd/predict-fused   — α-weighted late fusion (α=0.15 facial, 0.85 Q-CHAT) + save to Supabase
+  POST /asd/explain-qchat   — XAI: SHAP + counterfactuals + clinical text for Q-CHAT prediction
+  POST /asd/explain-fused   — XAI: modality attribution + agreement + clinical text for fused prediction
+  POST /asd/explain-face    — XAI: GradCAM heatmap + embedding-dim attribution for facial prediction
 
 VGG-Face preprocessing: resize 224x224, BGR (from OpenCV), subtract [93.5940, 104.7624, 129.1863]
 Label convention (both models): 1 = ASD, 0 = Non-ASD
@@ -31,6 +34,14 @@ import hashlib
 import math
 from typing import Optional
 import mtcnn.mtcnn
+
+# XAI modules
+from xai.schemas import QChatExplainResponse, FusedExplainResponse, FaceExplainResponse
+from xai.qchat_shap import build_shap_explainer, explain_qchat_sample, compute_counterfactuals
+from xai.fusion_attribution import compute_fusion_attribution
+from xai.clinical_translator import shap_to_sentences, modality_to_sentences
+from xai.facial_probe import rank_embedding_dims
+from xai.figure_render import numpy_bgr_to_b64_png
 
 router = APIRouter()
 
@@ -102,6 +113,18 @@ except Exception as e:
     print(f"[ASD] WARNING: Failed to load Q-CHAT ML models. Q-CHAT endpoints will return 503. {e}")
 
 print(f"[ASD] Model loading steps complete. Q-CHAT features: {'Loaded' if feature_columns else 'Missing'}")
+
+# --- SHAP explainer (built once at startup, reused per request) ---
+# Uses zero-vector background (all-typical child) — see xai/qchat_shap.py for rationale.
+shap_explainer = None
+try:
+    if xgboost_model is not None and feature_columns is not None:
+        shap_explainer = build_shap_explainer(xgboost_model, feature_columns)
+        print("[ASD] SHAP explainer ready.")
+    else:
+        print("[ASD] WARNING: SHAP explainer skipped (Q-CHAT models not loaded).")
+except Exception as e:
+    print(f"[ASD] WARNING: SHAP explainer failed to initialize: {e}")
 
 # --- MTCNN face detector ---
 mtcnn_detector = mtcnn.mtcnn.MTCNN()
@@ -535,4 +558,239 @@ async def predict_asd_fused(data: FusionInput):
         raise HTTPException(
             status_code=500,
             detail={"error": "Internal server error", "detail": str(e), "endpoint": "/asd/predict-fused"},
+        )
+
+# ──────────────────────────────────────────────
+# 11.  ENDPOINT: XAI — Q-CHAT Explanation
+# ──────────────────────────────────────────────
+
+class QChatExplainInput(BaseModel):
+    A1:  int
+    A2:  int
+    A3:  int
+    A4:  int
+    A5:  int
+    A6:  int
+    A7:  int
+    A8:  int
+    A9:  int
+    A10: int
+    Sex_M:                   int
+    Family_mem_with_ASD_Yes: int
+
+    @validator("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10",
+               "Sex_M", "Family_mem_with_ASD_Yes", pre=True)
+    def must_be_binary(cls, v):
+        if v not in [0, 1]:
+            raise ValueError("All answers must be 0 or 1")
+        return v
+
+
+@router.post("/explain-qchat", response_model=QChatExplainResponse)
+async def explain_asd_qchat(data: QChatExplainInput):
+    """
+    Q-CHAT XAI endpoint.
+
+    Returns:
+      - SHAP values per feature (post label-flip: positive = toward ASD)
+      - One-flip counterfactuals for all 12 features
+      - Top driver (feature with largest |SHAP|)
+      - Plain-language clinical sentences
+      - SHAP base value (E[f(X)] = model's prior ASD probability)
+    """
+    if shap_explainer is None or xgboost_model is None or feature_columns is None:
+        raise HTTPException(status_code=503, detail="Q-CHAT XAI models are not loaded.")
+
+    sample = {
+        "A1": data.A1, "A2": data.A2, "A3": data.A3, "A4": data.A4,
+        "A5": data.A5, "A6": data.A6, "A7": data.A7, "A8": data.A8,
+        "A9": data.A9, "A10": data.A10,
+        "Sex_M": data.Sex_M,
+        "Family_mem_with_ASD_Yes": data.Family_mem_with_ASD_Yes,
+    }
+
+    try:
+        shap_contributions, base_value = explain_qchat_sample(
+            shap_explainer, xgboost_model, feature_columns, sample
+        )
+
+        row = {col: 0 for col in feature_columns}
+        row.update(sample)
+        df = pd.DataFrame([row])[feature_columns]
+        p_asd = float(xgboost_model.predict_proba(df)[0][1])
+
+        counterfactuals = compute_counterfactuals(xgboost_model, feature_columns, sample, p_asd)
+        top_driver = shap_contributions[0].feature if shap_contributions else "N/A"
+        plain_language = shap_to_sentences(shap_contributions, p_asd)
+
+        return QChatExplainResponse(
+            p_asd=round(p_asd, 4),
+            base_value=round(base_value, 4),
+            shap_contributions=shap_contributions,
+            counterfactuals=counterfactuals,
+            top_driver=top_driver,
+            plain_language=plain_language,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Internal server error", "detail": str(e), "endpoint": "/asd/explain-qchat"},
+        )
+
+
+# ──────────────────────────────────────────────
+# 12.  ENDPOINT: XAI — Fused Explanation
+# ──────────────────────────────────────────────
+
+class FusedExplainInput(BaseModel):
+    p_facial: float
+    p_qchat:  float
+    A1:  int
+    A2:  int
+    A3:  int
+    A4:  int
+    A5:  int
+    A6:  int
+    A7:  int
+    A8:  int
+    A9:  int
+    A10: int
+    Sex_M:                   int
+    Family_mem_with_ASD_Yes: int
+
+    @validator("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10",
+               "Sex_M", "Family_mem_with_ASD_Yes", pre=True)
+    def must_be_binary(cls, v):
+        if v not in [0, 1]:
+            raise ValueError("All Q-CHAT answers must be 0 or 1")
+        return v
+
+
+@router.post("/explain-fused", response_model=FusedExplainResponse)
+async def explain_asd_fused(data: FusedExplainInput):
+    """
+    Fused result XAI endpoint.
+
+    Returns per-modality attribution + agreement bucket + clinician flag,
+    plus Q-CHAT SHAP and combined plain-language sentences.
+    """
+    if shap_explainer is None or xgboost_model is None or feature_columns is None:
+        raise HTTPException(status_code=503, detail="Q-CHAT XAI models are not loaded.")
+
+    if not (0.0 <= data.p_facial <= 1.0):
+        raise HTTPException(status_code=400, detail="p_facial must be in [0, 1].")
+    if not (0.0 <= data.p_qchat <= 1.0):
+        raise HTTPException(status_code=400, detail="p_qchat must be in [0, 1].")
+
+    sample = {
+        "A1": data.A1, "A2": data.A2, "A3": data.A3, "A4": data.A4,
+        "A5": data.A5, "A6": data.A6, "A7": data.A7, "A8": data.A8,
+        "A9": data.A9, "A10": data.A10,
+        "Sex_M": data.Sex_M,
+        "Family_mem_with_ASD_Yes": data.Family_mem_with_ASD_Yes,
+    }
+
+    try:
+        modality = compute_fusion_attribution(data.p_facial, data.p_qchat)
+
+        shap_contributions, _ = explain_qchat_sample(
+            shap_explainer, xgboost_model, feature_columns, sample
+        )
+
+        top_driver = shap_contributions[0].feature if shap_contributions else "N/A"
+
+        plain_language = modality_to_sentences(modality) + shap_to_sentences(
+            shap_contributions, data.p_qchat, max_sentences=3
+        )
+
+        return FusedExplainResponse(
+            fused_probability=modality.p_fused,
+            modality=modality,
+            qchat_shap=shap_contributions,
+            top_driver=top_driver,
+            plain_language=plain_language,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Internal server error", "detail": str(e), "endpoint": "/asd/explain-fused"},
+        )
+
+
+# ──────────────────────────────────────────────
+# 13.  ENDPOINT: XAI — Face Explanation (GradCAM + embedding attribution)
+# ──────────────────────────────────────────────
+
+@router.post("/explain-face", response_model=FaceExplainResponse)
+async def explain_asd_face(file: UploadFile = File(...)):
+    """
+    Face XAI endpoint.
+
+    Pipeline:
+      1. Decode BGR, MTCNN crop
+      2. VGG-Face preprocess → 256-D embedding
+      3. LogReg probe → P(ASD)
+      4. GradCAM JET overlay (None if vgg_model unavailable)
+      5. Top-10 embedding dimensions by |value × coef|
+    """
+    if vgg_model is None or intermediate_model is None or logreg_model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Facial ML models are not loaded (missing fold_5_best.h5 or probe models).",
+        )
+
+    try:
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            raise HTTPException(status_code=400, detail="Could not decode image.")
+
+        crop_bgr = _detect_and_crop_face(img)
+        if crop_bgr is None:
+            raise HTTPException(status_code=400, detail="No face detected in the image.")
+
+        resized = cv2.resize(crop_bgr, (224, 224)).astype(np.float32)
+        resized[:, :, 0] -= 93.5940
+        resized[:, :, 1] -= 104.7624
+        resized[:, :, 2] -= 129.1863
+        batch = np.expand_dims(resized, axis=0)
+        embedding = intermediate_model.predict(batch, verbose=0)
+
+        scaled = logreg_scaler.transform(embedding)
+        p_asd = float(logreg_model.predict_proba(scaled)[0][1])
+
+        gradcam_b64 = None
+        try:
+            from xai.facial_gradcam import gradcam_overlay
+            crop_rgb = crop_bgr[..., ::-1]
+            overlay_bgr = gradcam_overlay(crop_rgb, vgg_model)
+            gradcam_b64 = numpy_bgr_to_b64_png(overlay_bgr)
+        except Exception as cam_err:
+            print(f"[ASD] GradCAM failed (non-fatal): {cam_err}")
+
+        top_dims = rank_embedding_dims(embedding, logreg_model, top_k=10)
+
+        risk_word = "elevated" if p_asd > FACIAL_THRESHOLD else "low"
+        plain_language = [
+            f"Facial analysis: P(ASD) = {p_asd:.0%}. "
+            f"Top embedding dimensions show {risk_word} ASD signal."
+        ]
+
+        return FaceExplainResponse(
+            p_asd=round(p_asd, 4),
+            gradcam_b64=gradcam_b64,
+            top_embedding_dims=top_dims,
+            plain_language=plain_language,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Internal server error", "detail": str(e), "endpoint": "/asd/explain-face"},
         )

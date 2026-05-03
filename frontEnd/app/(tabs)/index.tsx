@@ -21,13 +21,13 @@
  *   time of day     → greeting and nudge text
  *   data presence   → which sections appear
  */
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   Pressable, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import {
   TrendingUp, CheckCircle2, Clock, Heart,
@@ -170,44 +170,43 @@ export default function DashboardScreen() {
   const [prediction,      setPrediction]      = useState<any>(null);
   const [postpartumData,  setPostpartumData]  = useState<any>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!user) { setLoading(false); return; }
-      try {
-        /* Baby */
-        const { data: inf } = await supabase
-          .from('infants').select('*').eq('parent_id', user.id).maybeSingle();
-        if (inf) {
-          setInfant(inf as Infant);
-          try {
-            const res = await fetch(`${API_URL}/growth/dashboard/${inf.id}`);
-            if (res.ok) {
-              const d = await res.json();
-              setWazScore(d.current_waz ?? null);
-              setMeasurements(d.chart_data ?? []);
-              setPrediction(d.prediction ?? null);
-            }
-          } catch { /* backend offline */ }
-          const { data: log } = await supabase
-            .from('daily_logs').select('id')
-            .eq('infant_id', inf.id)
-            .eq('log_date', new Date().toISOString().split('T')[0])
-            .maybeSingle();
-          setHasLoggedToday(!!log);
-        }
-        /* Mom */
-        const { data: pp } = await supabase
-          .from('postpartum_logs')
-          .select('weeks_since_delivery, pain_score, sleep_hours, created_at')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1).maybeSingle();
-        if (pp) setPostpartumData(pp);
-      } catch (e) { console.log(e); }
-      finally { setLoading(false); }
-    };
-    load();
+  const load = useCallback(async () => {
+    if (!user) { setLoading(false); return; }
+    try {
+      /* Baby */
+      const { data: inf } = await supabase
+        .from('infants').select('*').eq('parent_id', user.id).maybeSingle();
+      if (inf) {
+        setInfant(inf as Infant);
+        try {
+          const res = await fetch(`${API_URL}/growth/dashboard/${inf.id}`);
+          if (res.ok) {
+            const d = await res.json();
+            setWazScore(d.current_waz ?? null);
+            setMeasurements(d.chart_data ?? []);
+            setPrediction(d.prediction ?? null);
+          }
+        } catch { /* backend offline */ }
+        const { data: log } = await supabase
+          .from('daily_logs').select('id')
+          .eq('infant_id', inf.id)
+          .eq('log_date', new Date().toISOString().split('T')[0])
+          .maybeSingle();
+        setHasLoggedToday(!!log);
+      }
+      /* Mom */
+      const { data: pp } = await supabase
+        .from('postpartum_checkins')
+        .select('weeks_since_delivery, pain_severity, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1).maybeSingle();
+      if (pp) setPostpartumData(pp);
+    } catch (e) { console.log(e); }
+    finally { setLoading(false); }
   }, [user]);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   /* Derived values */
   const firstName   = getFirstName(profile?.full_name, user?.email);
@@ -281,22 +280,13 @@ export default function DashboardScreen() {
               </View>
 
               <View style={st.metricsRow}>
-                {postpartumData.sleep_hours != null && (
+                {postpartumData.pain_severity != null && (
                   <View style={st.metric}>
-                    <Text style={st.metricValue}>{postpartumData.sleep_hours}h</Text>
-                    <Text style={st.metricLabel}>Last sleep</Text>
+                    <Text style={[st.metricValue, { color: postpartumData.pain_severity > 5 ? C.danger : C.success }]}>
+                      {postpartumData.pain_severity}/10
+                    </Text>
+                    <Text style={st.metricLabel}>Pain level</Text>
                   </View>
-                )}
-                {postpartumData.pain_score != null && (
-                  <>
-                    <View style={st.metricDivider} />
-                    <View style={st.metric}>
-                      <Text style={[st.metricValue, { color: postpartumData.pain_score > 5 ? C.danger : C.success }]}>
-                        {postpartumData.pain_score}/10
-                      </Text>
-                      <Text style={st.metricLabel}>Pain level</Text>
-                    </View>
-                  </>
                 )}
                 <View style={st.metricDivider} />
                 <View style={st.metric}>
@@ -496,8 +486,7 @@ export default function DashboardScreen() {
                 </Text>
                 <Text style={st.motherSub}>
                   {[
-                    postpartumData.sleep_hours   != null && `😴 ${postpartumData.sleep_hours}h sleep`,
-                    postpartumData.pain_score    != null && `Pain: ${postpartumData.pain_score}/10`,
+                    postpartumData.pain_severity != null && `Pain: ${postpartumData.pain_severity}/10`,
                   ].filter(Boolean).join('  ·  ')}
                 </Text>
               </View>
