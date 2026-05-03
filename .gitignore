@@ -84,8 +84,8 @@ temp_*
 # Python virtual environment
 venv/
 venv312/
-.env
-*.env
+# .env          <- TEMPORARILY ALLOWING .env FILES FOR allWorking BRANCH
+# *.env         <- TEMPORARILY ALLOWING .env FILES FOR allWorking BRANCH
 
 # Node
 node_modules/
