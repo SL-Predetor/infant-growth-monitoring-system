@@ -13,7 +13,7 @@ import { Colors, Spacing, Radius, Shadows } from '@/constants/theme';
 const C = Colors.light;
 
 const WELLNESS_TIPS = [
-  { icon: Sun,      text: 'Rest whenever your baby sleeps — sleep is recovery medicine' },
+  { icon: Sun,      text: 'Rest whenever your baby sleeps, sleep is recovery medicine' },
   { icon: Salad,    text: 'Eat nourishing meals: protein, iron, and plenty of fluids' },
   { icon: Activity, text: 'Gentle movement, even short walks, support healing' },
   { icon: Moon,     text: 'Your emotional health matters just as much as physical healing' },

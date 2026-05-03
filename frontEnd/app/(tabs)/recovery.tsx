@@ -79,7 +79,7 @@ export default function RecoveryScreen() {
 
   const [age, setAge]                         = useState('28');
   const [weeks, setWeeks]                     = useState('');
-  const [deliveryType, setDeliveryType]       = useState('vaginal_no_tear');
+  const [deliveryType, setDeliveryType]       = useState('vaginal_tear');
   const [painPattern, setPainPattern]         = useState('movement');
   const [healingProgress, setHealingProgress] = useState('same');
   const [sleepHours, setSleepHours]           = useState('6-7hrs');
@@ -202,8 +202,8 @@ export default function RecoveryScreen() {
             onChange={setDeliveryType}
             color={C.accent}
             options={[
-              { label: 'Vaginal', value: 'vaginal_no_tear' },
-              { label: 'Vaginal + Tear', value: 'vaginal_tear' },
+    
+              { label: 'Vaginal', value: 'vaginal_tear' },
               { label: 'C-Section', value: 'csection' },
             ]}
           />
@@ -252,7 +252,7 @@ export default function RecoveryScreen() {
             ]}
           />
 
-          <Label>Daytime tiredness — {fatigueScore} / 10</Label>
+          <Label>Daytime tiredness - {fatigueScore} / 10</Label>
           <View style={s.sliderRow}>
             <Text style={s.sliderEnd}>😌</Text>
             <Slider

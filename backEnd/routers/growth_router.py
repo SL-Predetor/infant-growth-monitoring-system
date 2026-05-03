@@ -554,15 +554,18 @@ def get_dashboard(infant_id: str):
 
                 # Save alert to DB if fired
                 if alert_result['alert_fired']:
-                    supabase.table('growth_alerts').insert({
-                        'infant_id':    infant_id,
-                        'alert_date':   date.today().isoformat(),
-                        'alert_type':   alert_result['trigger_type'],
-                        'message':      alert_result['alert_message'],
-                        'recommendation': alert_result['recommendation'],
-                        'risk_score':   risk_result.get('risk_score'),
-                        'is_read':      False
-                    }).execute()
+                    try:
+                        supabase.table('growth_alerts').insert({
+                            'infant_id':    infant_id,
+                            'alert_date':   date.today().isoformat(),
+                            'alert_type':   alert_result['trigger_type'],
+                            'message':      alert_result['alert_message'],
+                            'recommendation': alert_result['recommendation'],
+                            'risk_score':   risk_result.get('risk_score'),
+                            'is_read':      False
+                        }).execute()
+                    except Exception as alert_err:
+                        print(f"  [growth] growth_alerts insert skipped: {alert_err}")
 
         # 8. Risk level label
         rs = risk_result['risk_score'] if risk_result else None

@@ -13,19 +13,19 @@ const C = Colors.light;
 
 const PAIN_CONFIG: Record<string, { label: string; emoji: string; color: string; soft: string }> = {
   perineal: {
-    label: 'Perineal Discomfort',
+    label: 'Perineal Pain',
     emoji: '🌸',
     color: '#E88D72',
     soft: '#FAE8E4',
   },
   csection: {
-    label: 'C-Section Recovery',
+    label: 'Cesarean Wound Pain',
     emoji: '🩹',
     color: C.primary,
     soft: C.primarySoft,
   },
   back_pelvic: {
-    label: 'Back & Pelvic Support',
+    label: 'Back & Pelvic Pain',
     emoji: '🌿',
     color: C.success,
     soft: C.successSoft,
@@ -36,6 +36,7 @@ export default function MomPredictionResultsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const result = params.result ? JSON.parse(params.result as string) : null;
+  const input = params.input ? JSON.parse(params.input as string) : null;
 
   const activePains = Object.entries(result?.predictions || {})
     .map(([type, value]: any) => ({ type, value }))
@@ -76,8 +77,9 @@ export default function MomPredictionResultsScreen() {
             {activePains.map(({ type, value }) => {
               const cfg = PAIN_CONFIG[type] ?? { label: type, emoji: '📋', color: C.labelSecondary, soft: C.cardSecondary };
               const isHigh = value.risk === 'HIGH';
-              const score = Math.round(Number(value.score));
+              const score = Number(value.score) || 0;
               const barPct = Math.min(100, (score / 10) * 100);
+              const displayPercent = `${Math.round(barPct)}%`;
 
               return (
                 <View key={type} style={[s.painCard, Shadows.sm]}>
@@ -97,7 +99,7 @@ export default function MomPredictionResultsScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Text style={[s.scoreNum, { color: cfg.color }]}>{score}<Text style={s.scoreOf}>/10</Text></Text>
+                    <Text style={[s.scoreNum, { color: cfg.color }]}>{displayPercent}</Text>
                   </View>
                   <View style={s.barTrack}>
                     <View style={[s.barFill, { width: `${barPct}%` as any, backgroundColor: cfg.color }]} />
@@ -142,7 +144,15 @@ export default function MomPredictionResultsScreen() {
         <View style={s.actionsRow}>
           <Pressable
             style={({ pressed }) => [s.primaryBtn, pressed && { opacity: 0.85 }]}
-            onPress={() => router.push('/postpartum-dashboard' as any)}
+            onPress={() =>
+              router.push({
+                pathname: '/postpartum-dashboard',
+                params: {
+                  result: JSON.stringify(result),
+                  input: JSON.stringify(input),
+                },
+              } as any)
+            }
           >
             <Text style={s.primaryBtnText}>View Dashboard</Text>
           </Pressable>
