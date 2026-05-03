@@ -15,9 +15,9 @@ const C = Colors.light;
 type PainKey = 'perineal' | 'csection' | 'back_pelvic';
 
 const PAIN_META: Record<PainKey, { label: string; emoji: string; color: string; soft: string }> = {
-  perineal:   { label: 'Perineal Discomfort',   emoji: '🌸', color: '#E88D72', soft: '#FAE8E4' },
-  csection:   { label: 'C-Section Recovery',    emoji: '🩹', color: C.primary, soft: C.primarySoft },
-  back_pelvic:{ label: 'Back & Pelvic Support', emoji: '🌿', color: C.success, soft: C.successSoft },
+  perineal:   { label: 'Perineal Pain',   emoji: '🌸', color: '#E88D72', soft: '#FAE8E4' },
+  csection:   { label: 'C-Section Pain',    emoji: '🩹', color: C.primary, soft: C.primarySoft },
+  back_pelvic:{ label: 'Back & Pelvic Pain', emoji: '🌿', color: C.success, soft: C.successSoft },
 };
 
 export default function PostpartumDashboard() {
@@ -238,22 +238,7 @@ export default function PostpartumDashboard() {
           <Text style={[s.trendText, { color: trendFg }]}>{trendTxt}</Text>
         </View>
 
-        {/* ── Progress Timeline ── */}
-        {overallPainTrend.points.length > 1 && (
-          <>
-            <Text style={s.sectionTitle}>Progress Over Time</Text>
-            <View style={[s.card, Shadows.sm]}>
-              {overallPainTrend.points.slice(-6).map((point, i) => (
-                <TrendRow
-                  key={`${point.date}-${i}`}
-                  date={point.date}
-                  value={point.score}
-                  color={C.primary}
-                />
-              ))}
-            </View>
-          </>
-        )}
+        
 
         {/* ── Sleep & Fatigue ── */}
         {sleepFatiguePoints.length > 0 && (
@@ -274,19 +259,7 @@ export default function PostpartumDashboard() {
           </>
         )}
 
-        {/* ── Lifestyle Support Score ── */}
-        <Text style={s.sectionTitle}>Lifestyle Support Score</Text>
-        <View style={[s.card, Shadows.sm, { alignItems: 'center' }]}>
-          <Text style={s.bigScore}>{recoverySupportScore}</Text>
-          <Text style={s.bigScoreOf}>out of 100</Text>
-          <Text style={s.bigScoreHint}>
-            {recoverySupportScore >= 75
-              ? '💚 Excellent! You are giving your body what it needs.'
-              : recoverySupportScore >= 50
-              ? '💛 Good foundation. Small improvements in nutrition and rest can help.'
-              : '💙 Your body needs more support. Focus on sleep, hydration, and nourishing meals.'}
-          </Text>
-        </View>
+       
 
         {/* ── New check-in CTA ── */}
         <Pressable
